@@ -17,15 +17,18 @@ Students are often well trained in the details of specific models relevant to th
 
 ## Required textbooks
 
-
-
+* [James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. New York: Springer.](http://link.springer.com.proxy.uchicago.edu/book/10.1007%2F978-1-4614-7138-7)
+    * Great coverage of machine learning topics such as linear regression, classification, resampling methods, decision trees/random forests, support vector machines, and unsupervised learning methods
+* [King, G. (1998). *Unifying Political Methodology: The Likelihood Theory of Statistical Inference*. University of Michigan Press.](http://proxy.uchicago.edu/login?url=http://search.ebscohost.com/login.aspx?direct=true&db=e000xna&AN=317921&site=ehost-live&scope=site)
+    * Solid introduction to likelihood theory for conducting inference
+    * Thorough explanation of maximum likelihood explanation
+    * Includes applications for continuous and discrete variable regression models, time series, and multiple equation models (though admittedly I haven't use it for time series or multiple equations)
 
 ## Evaluation
 
 Assignment | Quantity | Points | Total Points
 -----------|----------|--------|-------------
 Problem set| 10 | 10 | 100
-
 
 ## Disability services
 
