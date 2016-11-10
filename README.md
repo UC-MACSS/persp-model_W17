@@ -33,28 +33,28 @@ If you need any special accommodations, please provide us with a copy of your Ac
 
 ## Course schedule (lite)
 
-| Date | Topic | Assignment |
-|--------------|---------------------------------|------------|
-| Mon, Jan. 2 | Model/theory building |  |
-| Wed, Jan. 4 |  |  |
-| Mon, Jan. 9 | Data generating process |  |
-| Wed, Jan. 11 |  |  |
-| Mon, Jan. 16 | Model estimation |  |
-| Wed, Jan. 18 |  |  |
-| Mon, Jan. 23 | Model estimation (cont) |  |
-| Wed, Jan. 25 |  |  |
-| Mon, Jan. 30 | Regression (OLS and GLM) |  |
-| Wed, Feb. 1 |  |  |
-| Mon, Feb. 6 | Machine learning - supervised |  |
-| Wed, Feb. 8 |  |  |
-| Mon, Feb. 13 | Machine learning - unsupervised |  |
-| Wed, Feb. 15 |  |  |
-| Mon, Feb. 20 | Bayesian nonparametric models |  |
-| Wed, Feb. 22 |  |  |
-| Mon, Feb. 27 | ??? |  |
-| Wed, Mar. 1 |  |  |
-| Mon, Mar. 6 | Structural/theoretical models |  |
-| Wed, Mar. 8 |  |  |
+| Date | Topic | Assignment | Instructor |
+|--------------|----------------------------------------|------------|------------|
+| Mon, Jan. 2 | No class (term starts on Tuesday) |  |  |
+| Wed, Jan. 4 | Model/theory building |  | Rick |
+| Mon, Jan. 9 |  |  | Rick |
+| Wed, Jan. 11 | Data generating process |  | Rick |
+| Mon, Jan. 16 | No class (Martin Luther King, Jr. Day) |  |  |
+| Wed, Jan. 18 | Model estimation |  | Rick |
+| Mon, Jan. 23 |  |  | Rick |
+| Wed, Jan. 25 |  |  | Rick |
+| Mon, Jan. 30 | Regression (OLS and GLM) |  | Ben |
+| Wed, Feb. 1 |  |  | Ben |
+| Mon, Feb. 6 | Machine learning - supervised |  | Ben |
+| Wed, Feb. 8 |  |  | Ben |
+| Mon, Feb. 13 | Machine learning - unsupervised |  | Ben |
+| Wed, Feb. 15 |  |  | Ben |
+| Mon, Feb. 20 | Bayesian nonparametric models |  | James? |
+| Wed, Feb. 22 |  |  | James? |
+| Mon, Feb. 27 | ??? |  |  |
+| Wed, Mar. 1 |  |  |  |
+| Mon, Mar. 6 | Structural/theoretical models |  | Rick |
+| Wed, Mar. 8 |  |  | Rick |
 
 ## Course schedule (readings)
 
