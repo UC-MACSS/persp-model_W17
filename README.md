@@ -37,7 +37,7 @@ If you need any special accommodations, please provide us with a copy of your Ac
 ## Course schedule (lite)
 
 | Date | Topic | Assignment | Instructor |
-|--------------|----------------------------------------|------------|------------|
+|--------------|---------------------------------------------------------|------------|------------|
 | Mon, Jan. 2 | No class (term starts on Tuesday) |  |  |
 | Wed, Jan. 4 | Model/theory building |  | Rick |
 | Mon, Jan. 9 |  |  | Rick |
@@ -46,16 +46,16 @@ If you need any special accommodations, please provide us with a copy of your Ac
 | Wed, Jan. 18 | Model estimation |  | Rick |
 | Mon, Jan. 23 |  |  | Rick |
 | Wed, Jan. 25 |  |  | Rick |
-| Mon, Jan. 30 | Regression (OLS and GLM) |  | Ben |
+| Mon, Jan. 30 | Linear regression |  | Ben |
 | Wed, Feb. 1 |  |  | Ben |
-| Mon, Feb. 6 | Machine learning - supervised |  | Ben |
+| Mon, Feb. 6 | Classification (GLMs) |  | Ben |
 | Wed, Feb. 8 |  |  | Ben |
-| Mon, Feb. 13 | Machine learning - unsupervised |  | Ben |
-| Wed, Feb. 15 |  |  | Ben |
-| Mon, Feb. 20 | Bayesian nonparametric models |  | James? |
-| Wed, Feb. 22 |  |  | James? |
-| Mon, Feb. 27 | ??? |  |  |
-| Wed, Mar. 1 |  |  |  |
+| Mon, Feb. 13 | Resampling methods (cross-validation and bootstrapping) |  | Ben |
+| Wed, Feb. 15 | Non-linear modeling |  | Ben |
+| Mon, Feb. 20 | Tree-based methods |  | Ben |
+| Wed, Feb. 22 | Support vector machines |  | Ben |
+| Mon, Feb. 27 | Unsupervised learning - clustering |  | Ben |
+| Wed, Mar. 1 | Unsupervised learning - latent direchlet allocation |  | Ben |
 | Mon, Mar. 6 | Structural/theoretical models |  | Rick |
 | Wed, Mar. 8 |  |  | Rick |
 
