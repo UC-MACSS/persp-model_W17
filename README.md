@@ -18,11 +18,6 @@ Students are often well trained in the details of specific models relevant to th
 ## Required textbooks
 
 * [James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. New York: Springer.](http://link.springer.com.proxy.uchicago.edu/book/10.1007%2F978-1-4614-7138-7)
-    * Great coverage of machine learning topics such as linear regression, classification, resampling methods, decision trees/random forests, support vector machines, and unsupervised learning methods
-* [King, G. (1998). *Unifying Political Methodology: The Likelihood Theory of Statistical Inference*. University of Michigan Press.](http://proxy.uchicago.edu/login?url=http://search.ebscohost.com/login.aspx?direct=true&db=e000xna&AN=317921&site=ehost-live&scope=site)
-    * Solid introduction to likelihood theory for conducting inference
-    * Thorough explanation of maximum likelihood explanation
-    * Includes applications for continuous and discrete variable regression models, time series, and multiple equation models (though admittedly I haven't use it for time series or multiple equations)
 
 ## Evaluation
 
@@ -36,28 +31,28 @@ If you need any special accommodations, please provide us with a copy of your Ac
 
 ## Course schedule (lite)
 
-| Date | Topic | Assignment | Instructor |
-|--------------|---------------------------------------------------------|------------|------------|
-| Mon, Jan. 2 | No class (term starts on Tuesday) |  |  |
-| Wed, Jan. 4 | Model/theory building |  | Rick |
-| Mon, Jan. 9 |  |  | Rick |
-| Wed, Jan. 11 | Data generating process |  | Rick |
-| Mon, Jan. 16 | No class (Martin Luther King, Jr. Day) |  |  |
-| Wed, Jan. 18 | Model estimation |  | Rick |
-| Mon, Jan. 23 |  |  | Rick |
-| Wed, Jan. 25 |  |  | Rick |
-| Mon, Jan. 30 | Linear regression |  | Ben |
-| Wed, Feb. 1 |  |  | Ben |
-| Mon, Feb. 6 | Classification (GLMs) |  | Ben |
-| Wed, Feb. 8 |  |  | Ben |
-| Mon, Feb. 13 | Resampling methods (cross-validation and bootstrapping) |  | Ben |
-| Wed, Feb. 15 | Non-linear modeling |  | Ben |
-| Mon, Feb. 20 | Tree-based methods |  | Ben |
-| Wed, Feb. 22 | Support vector machines |  | Ben |
-| Mon, Feb. 27 | Unsupervised learning - clustering |  | Ben |
-| Wed, Mar. 1 | Unsupervised learning - latent direchlet allocation |  | Ben |
-| Mon, Mar. 6 | Structural/theoretical models |  | Rick |
-| Wed, Mar. 8 |  |  | Rick |
+| Date | Topic | Assignment |
+|--------------|---------------------------------------------------------|------------|
+| Mon, Jan. 2 | No class (term starts on Tuesday) |  |
+| Wed, Jan. 4 | Model/theory building |  |
+| Mon, Jan. 9 |  |  |
+| Wed, Jan. 11 | Data generating process |  |
+| Mon, Jan. 16 | No class (Martin Luther King, Jr. Day) |  |
+| Wed, Jan. 18 | Model estimation |  |
+| Mon, Jan. 23 |  |  |
+| Wed, Jan. 25 |  |  |
+| Mon, Jan. 30 | Linear regression |  |
+| Wed, Feb. 1 |  |  |
+| Mon, Feb. 6 | Classification (GLMs) |  |
+| Wed, Feb. 8 |  |  |
+| Mon, Feb. 13 | Resampling methods (cross-validation and bootstrapping) |  |
+| Wed, Feb. 15 | Non-linear modeling |  |
+| Mon, Feb. 20 | Tree-based methods |  |
+| Wed, Feb. 22 | Support vector machines |  |
+| Mon, Feb. 27 | Unsupervised learning - clustering |  |
+| Wed, Mar. 1 | Unsupervised learning - latent direchlet allocation |  |
+| Mon, Mar. 6 | Structural/theoretical models |  |
+| Wed, Mar. 8 |  |  |
 
 ## Course schedule (readings)
 
