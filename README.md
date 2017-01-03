@@ -33,27 +33,27 @@ If you need any special accommodations, please provide us with a copy of your Ac
 
 ## Course schedule (lite)
 
-| Date | Topic | Assignment |
-|--------------|---------------------------------------------------------|------------|
-| Wed, Jan. 4  | Model/theory building         |     |
-| Mon, Jan. 9  | Data generating process       | PS1 |
-| Wed, Jan. 11 | Maximum likelihood estimation |     |
-| Mon, Jan. 16 | **No class (Martin Luther King, Jr. Day)** |  |
-| Wed, Jan. 18 |                               |     |
-| Mon, Jan. 23 | Generalized method of moments | PS2 |
-| Wed, Jan. 25 |                               |     |
-| Mon, Jan. 30 | Simulated method of moments   | PS3 |
-| Wed, Feb. 1  |                               |     |
-| **Mon, Feb. 6** | **Evans Midterm** | PS4 |
-| Wed, Feb. 8 | Classification (GLMs) |  |
-| Mon, Feb. 13 | Resampling methods (cross-validation and bootstrapping) |  |
-| Wed, Feb. 15 | Non-linear modeling |  |
-| Mon, Feb. 20 | Tree-based methods |  |
-| Wed, Feb. 22 | Support vector machines |  |
-| Mon, Feb. 27 | Unsupervised learning - clustering |  |
-| Wed, Mar. 1 | Unsupervised learning - latent direchlet allocation |  |
-| Mon, Mar. 6 | Structural/theoretical models |  |
-| Wed, Mar. 8 |  |  |
+|  Date   |Day|        Topic        | Readings | Assignment |
+|---------|---|------------------------------ |-------|-----|
+| Jan.  4 | W | Model/theory building         | V1997 |     |
+| Jan.  9 | M | Data generating process       |       | PS1 |
+| Jan. 11 | W | Maximum likelihood estimation | Notes |     |
+| Jan. 16 | M | **No class (Martin Luther King, Jr. Day)** |  |
+| Jan. 18 | W |                               |       |     |
+| Jan. 23 | M | Generalized method of moments | Notes | PS2 |
+| Jan. 25 | W |                               |       |     |
+| Jan. 30 | M | Simulated method of moments   | Notes | PS3 |
+| Feb. 1  | W |                               |       |     |
+| **Feb. 6** | **M** | **Evans Midterm**      |       | PS4 |
+| Feb.  8 | W | Classification (GLMs)         |       |     |
+| Feb. 13 | M | Resampling methods (cross-validation and bootstrapping) |  |  |
+| Feb. 15 | W | Non-linear modeling           |       |     |
+| Feb. 20 | M | Tree-based methods            |       |     |
+| Feb. 22 | W | Support vector machines       |       |     |
+| Feb. 27 | M | Unsupervised learning - clustering |  |     |
+| Mar.  1 | W | Unsupervised learning - latent direchlet allocation |  |  |
+| Mar.  6 | M |                               |       |     |
+| Mar.  8 | W |                               |       |     |
 
 ## References and Readings ##
 
