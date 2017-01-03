@@ -15,10 +15,6 @@
 
 Students are often well trained in the details of specific models relevant to their respective fields. This course presents a generic definition of a model in the social sciences as well as a taxonomy of the wide range of different types of models used. We then cover principles of model building, including static versus dynamic models, linear versus nonlinear, simple versus complicated, and identification versus overfitting. Major types of models implemented in this course include systems of nonlinear equations, linear and nonlinear regression, machine learning (e.g., parametric, Bayesian and nonparametric), agent-based and structural models. We will also explore the wide range of computational strategies used to estimate models from data and make statistical and causal inference. Students will study both good examples and bad examples of modeling and estimation and will have the opportunity to build their own model in their field of interest.
 
-## Required textbooks
-
-* [James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. New York: Springer.](http://link.springer.com.proxy.uchicago.edu/book/10.1007%2F978-1-4614-7138-7)
-
 ## Grades ##
 
 | Assignment           | Quantity | Points | Total Points | Percent |
@@ -60,6 +56,7 @@ If you need any special accommodations, please provide us with a copy of your Ac
 
 All readings are required unless otherwise noted. Adjustments can be made throughout the quarter; be sure to check this repository frequently to make sure you know all the assigned readings.
 
+* [James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. New York: Springer.](http://link.springer.com.proxy.uchicago.edu/book/10.1007%2F978-1-4614-7138-7)
 * Varian, Hal R., "[How to Build an Economic Model in Your Spare Time](http://people.ischool.berkeley.edu/~hal/Papers/how.pdf)," in *Passion and Craft: Economists at Work*, eds. Michael Szenberg, University of Michigan Press, 1997.
 
 
