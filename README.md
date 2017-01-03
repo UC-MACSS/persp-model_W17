@@ -21,11 +21,12 @@ Students are often well trained in the details of specific models relevant to th
 
 ## Grades ##
 
-    Assignment     | Quantity | Points | Total Points | Percent
--------------------|----------|--------|--------------|--------
-Evans Problem Sets |     4    |   10   |     40       |    ?%
-Evans Midterm      |     1    |   10   |     10       |    ?%
-**Total Points**   |   **?**  |  **?** |    **?**     |  **?%**
+| Assignment           | Quantity | Points | Total Points | Percent |
+|----------------------|----------|--------|--------------|---------|
+| Evans Problem Sets   | 4        | 10     | 40           | ?%      |
+| Evans Midterm        | 1        | 10     | 10           | ?%      |
+| Soltoff Problem Sets | 6        | 10     | 60           | ?%      |
+| **Total Points**     | **?**    | **?**  | **?**        | **?%**  |
 
 ## Disability services
 
@@ -33,27 +34,27 @@ If you need any special accommodations, please provide us with a copy of your Ac
 
 ## Course schedule (lite)
 
-|  Date   |Day|        Topic        | Readings | Assignment |
-|---------|---|------------------------------ |-------|-----|
-| Jan.  4 | W | Model/theory building         | V1997 |     |
-| Jan.  9 | M | Data generating process       |       | PS1 |
-| Jan. 11 | W | Maximum likelihood estimation | Notes |     |
-| Jan. 16 | M | **No class (Martin Luther King, Jr. Day)** |  |
-| Jan. 18 | W |                               |       |     |
+| Date | Day | Topic | Readings | Assignment |
+|------------|-------|---------------------------------------------------------|----------|------------|
+| Jan.  4 | W | Model/theory building | V1997 |  |
+| Jan.  9 | M | Data generating process |  | PS1 |
+| Jan. 11 | W | Maximum likelihood estimation | Notes |  |
+| Jan. 16 | M | **No class (Martin Luther King, Jr. Day)** |  |  |
+| Jan. 18 | W |  |  |  |
 | Jan. 23 | M | Generalized method of moments | Notes | PS2 |
-| Jan. 25 | W |                               |       |     |
-| Jan. 30 | M | Simulated method of moments   | Notes | PS3 |
-| Feb. 1  | W |                               |       |     |
-| **Feb. 6** | **M** | **Evans Midterm**      |       | PS4 |
-| Feb.  8 | W | Classification (GLMs)         |       |     |
-| Feb. 13 | M | Resampling methods (cross-validation and bootstrapping) |  |  |
-| Feb. 15 | W | Non-linear modeling           |       |     |
-| Feb. 20 | M | Tree-based methods            |       |     |
-| Feb. 22 | W | Support vector machines       |       |     |
-| Feb. 27 | M | Unsupervised learning - clustering |  |     |
-| Mar.  1 | W | Unsupervised learning - latent direchlet allocation |  |  |
-| Mar.  6 | M |                               |       |     |
-| Mar.  8 | W |                               |       |     |
+| Jan. 25 | W |  |  |  |
+| Jan. 30 | M | Simulated method of moments | Notes | PS3 |
+| Feb. 1 | W |  |  |  |
+| **Feb. 6** | **M** | **Evans Midterm** |  | PS4 |
+| Feb.  8 | W | Generalized linear models |  | PS5 |
+| Feb. 13 | M |  |  |  |
+| Feb. 15 | W |  |  | PS6 |
+| Feb. 20 | M | Resampling methods (cross-validation and bootstrapping) |  | PS7 |
+| Feb. 22 | W | Non-linear modeling |  |  |
+| Feb. 27 | M | Tree-based methods |  | PS8 |
+| Mar.  1 | W | Support vector machines |  | PS9 |
+| Mar.  6 | M | Unsupervised learning - clustering |  |  |
+| Mar.  8 | W | Unsupervised learning - Latent Direchlet allocation |  | PS10 |
 
 ## References and Readings ##
 
