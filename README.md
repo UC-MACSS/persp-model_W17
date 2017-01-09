@@ -7,6 +7,7 @@
 | Office Hours | W 2:30-4:30pm | Th 2-4pm | Th 3-5pm |
 | GitHub | [rickecon](https://github.com/rickecon) | [bensoltoff](https://github.com/bensoltoff) | [gingcee](https://github.com/gingcee) |
 
+Grader: Reuben Bauer (bauerr@uchicago.edu)
 * **Meeting day/time**: MW 11:30-12:50pm, Saieh Hall, Room 247
 * **Lab session**: W 5-5:50pm, Saieh Hall, Room 021
 * Office hours also available by appointment
