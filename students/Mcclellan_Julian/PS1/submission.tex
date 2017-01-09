@@ -66,78 +66,67 @@
 \begin{document}
 
 \begin{flushleft}
-  \textbf{\large{Problem Set \#3}} \\
-  MACS 30000, Dr. Evans \\
+  \textbf{\large{Problem Set \#1}} \\
+  MACS 30100, Dr. Evans \\
   Julian McClellan
 \end{flushleft}
 
 \vspace{5mm}
 
 \noindent\textbf{Problem 1} 
-% \textbf{Parts (a-f).} % This situpid shit is indented for some reason.
 \newline
-\noindent\textbf{Part (b).} 
-There is a competition on Kaggle.com that is called "Dogs vs. Cats Redux: Kernels Edition".
-It seems quite interesting. Utilizing a training set of 25,000 images of cats 
-and dogs, the goal is to classify the 12,500 images in the testing set as a dog
-(1) or a cat (0). In order to make a submission, I would have to train a
-supervised (since training data is labeled) machine learning model on the 
-training set of images and then submit something that mapped the classifications
-made by the model to the 12,500 testing images.
+\noindent\textbf{Part (a-b).} 
+Juhn, Chinhui and Kristin McCue. 2016. "Evolution of the Marriage Earnings Gap for Women." American Economic Review, 106(5): 252-56.
 
-\newline
 \noindent\textbf{Part (c).} 
-\begin{figure}[h!]\centering\captionsetup{width=4.0in}
-  \caption{\textbf{2015 Accident Statistics}}\label{accidents}
-  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{images/Fig_1c.png}}}
-\end{figure}
+$ln Y_{it}=\beta X_{it}+\gamma M_{it}+\pi K_{it}+\delta _{c}+\varepsilon _{it}$
+$\varepsilon _{it} = \alpha _{i}+v_{it}$
+
+$i$ indexes the individual, $X$ are observable characteristics such as age, education, race, ethnicity, $M$ is the married dummy, $K$ are indicators for the presence and age of children, $\delta _{c}$ refers to birth cohort effects, and $ln Y_{it}$ refers to the natural log of earnings.
+
+\noindent\textbf{Part (d).}
+The only endogenous variable in the model is $ln Y_{it}$, the natural log of the earnings. Because this variable can easily be transformed to simply be the earnings, we can also say that the earnings themselves are the endogenous variable in the model. (It is what the model is estimating, the response variable.)
+
+The exogenous variables are simply the explanatory variables in the ordinary least squares regression. These are $X$, the observable characteristics such as age, education, race, ethnicity, $M$, the married dummy, $K$, the indicators for the presence and age of children, and $\delta _{c}$, the birth cohort effects.
+
+\noindent\textbf{Part (e).}
+The model is static, even though the model is indexed over time, each time period is kept distinct from the other periods.
+
+The model is linear because it is an ordinary least squares regression model.
+
+The model is stochastic because it includes an error term to introduce an element of randomness to the model.
+
+\noindent\textbf{Part (f).}
+A useful variable to include in the model would be the number of hours worked during each time period since with it one could separately examine the relative contributions of wages and hours.
 
 \noindent\textbf{Problem 2}
-In \href{http://proxy.uchicago.edu/login?url=http://search.ebscohost.com/login.aspx?direct=true&db=a9h&AN=117836513&site=eds-live&scope=site}{this study}, the 
-authors propose "a weakly supervised framework for domain adaptation in a multi-modal
-context for multi-label classification." The methods proposed in this study "
-take us a step closer to object recognition in the wild and automatic video 
-indexing." The researchers trained the model on a set of training images and
-subtitles from nature documentaries to recognize wildlife in said nature 
-documentaries.
 \\
-\\
-When thinking about formulating the data collection as a human computation 
-project, the data collected is the data being used to train the model.
-\\
-\\
-The authors of the study seem to have used a resource called ImageNet
-in order to train their model. In order to provide their model with a greater volume
-and diversity of training data, a call could be made for humans to provide images
- of certain animals, with maybe a subset of humans trying to identify animals
-from these submissions to help ensure the accuracy of the images provided. I'm
-assuming there is a limit to which the size of the training dataset gives better
-results, but until that limit is reached, human computation might have been able
-to supplement the ImageNet resource the researchers used.
-\\
-\\
-Of course however, this form of human computation in data collection is especially
-susceptible to a high number of repeat images, say the first few results for a 
-zebra on an image search. It would be nice to incentivize unique content, perhaps
-with a small bonus, or providing a screenshot of a video with the requested animal
-inside. Even so, according to Michael Franklin, there seem to be a number of people
-who try really hard to not submit the same images other people are likely to submit
-so there is hope for unique submissions even without incentives.
-\\
-\\
-Lastly, since the authors of the study also utilized the subtitles from the nature 
-documentaries that they were training in order to "adapt" their model to their 
-testing data. Indeed, their paper focused on how this improved the accuracy of 
-their model when compared to simply using ImageNet as a resource. This 
-adapatation could be supplemented by human computation. Going back to the 
-zebra example, a picture of a zebra from the documentary could be shown and humans
-could be asked to describe the image and/or animal in the image without using 
-the name of the animal. While humans could provide troll descriptions 
-without using the name of the animal, these troll descriptions could be thrown out
-if they are shown to not improve the accuracy of the model. One might 
-expect "better" descriptions to improve the accuracy of the model in identifying
-the animals.
+\noindent\textbf{Part (a-c).}
+$predicted\,lifespan_{musician} = \beta_{0} + \beta_{1}expectancy_{demographic \, info} + \beta_{2}genre_{1} + ... + \beta_{2+I}genre_{I} + \beta_{3}num\,rehab + \epsilon_{musician}$
 
+\\
+\noindent\textbf{Part (d).}
+The key factors are essentially all the ones that I included in my model. However I believe some are more important than others.
+
+I think that the most important factor that influences the outcome of how long popular musicians live is simply the expected lifespans of people matching the musician's demographic information. Taking the birth year of the musician, and things like their ethnicity and state of birth can be used to determine the expected lifespan of people matching those demographic characteristics.
+
+Of course, drug overdoses can also be a key factor in determining (terminating) a musician's lifespan, and an element of drug use in general, the number of rehab visits is thrown into the model as a weak proxy to drug usage intensity.
+
+Lastly, the differing genres of music musicians reside in often are indicative of different lifestyles for those musicians and indicator variables for the genre of music are included in my model.
+
+\\
+\noindent\textbf{Part (e).}
+I decided on these factors and not others because, firstly, they seemed the most feasible to gather. Demographic information can easily be gathered from a popular musician's Wikipedia page and be used to determine the expected lifespan for people born in that year and with other similar characteristics. 
+
+The music genre(s) can easily be gathered from the Wikipedia page as well. The only factor that I chose that might be slightly more difficult to pull from the musician's Wikipedia page is the number of times he or she went to rehab. Assuming the musician was popular enough and that this information was public, this ought to be contained on the page in some natural language form, and thus getting an accurate count would involve some sort of natural language parsing. However, it is possible that the musician was able to keep rehab visits private and/or they are not popular enough to have an exhaustive page to include this information.
+
+\noindent\textbf{Part (f-g).}
+A preliminary test of these factors would probably involve scraping Wikipedia pages of dead popular musicians in order to acquire the genre of music they were active in and their demographic information. For each unique country of origin, I would also have to look up some sort of life expectancy tables for that country and be able to match the year born with things like ethnicity to determine the life expectancy of the musician (the explanatory variable, not predicted lifespan, the response variable).
+
+A preliminary test of the number of rehab visits factor would be much more difficult. It would be much easier to simply eschew this variable in my "preliminary" test, but I suppose I could attempt to utilize some of the things I will learn in James Evans's Content Analysis course to try and build a parser to detect how many times a musician has visited rehab.
+
+
+\end{document}
 % \noindent\textbf{Part (c).} 
 % \begin{figure}[h!]\centering\captionsetup{width=4.0in}
 %   \caption{\textbf{1c}}\label{FigExample}
@@ -186,5 +175,3 @@ the animals.
 %   \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{images/Fig_1a.png}}}
 % \end{figure}
 
-
-\end{document}
