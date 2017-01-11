@@ -10,6 +10,7 @@
 * **Meeting day/time**: MW 11:30-12:50pm, Saieh Hall, Room 247
 * **Lab session**: W 5-5:50pm, Saieh Hall, Room 021
 * Office hours also available by appointment
+* Grader: Reuben Bauer (bauerr@uchicago.edu)
 
 ## Course description
 

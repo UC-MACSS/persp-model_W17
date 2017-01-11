@@ -1,0 +1,136 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\usepackage{color}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+\lstset{ %
+  language=R,                     % the language of the code
+  basicstyle=\footnotesize,       % the size of the fonts that are used for the code
+  numbers=left,                   % where to put the line-numbers
+  numberstyle=\tiny\color{gray},  % the style that is used for the line-numbers
+  stepnumber=1,                   % the step between two line-numbers. If it's 1, each line
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  backgroundcolor=\color{white},  % choose the background color. You must add \usepackage{color}
+  showspaces=false,               % show spaces adding particular underscores
+  showstringspaces=false,         % underline spaces within strings
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,                   % adds a frame around the code
+  rulecolor=\color{black},        % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. commens (green here))
+  tabsize=2,                      % sets default tabsize to 2 spaces
+  captionpos=b,                   % sets the caption-position to bottom
+  breaklines=true,                % sets automatic line breaking
+  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+  title=\lstname,                 % show the filename of files included with \lstinputlisting;
+  keywordstyle=\color{blue},      % keyword style
+  commentstyle=\color{dkgreen},   % comment style
+  stringstyle=\color{mauve},      % string literal style
+  escapeinside={\%*}{*)},         % if you want to add a comment within your code
+  morekeywords={*,...}            % if you want to add more keywords to the set
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+
+\begin{document}
+
+\begin{flushleft}
+  \textbf{\large{Problem Set \#1}} \\
+  MACS 30100, Dr. Evans \\
+  Cheng Yee Lim\\
+  12145076
+\end{flushleft}
+
+\vspace{5mm}
+
+\noindent \textbf{Problem 1: Model Classification}\\
+\textbf{(a)(b)}
+\flushleft Stevenson, Betsey, and Justin Wolfers. "Subjective well-being and income: Is there any evidence of satiation?." \textit{The American Economic Review 103, no. 3 }(2013): 598-604.
+
+\flushleft \textbf{(c)}\\
+In Stevenson, Betsey and Wolfer's paper, they investigate whether a satiation point in subjective well-being exists, more specifically if the relationship between income and well-being is different beyond a critical income level. They do so with two models:
+\begin{equation}
+	Well-being_{c}=\alpha+\beta log(GDP_c)+\varepsilon_{c}
+\end{equation}
+\flushleft The exogenous variable is the log of the GDP of the country and the endogenous variable is the measured subjective well-being of the country.
+\begin{align}
+	Well-being_{c}&=\alpha+\beta_{poor}I(GDP_{c}<k)\times(log(GDP)_c) - log(k))+ \notag\\
+&\phantom{{}=}{}+{}\beta_{rich}I(GDP_{c}>=k)\times(log(GDP)_c) - log(k))-\varepsilon_{c},
+\end{align}
+where the subscript c denotes country, and the independent variables are the interactions of a dummy variable, categorizing the country's GDP per capita as above or below the a critical point (\$k), and log real GDP per capita. The coefficient $\beta_{poor}$ refers to the gradient of well-being and GDP of "poor" countries (those with GDP $<\$k$), and $\beta_{rich}$ is the gradient of "rich" countries (those with GDP $\geqslant \$k$).
+
+\flushleft In model 2, the endogenous variable is also the subjective well-being of the country and the exogenous variables include the log GDP of the country, the dummy variable categorizing whether the country is below or above the critical level of GDP, and the interaction of the former two variables. 
+
+\flushleft \textbf{(d)}\\
+Both model 1 and 2 are static, non-linear, and deterministic models. In model 1, the logarithmic of the GDP of the country allows for a non-linear relationship between well-being and GDP. Similarly, the functional form in model 2 allows for a kink in the model at \$k, as the gradients for the "poor" and "rich" countries could be different. Both model 1 and 2 are static models, as they do not have time dimensions. Both models are also deterministic, as there is no randomness involved.  
+
+\flushleft \textbf{(e)}\\
+I would include a variable that denotes government expenditure per capita. The larger the government expenditure per capita, the closer a country is to a welfare state. Welfare states, such as Denmark and Norway, are known for their high happiness levels in their countries. Thus, government expenditure per capita is a valuable variable that has been left out in the model explaining happiness of a country.
+
+\noindent \flushleft \textbf{Problem 2: Modeling the Lifespan of Popular Musicians}\\
+\textbf{(a)(b)(c)}
+\begin{equation}
+predicted\_lifespan_{i}=\beta_0+	\beta_1income_{i}+\beta_2smoking_i+\beta_3drugs_{i}+\phi_₀X_i+\varepsilon_{i}
+\end{equation}
+
+\flushleft Where the dependent variable, \textit{predicted\_lifespan\textsubscript{i}}, is a measure of the length of the lifespan of the musician in years.  \textit{Smoking\textsubscript{i}} and \textit{drugs\textsubscript{i}} are categorical variables reflecting the extent of smoking of the musician per week and history of substance intake of the musician respectively. \textit{X\textsubscript{i}} is a vector of individual characteristics that include log of real income, gender, marital status, lifestyle habits, such as dietary preferences and frequency of exercising, presence of genetic diseases in family medical history.\\
+ 
+\noindent \flushleft \textbf{(d)(e)}\\
+In our model, I hypothesize that \textit{income\textsubscript{i}} will play a more significant role in influencing this outcome compared to an average individual. This is because income reflects not only the individual’s ability to consume a healthy diet and have better access to healthcare, but also the musician’s popularity. A more popular musician will often have a higher income from their high album and concert sales, but would also be under greater stress to maintain his or her popularity. Thus, the income of a musician can also be a proxy for the stress levels of a musician and I would expect the coefficient of income of the musician to be less positive than the same coefficient for the average individual in a population.
+\flushleft Other key factors will include the categorical variables, \textit{smoking\textsubscript{i}}, which reflects the range of the number of cigarettes smoked per week, and \textit{drugs\textsubscript{i}} reflecting the history substance abuse of the musician in the model. According to newspaper reportings and past literature, musicians are more likely to abuse drugs or smoke than an average individual. In fact, the top cause of death amongst performers is lung cancer. Researchers have attributed this to the high stress they are under and the dependence on popularity in their job.
+\flushleft Other factors, such as gender, presence of genetic diseases in family medical history, exercise frequency, and dietary preferences are also factors that affect the lifespan of individuals. These variables are often highly correlated with health, but are not specific in affecting the lifespan of popular musicians. Thus, they will be included as control variables in the regression model instead. 
+\pagebreak
+\flushleft \textbf{(f)}\\
+I would conduct the preliminary test whether the factors are significant in real life with a regression analysis on the dataset, Trends in Life Expectancy by Social Class 1972-2005, from the United Kingdom Office of National Statistics. The regression will be estimated with ordinary least squares with robust standard errors. 
+\flushleft However, there is multicollinearity in the regression as income will also allow individuals to have better diets. To tackle the problem of multicollinearity of the income variable, I perform instrumental variable (IV) regression. I intend to use the proportion of times the musician has entered the weekly billboard top hits over the length of their music career as a proxy of income. This instrument is relevant to income as high billboard rankings often means more album sales and higher popularity. The instrument is also exogenous as the musician does not decide if he or she enters the billboard. \\
+
+\end{document}
