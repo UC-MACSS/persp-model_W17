@@ -1,0 +1,144 @@
+\documentclass[letterpaper,10pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+\setlength{\parindent}{2em}
+\setlength{\parskip}{1em}
+\renewcommand{\baselinestretch}{1.25}
+
+\begin{document}
+
+% ----------------------------------------------------------------------
+\begin{flushleft}
+  \textbf{\large{Problem Set \#1}} \\
+  MACS 30100, Dr. Evans \\
+  Chih-Yu Chiang \\
+\end{flushleft}
+
+\noindent\textbf{Problem 1} \\
+\noindent\textbf{Part (a). Find an article} \\
+\textit{Game Changer: The Topology of Creativity} \\
+This article examines the sociological factors that explain why some creative teams are able to produce game-changing culture products. It applies empirical data collected from video game industry; video game like art, film, and dance is often deemed as an expression of culture.
+
+\noindent\textbf{Part (b). Detailed citation} \\
+De Vaan, M., Stark, D., & Vedres, B. (2015). \textit{Game Changer: The Topology of Creativity}. American Journal of Sociology, 120(4), 1–51. \url{http://doi.org/10.1086/681213}
+
+\noindent\textbf{Part (c). Statistical model} \\
+This article implements a couple of OLS Regressions as its method. It employs Distinctiveness, Critical Acclaim, and Game Changer as dependent variables; each in one regression model. The models share an array of sociological factors as independent variables. The equation is exhibited as follows, demonstrated with Distinctiveness as the independent variable
+\begin{multline*}
+Distinctiveness = \beta_{0} + \beta_{1}(Folded Diversity) + \beta_{2}(Cognitive Diversity) + \beta_{3}(Structural Folding) \\ + \beta_{4}(Constraint) + \beta_{5}(Mean Group Size) + \beta_{6}(Mean Group Size)^{2} + \beta_{7}(Number of Groups) \\ + \beta_{8}(Number of Members) + \beta_{9}(Number of Newbies) + \beta_{10}(Games Tenure) + \beta_{11}(Past Review Score) \\ + \beta_{12}(High Performers) + \beta_{13}(Star Developer) + \beta_{14}(Single Firm) + \beta_{15}(Mean Firm Age) \\ + \beta_{16}(Number of Elements) + \epsilon
+\end{multline*}
+
+\noindent\textbf{Part (d). Endogenous and Exogenous variables}
+\begin{itemize}
+\item Endogenous variables: $Distinctiveness$, $Critical Acclaim$, and $Game Changer$.
+\item Exogenous variables: $Folded Diversity$, $Cognitive Diversity$, $Structural Folding$, $Constraint$, $Mean Group Size$, $Mean Group Size^{2}$, $Number of Groups$, $Number of Members$, $Number of Newbies$, $Games Tenure$, $Past Review Score$, $High Performers$, $Star Developer$, $Single Firm$, $Mean Firm Age$, and $Number of Elements$.
+\end{itemize}
+
+\noindent\textbf{Part (e). Classify the model}
+\begin{itemize}
+\item Static: This model describes a static relationship between the variables; there’s no interactions like intertemporal of spatial ones between each observation.
+\item Linear: OLS regressions assume a linear dependent and independent variable relationship.
+\item Stochastic: OLS regressions assume an error term following $N(0 , \sigma^{2})$ in each model, which brings about stochasticity.
+\end{itemize}
+
+\noindent\textbf{Part (f). Possible variable of feature}
+\begin{itemize}
+\item $Average Member Age$: Young people are often considered having more creative power, with more passion, and willing to take more risk in their works; those characteristics could contribute to developing game-changing products.
+\item $Average Working Hour per Member$: One creative productivity source is exposing one selves to the various things in everyday life. Average working hour focusing on the focal project could be a reversal proxy to this.
+\end{itemize}
+
+% ----------------------------------------------------------------------
+\noindent\textbf{Problem 2} \\
+\noindent\textbf{Part (a)(b). Model for popular musicians live} \\
+This is a model estimating popular musicians’ lifespan.
+\begin{multline*}
+Predicted Lifespan = \beta_{0} + \beta_{1}(Number of Relationship Scandals) + \beta_{2}(Alcohol Consumption) \\ +\beta_{3}(Diet Preference) + \beta_{4}(Travel Time per Active Year) + \beta_{5}(Spouse) \\ + \beta_{6}(Religion) + \beta_{7}(Education Level) + \beta_{8}(Nationality) + \beta_{9}(Sex) + \beta_{10}(Year Born) + \epsilon
+\end{multline*}
+Some definitions:
+\begin{itemize}
+\item $Alcohol Consumption$: 1 (least preference) – 5 (strongest preference) scale. Might be acquired by asking the people close to the musician.
+\item $Diet Preference$: 1 (least healthy) – 5 (strongest healthy) scale. Might be evaluated by the musician’s favorite foods.
+\item $Travel Time per Active Year$: The length of time not living in the musician’s town of residency each year.
+\item $Spouse$: Binary. If the musician has a spouse at the time the model is estimated, 1; otherwise, 0.
+\item $Religion$: Binary. If the musician has a stable religious belief at the time the model is estimated, 1; otherwise, 0.
+\end{itemize}
+
+\noindent\textbf{Part (c). Key factors} \\
+The variables illustrating the musicians’ life style is healthy or not, including $Number of Relationship Scandals$, $Alcohol Consumption$, $Diet Preference$, $Travel Time per Active Year$, $Spouse$, and $Religion$ are the key variables. \\
+On top of that, some demographic factors can also influence life span, and therefore worth being included. They are $Education Level$, $Nationality$, $Sex$, and $Year Born$.
+
+\noindent\textbf{Part (d). Reason of choosing factors} \\
+After randomly collecting 10 passed-away popular musicians’ information (refer to the table \href{https://airtable.com/shrNGSGC8SP2wTAi2}{here}), I found that many of them died young and because of the sickness or reasons resulting from bad life styles (not natural reasons). Out of the 10 musicians, 3 died directly and indirectly because of intoxication; 2 died because of heroin drugging. \\
+It is therefore I included variables illustrating good or bad life styles. More $Relationship Scandals$, $Alcohol Consumption$, bad $Diet Preference$, longer time traveling around could lead to high pressure, bad eating and resting, and thus shorter lifespan. On the other hand, having a $Spouse$, a good $Religion$, and knowledge from higher Education can lead to better everyday habits lead to longer life.
+
+\noindent\textbf{Part (e). Preliminary test}
+\begin{itemize}
+\item Step 1. Collect a list of passed-away popular musicians from music services such as Spotify and online rankings such as \href{http://rateyourmusic.com/list/eddythefan/100_greatest_rock_stars/}{this one} for rock musicians.
+\item Step 2. Collect data of each musician; sort into database. Many of data of the variables employed in the model can be found on Wikipedia, such as Nationality, Education Level, and the passed-away musicians’ actual age when they died. For rest of the variables, such as Religion and Number of Relationship Scandals, could also possibly be found through google search, since our observing targets were all super stars and often left an abundance of personal life information in coverage.
+\item Step 3. Explore the data see if there’s structural patterns between independent variables and passed-away musicians’ life span.
+\item Step 4. If the data size is sufficient, a regression model can be built according to it, using the actual age when the musician died as the dependent variable.
+\item Step 5. We can then examine the statistics of each parameter to see its significance, and the MSE (comparing predicted lifespan from this model and real age the musician died) to determine if the model as a whole provides a good estimation.
+\end{itemize}
+
+\end{document}
