@@ -1,0 +1,122 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+
+\begin{document}
+
+\begin{flushleft}
+  \textbf{\large{Problem Set \#1}} \\
+  MACS 30100, Dr. Evans \\
+  Bobae Kang
+\end{flushleft}
+
+\vspace{5mm}
+
+\noindent\textbf{1. Classify a model from a journal.}
+\par
+\noindent (a), (b) Citation: Holbein, J. B. and Hillygus, D. S. (2016), Making Young Voters: The Impact of Preregistration on Youth Turnout. \textit{American Journal of Political Science, 60}: 364-382. doi:10.1111/ajps.12177
+\par\bigskip
+\noindent (c) The paper uses two models, one for the upper bound of the preregistration effect (the difference-in-difference model) and the other for the lower bound (the lagged model).
+\par\bigskip
+(1) $Y_{it} = \lambda_{0} + \lambda_{p}P_{st} + \lambda_{\alpha}\alpha_{s} + \lambda_{\delta}\delta_{t} + \lambda_{\gamma}\gamma_{st} + \lambda_{X}X_{it} + \epsilon$
+\par
+(2) $Y_{it} = \lambda_{0} + \lambda_{p}P_{st} + \lambda_{Y}Y_{s, t-2} +  \lambda_{\gamma}\gamma_{st} + \lambda_{X}X_{it} + \epsilon$ 
+\par\bigskip
+\noindent (d) Endogenous variable: $Y_{it}$(whether the individual reported voting).
+\par\noindent
+Exogenous variables: $P_{st}$ (whether the respondent’s state had a preregistration law in effect), $\alpha_{s}$ (the state fixed effects; first model only), $\delta_{t}$ (the year fixed effects; first model only), $\gamma_{st}$ (the full set of interactions between the two for state-specific year effects), $X_{it}$ (a matrix of time-varying controls), and $Y_{s, t-2}$ (lagged turnout aggregated to the state level).
+\par\bigskip
+\noindent (e) Both models (1) and (2) are static, linear and stochastic.
+\par\bigskip
+\noindent (f) Perhaps it is important to acccount for the neighbor effect among states, i.e. the known voting rates of the neighboring states. An individual may evaluate the importance of voting based on not only the factors already included in the current model but also social pressure originating from the known voting behavior of the nearby states. This is based on an observation that, first, Americans often identify themselves with the state of their residence and, second, US states are often considered to be in a competitive relationship with one another. In addition, voter participating is generally presented as socially desireable. If these observations are true, it is reasonable to assume that individuals may have a sense of competition which tells it is desirable for her state to achieve a higher voter turnout than other states.
+\par\bigskip
+\par\bigskip
+
+\noindent\textbf{2. Make your own model.}
+\par
+\noindent (a)
+$Y_{i} = \beta_{0} + \beta_{P}P_{i} + \beta_{G}G_{i} + \beta_{I}I_{i} + \beta_{F}F_{i} + \beta_{M}M_{i} + \beta_{H}H_{i} + \epsilon$
+\par
+$H_{i} = \gamma_{0} + \gamma_{Y}Y_{p} + \gamma_{C}C_{i} + \gamma_{D}D_{i} + \epsilon_{H}$
+\par\bigskip
+$Y_{i}$ is the predicted lifespan in years for an individual (endogenous); 
+$P_{i}$ is the popularity indicator of the individual;
+$G_{}$ is the musical genre of the individual;
+$I_{i}$ is the income level of the individual;
+$F_{i}$ is whether the individual is biologically female;
+$M_{}$ is the marital status of the individual;
+$H_{i}$ is the health indicator of the individual (endogenous);
+$Y_{p}$ is the average age at which the individuals' parents passed away;
+$C_{i}$ is whether the individual has been a life-long cigarrette smoker;
+$D_{i}$ is whether the individual has been an drug addict.
+\par\bigskip
+\noindent (d), (e) The key factors for this model are $I_{i}$, $F_{i}$, $M_{i}$, and $H_{i}$ as well as other variables required to calculate $H_{i}$, namely, $Y_{p}$, $C_{i}$,and $D_{i}$. $I_{i}$ is important because higher income allows for the individual to take better care of the self. $F_{i}$ is important because in general the life expectancy of females is known to be higher than that of males. $M_{i}$ is important because one's committed romantic partner, which generally coincides with a marital partner, is known to offer health benefits to the individual. $H_{i}$ and other variables required to calculate $H_{i}$ are important because one's life expectancy is closely related to one's health and these variables collectively provide a measurement for health. The relevance of all variables used to calcualte $H_{i}$ on one's life expectancy, i.e. the effect of the longevity of the individual's parents, smoking and drug addiction on the individual's life expectancy, is supported by the empirical evidence from a number of scientific studies.
+\par
+On the other hand, I do not consider $P_{i}$ and $G_{i}$ as key factors to this model because they have little known effect on musicians' lifespan. Even if they are found to have significant effect, they are most likely intermediary factors that mediate the effect of other factors. For example, a subculture of a specific musical genre may be correlated with the chance that an individual is a heavy smoker. Therefore, I suspect that these two factors will appear insignificant after controlling for other variables.
+\par\bigskip
+\noindent (f) In order to test the significance of these factors, I can use a random sample of musicians who have passed away to fit the model. Since it is a strightforward linear regression model, testing the statistical signifiance of each parameter will be a relatively easy task, with an assumption that the true data generating process is linear and each variable is normally distributed as well as i.i.d.
+\par
+
+
+\end{document}
