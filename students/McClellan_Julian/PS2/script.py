@@ -8,6 +8,7 @@ import os
 import scipy.stats as sts
 import scipy.optimize as opt
 
+COVERAGE = 25
 
 # Utility fuctions
 def make_output_dir():
@@ -22,6 +23,7 @@ def make_output_dir():
 
     return(output_dir)
 
+
 def man_lognorm_pdf(x, mu, sigma):
     '''
     '''
@@ -30,7 +32,7 @@ def man_lognorm_pdf(x, mu, sigma):
 
 
 # Exercise 1a
-def plot_income_hist(incomes):
+def plot_income_hist(incomes, part_c = False):
     '''
     This function takes incomes array and plots an appropriate percentage 
     histogram for Exercise 1a.
@@ -44,19 +46,25 @@ def plot_income_hist(incomes):
     plt.hist(incomes, num_bins, weights = hist_wgts)
     plt.ylabel(r'Percentage of incomes (%)')
     plt.xlabel(r'Annual Incomes (\$s)')
-    plt.title('Annual Incomes of MACSS Students')
-
+    
     # plt.show()
-    # Save figure
-    output_path = os.path.join(make_output_dir(), 'Fig_1a')
-    plt.savefig(output_path)
-    plt.close()
+    
+    # If need to add the PDF from 1c, do not save, return some x_vals and ax
+    if part_c: 
+        max_income = incomes.max()
+        return(np.linspace(0.001, max_income, COVERAGE * max_income), fig, ax)
+    else: # Else, if this is being used for just 1a, then save the figure.
+        plt.title('Annual Incomes of MACSS Students')
+        output_path = os.path.join(make_output_dir(), 'Fig_1a')
+        plt.savefig(output_path)
+        plt.close()
 
     return(None)
 
 
 # Exercise 1b | Plotting lognormal pdf
-def plot_lognorm_pdf(bounds, coverage, mu, sigma):
+def plot_lognorm_pdf(bounds, coverage, mu, sigma, part_c = False, 
+                     fig_name = 'Fig_1b'):
     '''
     '''
     assert (0 < coverage < 100), 'Coverage must be between 0% and 100%'
@@ -71,18 +79,22 @@ def plot_lognorm_pdf(bounds, coverage, mu, sigma):
 
     # Plotting
     fig, ax = plt.subplots()
-    fig.set_size_inches(10, 6)
     plt.xlim(0, 150000)
-    plt.plot(x_vals, lognorm_pdf)
+    plt.plot(x_vals, lognorm_pdf, label = '$f(x|\mu={}, \sigma={}$'
+            .format(round(mu, 3), round(sigma, 3)))
     plt.xlabel('x')
-    plt.ylabel('$f(x|\mu=9,\sigma=.3)$')
-    plt.title('Log normal pdf. $\mu={}$, $\sigma={}$'.format(mu, sigma))
-    # plt.show()
 
-    # Save figure
-    output_path = os.path.join(make_output_dir(), 'Fig_1b')
-    plt.savefig(output_path)
-    plt.close()
+    if part_c: # If need to add the PDF from 1c, do not save, return the x_vals
+        return(x_vals)
+    else:
+        plt.ylabel('$f(x|\mu=9,\sigma=.3)$')
+        plt.title('Log normal pdf. $\mu={}$, $\sigma={}$'
+                  .format(round(mu, 3), round(sigma, 3)))
+        plt.tight_layout()
+        output_path = os.path.join(make_output_dir(), fig_name)
+        plt.savefig(output_path)
+        plt.close()
+    return(None)
 
 
 # Exercise 1b | Calculating log likelihood value
@@ -135,11 +147,64 @@ def estimate_params(mu_init, sig_init, values):
 
     results = opt.minimize(crit, params_init, method='SLSQP', args=(mle_args), 
                            bounds = bnds)
-    mu_MLE, sig_MLE = results.x
-    print('mu_MLE=', mu_MLE, ' sig_MLE=', sig_MLE)
+    return(results)
 
 
+# Exercise 1c | Plot the PDF against the pdf from part (b) and the histogram 
+# from part (a). Plot the estimated pdf for 0 <= x <= 150,000. Report the ML 
+# estimates for mu and sigma, the value of the likelihood function, and the 
+# variance-covariance matrix.
+def plot_alot(mu_init, sig_init, values):
+    '''
+    This function takes an initial value of mu and sigma, as well as the array
+    of student incomes and estimates the parameters of the lognormal distribution
+    by maximum likelihood and makes several required plots.
+    '''
+    results = estimate_params(mu_init, sig_init, incomes)
+    mu_mle, sig_mle = results.x
+    mle_label = '$f(x|\mu={}, \sigma={})$'.format(round(mu_mle, 3), 
+                                                  round(sig_mle, 3))
 
+    # Plot the PDF against the PDF from part b
+    # Plot part b, retrieve x_vals
+    x_vals = plot_lognorm_pdf([0.001, 150000], coverage = COVERAGE, mu = 9, 
+                              sigma = .3, part_c = True) 
+
+    # Y-axis values (lognorm pdf) creation
+    mle_lognorm_dist = sts.lognorm(scale = np.exp(mu_mle), s = sig_mle)
+    mle_lognorm_pdf = mle_lognorm_dist.pdf(x_vals)
+    # Plot on top of figure from part b
+    plt.plot(x_vals, mle_lognorm_pdf, label = mle_label)
+    plt.ylabel('$f(x|\mu,\sigma)$')
+    plt.title('Log normal pdfs with parameters $\mu,\sigma$')
+    plt.legend()
+    plt.tight_layout()
+
+    # Save figure
+    output_path = os.path.join(make_output_dir(), 'Fig_1c_with_b')
+    plt.savefig(output_path)
+    plt.close()
+
+    # Plot the estimated pdf for ) <= x <= 150,000.
+    plot_lognorm_pdf([0.001, 150000], COVERAGE, mu_mle, sig_mle, part_c = False, 
+                     fig_name = 'Fig_1c')
+
+    # Plot the PDF against the histogram from part a (twin y-label)
+    # Get new x vals (max is incomes.max())
+    x_vals, fig, ax = plot_income_hist(incomes, part_c = True) 
+    trunc_mle_ln_pdf = mle_lognorm_dist.pdf(x_vals)
+    ax2 = ax.twinx()
+    ax2.plot(x_vals, trunc_mle_ln_pdf, label = mle_label, color = 'red')
+    ax2.set_ylabel(mle_label)
+    plt.title('Annual Incomes of MACSS Students Histogram with Lognormal PDF', 
+              y = 1.02) # Move title up slightly
+    plt.legend(loc = 2) # Legend in upper left
+    plt.tight_layout() # I want to see the labels
+
+    # Save figure
+    output_path = os.path.join(make_output_dir(), 'Fig_1c_with_a')
+    plt.savefig(output_path)
+    plt.close()
 
 
 if __name__ == '__main__':
@@ -148,8 +213,9 @@ if __name__ == '__main__':
     plot_income_hist(incomes)
 
     # Exercise 1b
-    plot_lognorm_pdf([0.001, 150000], coverage = 25, mu = 9, sigma = .3)
+    plot_lognorm_pdf([0.001, 150000], coverage = COVERAGE, mu = 9, sigma = .3)
     log_lik_val = calc_lognorm_likelihood(incomes, mu = 9, sigma = .3)
     print('The log likelihood value of the data given mu = 9 and sigma = .3 is {}'.format(log_lik_val))
 
     # Exercise 1c
+    plot_alot(9, .3, incomes)
