@@ -324,12 +324,11 @@ if __name__ == '__main__':
           ' came from the distribution in part (b)\n')
 
     # Exercise 1e
-    # mle_lognorm.cdf()
     print('Exercise 1e')
     print('The probability that I will earn more than $100,000 is {:.3f}\n'
-          .format(1 - mle_lognorm.cdf(100000), 3))
+          .format(1 - mle_lognorm.cdf(100000)))
     print('The probability that I will earn less than $75,000 is {:.3f}\n'
-          .format(mle_lognorm.cdf(75000), 3))
+          .format(mle_lognorm.cdf(75000)))
 
     # Exercise 2a
     print('Exercise 2a')
