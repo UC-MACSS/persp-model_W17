@@ -43,10 +43,14 @@ def plot_income_hist(incomes, part_c = False):
     # Plot percentages histogram with 30 bins
     num_incomes = len(incomes)
     num_bins = 30
-    hist_wgts = (100 / num_incomes) * np.ones(num_incomes)
+
+    if part_c:
+        hist_wgts = None
+    else:
+        hist_wgts = (100 / num_incomes) * np.ones(num_incomes)
 
     fig, ax = plt.subplots()
-    plt.hist(incomes, num_bins, weights = hist_wgts)
+    plt.hist(incomes, num_bins, weights = hist_wgts, normed = part_c)
     plt.ylabel(r'Percentage of incomes (%)')
     plt.xlabel(r'Annual Incomes (\$s)')
     
@@ -66,8 +70,7 @@ def plot_income_hist(incomes, part_c = False):
 
 
 # Exercise 1b | Plotting lognormal pdf
-def plot_lognorm_pdf(bounds, coverage, mu, sigma, part_c = False, 
-                     fig_name = 'Fig_1b'):
+def plot_lognorm_pdf(bounds, coverage, mu, sigma, fig_name = 'Fig_1b'):
     '''
     '''
     assert (0 < coverage < 100), 'Coverage must be between 0% and 100%'
@@ -80,23 +83,19 @@ def plot_lognorm_pdf(bounds, coverage, mu, sigma, part_c = False,
     lognorm_dist = sts.lognorm(scale = np.exp(mu), s = sigma)
     lognorm_pdf = lognorm_dist.pdf(x_vals)
 
-    # Plotting
+    # Plotting and saving
     fig, ax = plt.subplots()
     plt.xlim(0, 150000)
     plt.plot(x_vals, lognorm_pdf, label = '$f(x|\mu={}, \sigma={}$'
             .format(round(mu, 3), round(sigma, 3)))
     plt.xlabel('x')
-
-    if part_c: # If need to add the PDF from 1c, do not save, return the x_vals
-        return(x_vals)
-    else:
-        plt.ylabel('$f(x|\mu=9,\sigma=.3)$')
-        plt.title('Log normal pdf. $\mu={}$, $\sigma={}$'
-                  .format(round(mu, 3), round(sigma, 3)))
-        plt.tight_layout()
-        output_path = os.path.join(make_output_dir(), fig_name)
-        plt.savefig(output_path)
-        plt.close()
+    plt.ylabel('$f(x|\mu=9,\sigma=.3)$')
+    plt.title('Log normal pdf. $\mu={}$, $\sigma={}$'
+              .format(round(mu, 3), round(sigma, 3)))
+    plt.tight_layout()
+    output_path = os.path.join(make_output_dir(), fig_name)
+    plt.savefig(output_path)
+    plt.close()
     return(None)
 
 
@@ -172,45 +171,27 @@ def plot_alot(mu_init, sig_init, values):
     mu_mle, sig_mle = results.x
     mle_label = '$f(x|\mu={}, \sigma={})$'.format(round(mu_mle, 3), 
                                                   round(sig_mle, 3))
+    init_label = '$f(x|\mu={}, \sigma={})$'.format(MU_INIT, SIG_INIT)
 
-    # Plot the PDF against the PDF from part b
-    # Plot part b, retrieve x_vals
-    x_vals = plot_lognorm_pdf([0.001, 150000], coverage = COVERAGE, mu = MU_INIT, 
-                              sigma = SIG_INIT, part_c = True) 
-
-    # Y-axis values (lognorm pdf) creation
     mle_lognorm = sts.lognorm(scale = np.exp(mu_mle), s = sig_mle)
-    mle_lognorm_pdf = mle_lognorm.pdf(x_vals)
-    # Plot on top of figure from part b
-    plt.plot(x_vals, mle_lognorm_pdf, label = mle_label)
-    plt.ylabel('$f(x|\mu,\sigma)$')
-    plt.title('Log normal pdfs with parameters $\mu,\sigma$')
-    plt.legend()
-    plt.tight_layout()
+    init_lognorm = sts.lognorm(scale = np.exp(MU_INIT), s = SIG_INIT)
 
-    # Save figure
-    output_path = os.path.join(make_output_dir(), 'Fig_1c_with_b')
-    plt.savefig(output_path)
-    plt.close()
-
-    # Plot the estimated pdf for ) <= x <= 150,000.
-    plot_lognorm_pdf([0.001, 150000], COVERAGE, mu_mle, sig_mle, part_c = False, 
-                     fig_name = 'Fig_1c')
-
-    # Plot the PDF against the histogram from part a (twin y-label)
+    # Plot the PDF against the histogram from part (a)  and the pdf from part (b).
     # Get new x vals (max is incomes.max())
     x_vals, fig, ax = plot_income_hist(incomes, part_c = True) 
     trunc_mle_ln_pdf = mle_lognorm.pdf(x_vals)
-    ax2 = ax.twinx()
-    ax2.plot(x_vals, trunc_mle_ln_pdf, label = mle_label, color = 'red')
-    ax2.set_ylabel(mle_label)
-    plt.title('Annual Incomes of MACSS Students Histogram with Lognormal PDF', 
+    trunc_init_ln_pdf = init_lognorm.pdf(x_vals)
+    plt.plot(x_vals, trunc_mle_ln_pdf, label = mle_label, color = 'red')
+    plt.plot(x_vals, trunc_init_ln_pdf, label = init_label, color = 'cyan')
+
+    plt.ylabel('$f(x|\mu,\sigma)$')
+    plt.title('Annual Incomes of MACSS Students Histogram with Lognormal PDFs', 
               y = 1.02) # Move title up slightly
-    plt.legend(loc = 2) # Legend in upper left
+    plt.legend(loc = 1) # Legend in upper right
     plt.tight_layout() # I want to see the labels
 
     # Save figure
-    output_path = os.path.join(make_output_dir(), 'Fig_1c_with_a')
+    output_path = os.path.join(make_output_dir(), 'Fig_1c')
     plt.savefig(output_path)
     plt.close()
 
@@ -316,6 +297,7 @@ def lrt_norm(df, **mle_test_params):
     p_val = 1.0 - sts.chi2.cdf(lr_val, 2)
 
     return(p_val)
+
 
 if __name__ == '__main__':
     np.seterr(all = 'ignore') # Ignore numpy warnings
