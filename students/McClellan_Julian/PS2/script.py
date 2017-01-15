@@ -148,8 +148,13 @@ def estimate_params1(mu_init, sig_init, values):
     mle_args = (values)
     bnds = ((None, None), (0, None)) # Want standard deviation to be positive
 
+    # While this minimize with the SLSQP method and the above bounds works, it
+    # does not return an inverse Hessian (variance-covariance) matrix
     results = opt.minimize(crit, params_init, method='SLSQP', args=(mle_args), 
                            bounds = bnds)
+
+    # For the lognormal function the below does not work.
+    # results = opt.minimize(crit, params_init, args=(mle_args))
     return(results)
 
 
@@ -299,38 +304,73 @@ def estimate_params2(*params, values):
                            # bounds = bnds)
     return(results)
 
+# Exercise 2b | Likelihood ratio test
+def lrt_norm(df, **mle_test_params):
+    '''
+    '''
+    log_lhood_mle = calc_norm_likelihood(df, *mle_test_params['mle'])
+    log_lhood_tst = calc_norm_likelihood(df, *mle_test_params['tst'])
+
+    lr_val = 2 * (log_lhood_mle - log_lhood_tst)
+
+    p_val = 1.0 - sts.chi2.cdf(lr_val, 2)
+
+    return(p_val)
+
 if __name__ == '__main__':
-    # np.seterr(all = 'ignore') # Ignore numpy warnings
-    # incomes = np.loadtxt('incomes.txt') # Load incomes data
-    # # Exercise 1a
-    # plot_income_hist(incomes)
+    np.seterr(all = 'ignore') # Ignore numpy warnings
+    incomes = np.loadtxt('incomes.txt') # Load incomes data
+    # Exercise 1a
+    plot_income_hist(incomes)
 
-    # # Exercise 1b
-    # print('Exercise 1b')
-    # plot_lognorm_pdf([0.001, 150000], coverage = COVERAGE, 
-    #                                    mu = MU_INIT, sigma = SIG_INIT)
-    # log_lik_val = calc_lognorm_likelihood(incomes, mu = MU_INIT, sigma = SIG_INIT)
-    # print('The log likelihood value of the data given mu = 9 and sigma = .3 is {}\n'
-    #       .format(round(log_lik_val, 3)))
+    # Exercise 1b
+    print('Exercise 1b')
+    plot_lognorm_pdf([0.001, 150000], coverage = COVERAGE, 
+                                       mu = MU_INIT, sigma = SIG_INIT)
+    log_lik_val = calc_lognorm_likelihood(incomes, mu = MU_INIT, sigma = SIG_INIT)
+    print('The log likelihood value of the data given mu = 9 and sigma = .3 is {}\n'
+          .format(round(log_lik_val, 3)))
 
-    # # Exercise 1c
-    # print('Exercise 1c')
-    # mu_mle, sig_mle, mle_lognorm = plot_alot(MU_INIT, SIG_INIT, incomes)
+    # Exercise 1c
+    print('Exercise 1c')
+    mu_mle, sig_mle, mle_lognorm = plot_alot(MU_INIT, SIG_INIT, incomes)
 
-    # # Exercise 1d
-    # print('Likelihood Ratio Test p-value is: {}\n'
-    #      .format(lrt_lognorm(incomes, *(mu_mle, sig_mle, MU_INIT, SIG_INIT))))
-    # print('This number is really low (< .05), so it is unlikely that the data'
-    #       'came from the distribution in part (b)\n')
+    # Exercise 1d
+    p_val1 = lrt_lognorm(incomes, *(mu_mle, sig_mle, MU_INIT, SIG_INIT))
+    print('Likelihood Ratio Test p-value is: {}\n'
+         .format(p_val1))
+    print('This number is really low (< .05), so it is unlikely that the data'
+          ' came from the distribution in part (b)\n')
 
-    # # Exercise 1e
-    # # mle_lognorm.cdf()
-    # print('Exercise 1e')
-    # print('The probability that I will earn more than $100,000 is {}\n'
-    #       .format(round(1 - mle_lognorm.cdf(100000), 3)))
-    # print('The probability that I will earn less than $75,000 is {}\n'
-    #       .format(round(mle_lognorm.cdf(75000), 3)))
+    # Exercise 1e
+    # mle_lognorm.cdf()
+    print('Exercise 1e')
+    print('The probability that I will earn more than $100,000 is {}\n'
+          .format(round(1 - mle_lognorm.cdf(100000), 3)))
+    print('The probability that I will earn less than $75,000 is {}\n'
+          .format(round(mle_lognorm.cdf(75000), 3)))
 
     # Exercise 2a
+    print('Exercise 2a')
     sick_dat = pd.read_csv('sick.txt', encoding = 'utf-8-sig') # Read in CSV
+    results = estimate_params2(*(1, 0, 0, 0, 0), values = sick_dat)
+    sig, b0, b1, b2, b3 = results.x
+    print('The estimates for beta_0, beta_1, beta_2, beta_3, and sigma^2 are:'
+          '{}, {}, {}, {}, and {}, respectively.\n'.format(round(b0, 3), 
+            round(b1, 3), round(b2, 3), round(b3, 6), round(sig**2, 8)))
+    print('The value of the log likelihood function is: {}\n'.format(
+            calc_norm_likelihood(sick_dat, *(sig, b0, b1, b2, b3))))
+    print('The estimated variance covariance matrix of the estimates is: {}\n'
+           .format(results.hess_inv))
+
+    # Exercise 2b
+    print('Exercise 2b')
+    p_val2 = lrt_norm(sick_dat, **{'mle': (sig, b0, b1, b2, b3), 
+                                 'tst': (np.sqrt(.01), 1, 0, 0, 0)})
+    print('Likelihood Ratio Test p-value is: {}\n'
+         .format(p_val1))
+    print('This number is really low (< .05), so it is unlikely that age'
+          ' number of children, and average winter temperature have no effect on'
+          'the number of sick days.\n')
+
     
