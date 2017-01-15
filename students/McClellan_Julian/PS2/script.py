@@ -86,12 +86,12 @@ def plot_lognorm_pdf(bounds, coverage, mu, sigma, fig_name = 'Fig_1b'):
     # Plotting and saving
     fig, ax = plt.subplots()
     plt.xlim(0, 150000)
-    plt.plot(x_vals, lognorm_pdf, label = '$f(x|\mu={}, \sigma={}$'
-            .format(round(mu, 3), round(sigma, 3)))
+    plt.plot(x_vals, lognorm_pdf, label = '$f(x|\mu={:.3f}, \sigma={:.3f}$'
+            .format(mu, sigma))
     plt.xlabel('x')
     plt.ylabel('$f(x|\mu=9,\sigma=.3)$')
-    plt.title('Log normal pdf. $\mu={}$, $\sigma={}$'
-              .format(round(mu, 3), round(sigma, 3)))
+    plt.title('Log normal pdf. $\mu={:.3f}$, $\sigma={:.3f}$'
+              .format(mu, sigma))
     plt.tight_layout()
     output_path = os.path.join(make_output_dir(), fig_name)
     plt.savefig(output_path)
@@ -169,8 +169,7 @@ def plot_alot(mu_init, sig_init, values):
     '''
     results = estimate_params1(mu_init, sig_init, incomes)
     mu_mle, sig_mle = results.x
-    mle_label = '$f(x|\mu={}, \sigma={})$'.format(round(mu_mle, 3), 
-                                                  round(sig_mle, 3))
+    mle_label = '$f(x|\mu={:.3f}, \sigma={:.3f})$'.format(mu_mle, sig_mle)
     init_label = '$f(x|\mu={}, \sigma={})$'.format(MU_INIT, SIG_INIT)
 
     mle_lognorm = sts.lognorm(scale = np.exp(mu_mle), s = sig_mle)
@@ -185,7 +184,7 @@ def plot_alot(mu_init, sig_init, values):
     plt.plot(x_vals, trunc_init_ln_pdf, label = init_label, color = 'cyan')
 
     plt.ylabel('$f(x|\mu,\sigma)$')
-    plt.title('Annual Incomes of MACSS Students Histogram with Lognormal PDFs', 
+    plt.title('Incomes of MACSS Students Histogram (normed) with Lognormal PDFs', 
               y = 1.02) # Move title up slightly
     plt.legend(loc = 1) # Legend in upper right
     plt.tight_layout() # I want to see the labels
@@ -196,12 +195,12 @@ def plot_alot(mu_init, sig_init, values):
     plt.close()
 
     # Report ML estimates for mu and sigma
-    print('mu_MLE = {} | sig_MLE = {}\n'.format(mu_mle, sig_mle))
+    print('mu_MLE = {:.3f} | sig_MLE = {:.3f}\n'.format(mu_mle, sig_mle))
 
     # Report value of the likelihood function
     log_lik_val = calc_lognorm_likelihood(incomes, mu = mu_mle, sigma = sig_mle)
-    print('The log likelihood value of the data given mu = {} and sigma = {} is {}\n'
-          .format(round(mu_mle, 3), round(sig_mle, 3), round(log_lik_val, 3)))
+    print('The log likelihood value of the data given mu = {:.3f} and sigma = {:.3f} is {:.3f}\n'
+          .format(mu_mle, sig_mle, log_lik_val))
 
     # Report the variance covariance matrix (Empirical Hessian Estimator)
     # print('The variance-covariance matrix is {}'.format(results.hess_inv))
@@ -310,8 +309,8 @@ if __name__ == '__main__':
     plot_lognorm_pdf([0.001, 150000], coverage = COVERAGE, 
                                        mu = MU_INIT, sigma = SIG_INIT)
     log_lik_val = calc_lognorm_likelihood(incomes, mu = MU_INIT, sigma = SIG_INIT)
-    print('The log likelihood value of the data given mu = 9 and sigma = .3 is {}\n'
-          .format(round(log_lik_val, 3)))
+    print('The log likelihood value of the data given mu = 9 and sigma = .3 is {:.3f}\n'
+          .format(log_lik_val))
 
     # Exercise 1c
     print('Exercise 1c')
@@ -327,10 +326,10 @@ if __name__ == '__main__':
     # Exercise 1e
     # mle_lognorm.cdf()
     print('Exercise 1e')
-    print('The probability that I will earn more than $100,000 is {}\n'
-          .format(round(1 - mle_lognorm.cdf(100000), 3)))
-    print('The probability that I will earn less than $75,000 is {}\n'
-          .format(round(mle_lognorm.cdf(75000), 3)))
+    print('The probability that I will earn more than $100,000 is {:.3f}\n'
+          .format(1 - mle_lognorm.cdf(100000), 3))
+    print('The probability that I will earn less than $75,000 is {:.3f}\n'
+          .format(mle_lognorm.cdf(75000), 3))
 
     # Exercise 2a
     print('Exercise 2a')
@@ -338,8 +337,8 @@ if __name__ == '__main__':
     results = estimate_params2(*(1, 0, 0, 0, 0), values = sick_dat)
     sig, b0, b1, b2, b3 = results.x
     print('The estimates for beta_0, beta_1, beta_2, beta_3, and sigma^2 are:'
-          '{}, {}, {}, {}, and {}, respectively.\n'.format(round(b0, 3), 
-            round(b1, 3), round(b2, 3), round(b3, 6), round(sig**2, 8)))
+          '{:.3f}, {:.3f}, {:.3f}, {:.6f}, and {:.8f}, respectively.\n'
+          .format(b0, b1, b2, b3, sig**2))
     print('The value of the log likelihood function is: {}\n'.format(
             calc_norm_likelihood(sick_dat, *(sig, b0, b1, b2, b3))))
     print('The estimated variance covariance matrix of the estimates is: {}\n'
