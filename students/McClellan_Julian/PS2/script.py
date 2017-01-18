@@ -316,6 +316,9 @@ if __name__ == '__main__':
 
     # Exercise 1c
     print('Exercise 1c')
+    # I cheated by calculating 11.331 and .212 with the SLSQP method first
+    # and then I am using these numbers as a starting point for the L-BFGS-B method
+    # since that method returns a useable inverse hessian matrix.
     mu_mle, sig_mle, mle_lognorm, results1 = plot_alot(11.331, .212, incomes)
     print('Variance covariance matrix: {}\n'.format(results1.hess_inv.sk))
 
