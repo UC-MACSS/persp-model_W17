@@ -13,6 +13,8 @@ COVERAGE = 25 #%
 MU_INIT = 9
 SIG_INIT = .3
 
+# methods: TNC, SLSQP
+
 # Utility fuctions
 def make_output_dir():
     '''
@@ -26,7 +28,7 @@ def make_output_dir():
 
     return(output_dir)
 
-# 
+# Unused
 def man_lognorm_pdf(x, mu, sigma):
     '''
     '''
