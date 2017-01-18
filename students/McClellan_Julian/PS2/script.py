@@ -13,8 +13,6 @@ COVERAGE = 25 #%
 MU_INIT = 9
 SIG_INIT = .3
 
-# methods: TNC, SLSQP
-
 # Utility fuctions
 def make_output_dir():
     '''
@@ -139,7 +137,7 @@ def crit(params, *args):
     return(neg_log_lik_val)
 
 
-def estimate_params1(mu_init, sig_init, values):
+def estimate_params1(mu_init, sig_init, values, method = 'L-BFGS-B'):
     '''
     This function takes intial values of mu and sigma, as well as an array of 
     real data with which to conduct the MLE, and returns the estimated parameters
@@ -151,7 +149,7 @@ def estimate_params1(mu_init, sig_init, values):
 
     # While this minimize with the SLSQP method and the above bounds works, it
     # does not return an inverse Hessian (variance-covariance) matrix
-    results = opt.minimize(crit, params_init, method='L-BFGS-B', args=(mle_args), 
+    results = opt.minimize(crit, params_init, method=method, args=(mle_args), 
                            bounds = bnds)
 
     # For the lognormal function the below does not work.
@@ -169,8 +167,16 @@ def plot_alot(mu_init, sig_init, values):
     of student incomes and estimates the parameters of the lognormal distribution
     by maximum likelihood and makes several required plots.
     '''
-    results1 = estimate_params1(mu_init, sig_init, incomes)
-    mu_mle, sig_mle = results1.x
+    # The SLSQP method does not return an inverse Hessian matrix so I use it 
+    # to produce "starting points" for the L-BFGS-B method, which does return an
+    # inverse hessian matrix
+    results_prelim = estimate_params1(mu_init, sig_init, incomes, method = 'SLSQP')
+    mu_start, sig_start = results_prelim.x
+
+    # Weirdly enough, the only way for me to have results_final return an inverse
+    # Hessian matrix is to round mu_start, and sig_start.
+    results_final = estimate_params1(round(mu_start, 3), round(sig_start, 3), incomes)
+    mu_mle, sig_mle = results_final.x
     mle_label = '$f(x|\mu={:.3f}, \sigma={:.3f})$'.format(mu_mle, sig_mle)
     init_label = '$f(x|\mu={}, \sigma={})$'.format(MU_INIT, SIG_INIT)
 
@@ -204,14 +210,12 @@ def plot_alot(mu_init, sig_init, values):
     print('The log likelihood value of the data given mu = {:.3f} and sigma = {:.3f} is {:.3f}\n'
           .format(mu_mle, sig_mle, log_lik_val))
 
-    # Report the variance covariance matrix (Empirical Hessian Estimator)
-    # print('The variance-covariance matrix is {}'.format(results.hess_inv))
-    # !!! The only method that terminates successfully is 'SLSQP' and its 
-    # results object does not have the inverse Hessian Matrix...
+    print('The inverse hessian matrix: {}'.format(results_final.hess_inv.sk))
 
     # Return the parameters and the MLE lognorm distribution, they will be 
-    # useful for 1d and 1e, respectively
-    return(mu_mle, sig_mle, mle_lognorm, results1) 
+    # useful for 1d and 1e, respectively. Results final is returned for 
+    # debugging purposes.
+    return(mu_mle, sig_mle, mle_lognorm, results_final) 
 
 # Exercise 1d | LRT test to determine if the data in incomes.txt came from the
 # distribution in part (b)
@@ -282,8 +286,7 @@ def estimate_params2(*params, values):
     mle_args = (values)
     # bnds = ((0, None), (None, None), (None, None), (None, None), (None, None)) # Want standard deviation to be positive
 
-    results = opt.minimize(crit2, params_init, args=(mle_args)) # method = 'SLSQP', 
-                           # bounds = bnds)
+    results = opt.minimize(crit2, params_init, args=(mle_args))
     return(results)
 
 # Exercise 2b | Likelihood ratio test
@@ -319,8 +322,7 @@ if __name__ == '__main__':
     # I calculated 11.331 and .212 with the SLSQP method first and then I am 
     # using these numbers as a starting point for the L-BFGS-B method since 
     # L-BFGS-B returns a useable inverse hessian matrix.
-    mu_mle, sig_mle, mle_lognorm, results1 = plot_alot(11.331, .212, incomes)
-    print('Variance covariance matrix: {}\n'.format(results1.hess_inv.sk))
+    mu_mle, sig_mle, mle_lognorm, results1 = plot_alot(MU_INIT, SIG_INIT, incomes)
 
     # Exercise 1d
     print('Exercise 1d')
