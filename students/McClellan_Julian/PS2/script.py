@@ -145,11 +145,11 @@ def estimate_params1(mu_init, sig_init, values):
     '''
     params_init = np.array([mu_init, sig_init])
     mle_args = (values)
-    bnds = ((None, None), (0, None)) # Want standard deviation to be positive
+    bnds = ((None, None), (0.00001, None)) # Want standard deviation to be positive
 
     # While this minimize with the SLSQP method and the above bounds works, it
     # does not return an inverse Hessian (variance-covariance) matrix
-    results = opt.minimize(crit, params_init, method='SLSQP', args=(mle_args), 
+    results = opt.minimize(crit, params_init, method='L-BFGS-B', args=(mle_args), 
                            bounds = bnds)
 
     # For the lognormal function the below does not work.
@@ -167,8 +167,8 @@ def plot_alot(mu_init, sig_init, values):
     of student incomes and estimates the parameters of the lognormal distribution
     by maximum likelihood and makes several required plots.
     '''
-    results = estimate_params1(mu_init, sig_init, incomes)
-    mu_mle, sig_mle = results.x
+    results1 = estimate_params1(mu_init, sig_init, incomes)
+    mu_mle, sig_mle = results1.x
     mle_label = '$f(x|\mu={:.3f}, \sigma={:.3f})$'.format(mu_mle, sig_mle)
     init_label = '$f(x|\mu={}, \sigma={})$'.format(MU_INIT, SIG_INIT)
 
@@ -209,7 +209,7 @@ def plot_alot(mu_init, sig_init, values):
 
     # Return the parameters and the MLE lognorm distribution, they will be 
     # useful for 1d and 1e, respectively
-    return(mu_mle, sig_mle, mle_lognorm) 
+    return(mu_mle, sig_mle, mle_lognorm, results1) 
 
 # Exercise 1d | LRT test to determine if the data in incomes.txt came from the
 # distribution in part (b)
@@ -314,9 +314,11 @@ if __name__ == '__main__':
 
     # Exercise 1c
     print('Exercise 1c')
-    mu_mle, sig_mle, mle_lognorm = plot_alot(MU_INIT, SIG_INIT, incomes)
+    mu_mle, sig_mle, mle_lognorm, results1 = plot_alot(11.331, .212, incomes)
+    print('Variance covariance matrix: {}\n'.format(results1.hess_inv.sk))
 
     # Exercise 1d
+    print('Exercise 1d')
     p_val1 = lrt_lognorm(incomes, *(mu_mle, sig_mle, MU_INIT, SIG_INIT))
     print('Likelihood Ratio Test p-value is: {}\n'
          .format(p_val1))
