@@ -1,0 +1,142 @@
+{\rtf1\ansi\ansicpg936\cocoartf1404\cocoasubrtf460
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \\documentclass[letterpaper,12pt]\{article\}\
+\\usepackage\{array\}\
+\\usepackage\{threeparttable\}\
+\\usepackage\{geometry\}\
+\\geometry\{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in\}\
+\\usepackage\{fancyhdr,lastpage\}\
+\\pagestyle\{fancy\}\
+\\lhead\{\}\
+\\chead\{\}\
+\\rhead\{\}\
+\\lfoot\{\}\
+\\cfoot\{\}\
+\\rfoot\{\\footnotesize\\textsl\{Page \\thepage\\ of \\pageref\{LastPage\}\}\}\
+\\renewcommand\\headrulewidth\{0pt\}\
+\\renewcommand\\footrulewidth\{0pt\}\
+\\usepackage[format=hang,font=normalsize,labelfont=bf]\{caption\}\
+\\usepackage\{listings\}\
+\\lstset\{frame=single,\
+  language=Python,\
+  showstringspaces=false,\
+  columns=flexible,\
+  basicstyle=\{\\small\\ttfamily\},\
+  numbers=none,\
+  breaklines=true,\
+  breakatwhitespace=true\
+  tabsize=3\
+\}\
+\\usepackage\{amsmath\}\
+\\usepackage\{amssymb\}\
+\\usepackage\{amsthm\}\
+\\usepackage\{harvard\}\
+\\usepackage\{setspace\}\
+\\usepackage\{float,color\}\
+\\usepackage[pdftex]\{graphicx\}\
+\\usepackage\{hyperref\}\
+\\hypersetup\{colorlinks,linkcolor=red,urlcolor=blue\}\
+\\theoremstyle\{definition\}\
+\\newtheorem\{theorem\}\{Theorem\}\
+\\newtheorem\{acknowledgement\}[theorem]\{Acknowledgement\}\
+\\newtheorem\{algorithm\}[theorem]\{Algorithm\}\
+\\newtheorem\{axiom\}[theorem]\{Axiom\}\
+\\newtheorem\{case\}[theorem]\{Case\}\
+\\newtheorem\{claim\}[theorem]\{Claim\}\
+\\newtheorem\{conclusion\}[theorem]\{Conclusion\}\
+\\newtheorem\{condition\}[theorem]\{Condition\}\
+\\newtheorem\{conjecture\}[theorem]\{Conjecture\}\
+\\newtheorem\{corollary\}[theorem]\{Corollary\}\
+\\newtheorem\{criterion\}[theorem]\{Criterion\}\
+\\newtheorem\{definition\}[theorem]\{Definition\}\
+\\newtheorem\{derivation\}\{Derivation\} % Number derivations on their own\
+\\newtheorem\{example\}[theorem]\{Example\}\
+\\newtheorem\{exercise\}[theorem]\{Exercise\}\
+\\newtheorem\{lemma\}[theorem]\{Lemma\}\
+\\newtheorem\{notation\}[theorem]\{Notation\}\
+\\newtheorem\{problem\}[theorem]\{Problem\}\
+\\newtheorem\{proposition\}\{Proposition\} % Number propositions on their own\
+\\newtheorem\{remark\}[theorem]\{Remark\}\
+\\newtheorem\{solution\}[theorem]\{Solution\}\
+\\newtheorem\{summary\}[theorem]\{Summary\}\
+%\\numberwithin\{equation\}\{section\}\
+\\bibliographystyle\{aer\}\
+\\newcommand\\ve\{\\varepsilon\}\
+\\newcommand\\boldline\{\\arrayrulewidth\{1pt\}\\hline\}\
+\
+\
+\\begin\{document\}\
+\
+\\begin\{flushleft\}\
+  \\textbf\{\\large\{Problem Set \\#1\}\} \\\\\
+  MACS 30000, Dr. Evans \\\\\
+  Xingyun Wu\
+\\end\{flushleft\}\
+\
+\\vspace\{5mm\}\
+\
+\\noindent\\textbf\{Problem 1\}\
+Classify a model from a journal.\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (a \\& b).\} Citation: David Jacobs and Jonathan C. Dirlam, "Politics and Economic Stratification: Power Resources and Income Inequality in the United States," American Journal of Sociology 122, no. 2 (September 2016): 469-500. \\href\{http://www.journals.uchicago.edu/doi/abs/10.1086/687744\}\{Link\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (c).\} This journal article tests the power resource hypothesis with a pooled time-series analysis of income inequality. The explanatory variables are lagged by at least a year, especially most political variables are lagged by two years, to capture possible lagged effect of changes in public policy or other aspects. Most continuous variables are logged unless the transformation ruins a variable's explanatory power. This is to correct modest nonlinearities. The equation for the statistical model is:\
+\\begin\{equation\}\\label\{Inequality_Equation\}\
+\\begin\{split\}\
+    ln(Theil \\quad Index) =\
+    b_\{0\} + b_\{1\}ln(\\%REPUB.GOV_\{t-2\}) + b_\{2\}REPUB.LEG_\{t-2\}\\\\\
+    + b_\{3\}REPUB.PRES_\{t-2\} + b_\{4\}PRES.ELECT.YR_\{t-1\} + b_\{5\}ln(\\%UNION_\{t-1\}) \\\\\
+    + b_\{6\}ln(FINANCE.EMP_\{t-1\}) + b_ln(\{7\}\\%BLACK_\{t-1\}) + \
+    b_\{8\}ln(\\%BLACK \\times YR)_\{t-1\}\\\\\
+    + b_\{9\}(\\%HISPANIC_\{t-1\}) + b_\{10\}INC.PER.CAP_\{t-1\} + b_\{11\}INC.PER.CAP^\{2\}\\\\\
+    + b\{12\}ln(\\%COLLEGE_\{t-1\}) + b_\{13\}ln(\\%COLLEGE \\times YR)_\{t-1\} + b_\{14\}DENSITY_\{t-1\}\\\\\
+    + b_\{15\}DENSITY^\{2\}_\{t-1\} + b_\{16\}\\%POVERTY_\{t-1\} + b_\{17\}ln(\\%RURAL.EMP_\{t-1\})\\\\\
+    + b_\{18\}\\%WOMEN.LBR.FRC_\{t-1\} + b_\{19\}ln(\\%MANU.EMP_\{t-1\}) + b_\{20\}STOCK.VAL_\{t-1\}\\\\\
+    + b_\{21\}ln(\\%UNEMPLOYED_\{t-1\}) + b_\{22\}ln(\\%UNEMPLOYED \\times YR)_\{t-1\}\\\\\
+    + b_\{23\}INEQ.MARGNL.TX + b_\{24-73\}(49 \\quad STATE \\quad TRNDS)\\\\\
+    + b_\{74-123\}(49 \\quad STATE \\quad TRNDS^\{2\}) + e\
+\\end\{split\}\
+\\end\{equation\}\
+\
+\\textbf\{Part (d).\} (1) Exogenous variables are: marginal tax rate, variables indicating government conditions, union strength, higher education rate, financialization, state economic development, the degree to which a state's economy remains rural, population density, employment, women's labor force participation, minority presence.(2) Endogenous variables are: income inequality in the U.S. States from 1978 to 2011. It is measured with the natural log of the Theil inequality measure computed on Internal Revenue Service income data.\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (e).\} The model is a dynamic, linear and stochastic model. It is dynamic because it captures changes, interactions and possibilities that might arise in time. It is linear because it represents a linear relationship among variables. And it is stochastic model because the endogenous varible is not fully determined by the exogenous variables and the initial conditions, which is why the equation includes an error term.\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (f).\} What I think the model is missing that might be valuable: time invariant explanatory variables, such as State culture differences.\
+\
+\\noindent\\textbf\{Problem 2\} Make my own model.\\\\\
+\
+\\textbf\{Part (a - c)\} My model for how long popular musicians live is written as follows. The dependent endogenous variable is predicted lifespan (in years). The exogenous variables are: birth year of the musicians, gender, dummy variable of whether the musician regularly do physical exercise, dummy variable of existence of strong family tie, dummy variable of whether the musician has drug issue, dummy variable of whether the musician smoke, dummy variable of whether the musician has alcohol abuse, dummy variable of whether the working hours are long, and yearly income. The equation is: \
+\\begin\{equation\}\\label\{musicians'_life\}\
+\\begin\{split\}\
+    PREDICTED \\quad LIFESPAN = b_\{0\} + b_\{1\}BIRTH.YEAR + b_\{2\}GENDER\\\\\
+    + b_\{3\}EXERCISE + b_\{4\}FAMILY + b_\{5\}DRUG + b_\{6\}SMOKE + b_\{7\}DRINK\\\\\
+    + b_\{8\}LONG.WORKING.HOURS + b_\{9\}ln(YEARLY.INCOME)+ e\
+    \\end\{split\}\
+\\end\{equation\}\
+\
+\\textbf\{Part (d).\} Although I believe most of the variables I put in my model are important, some may have more impact on how long popular musicians live. The assumed key factors are yearly income, physical exercise, family, and drug/smoking/drinking issue. \
+\
+\\textbf\{Part(e).\} (1) Yearly income. It is among key factors because it influences the musicians' relative socioeconomic status, which would set a foundation for the prediction of lifespan. (2) Physical exercise. People regularly doing physical exercise tend to have better health condition and longer life. (3) The variable for family. It is a key factor for people's social support and mental health. And they could significantly influence the musician's lifespan. (4) The variables for drug, smoking and drinking issue. the other key variables are so important because they have critical impact on their physical health.\
+\
+\\textbf\{Part(f).\} I would gather testing data from the Internet and run my model with the data for the preliminary test. Here are the steps I would take to do the preliminary test:\\\\\
+1. Gather data from the Internet. Since rock \\& roll is one type of popular music, its relevant data could be used to do the preliminary test. There is a wikipedia page named List of Deaths in Rock and Roll, including data of musician names, age when died, date, location and cause of death. I would randomly generate 50 numbers indicating rows, which would be based on the total amount of records that web page records. I need 50 observations to get some extent of statistical significance, while gathering information of 50 people would not cause too much manual work. Then I would scrape the picked musicians' wikipedia page for the information needed for my model.\\\\\
+2. Data recording and data cleaning in statistical software. Information gathered from wikipedia page would be text of descriptions. Since the observation is only 50, I would manually extract the information from the texts. Then record the data and so data cleaning in R or STATA for the next step.\\\\\
+3. The relationships should be linear. Run the linear regression model in R or STATA and get the results of whether my factors are significant in real life.\
+\
+\
+\\end\{document\}\
+\
+}
