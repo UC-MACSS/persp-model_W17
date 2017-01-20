@@ -174,7 +174,8 @@ def plot_alot(mu_init, sig_init, values):
     mu_start, sig_start = results_prelim.x
 
     # Weirdly enough, the only way for me to have results_final return an inverse
-    # Hessian matrix is to round mu_start, and sig_start.
+    # Hessian matrix that isn't an indentiy matrix 
+    # is to round mu_start, and sig_start.
     results_final = estimate_params1(round(mu_start, 3), round(sig_start, 3), incomes)
     mu_mle, sig_mle = results_final.x
     mle_label = '$f(x|\mu={:.3f}, \sigma={:.3f})$'.format(mu_mle, sig_mle)
@@ -210,7 +211,7 @@ def plot_alot(mu_init, sig_init, values):
     print('The log likelihood value of the data given mu = {:.3f} and sigma = {:.3f} is {:.3f}\n'
           .format(mu_mle, sig_mle, log_lik_val))
 
-    print('The inverse hessian matrix: {}'.format(results_final.hess_inv.sk))
+    print('The inverse hessian matrix: {}'.format(results_final.hess_inv.todense()))
 
     # Return the parameters and the MLE lognorm distribution, they will be 
     # useful for 1d and 1e, respectively. Results final is returned for 
@@ -243,8 +244,8 @@ def calc_norm_likelihood(df, *params):
     distribution.
     '''
     sigma, b0, b1, b2, b3 = params
-    values = df['sick'] - b0 + b1 * df['age'] + b2 * df['children']\
-            + b3 * df['avgtemp_winter']
+    values = df['sick'] - b0 - b1 * df['age'] - b2 * df['children']\
+            - b3 * df['avgtemp_winter']
     norm_dist = sts.norm(scale = sigma)
     pdf = norm_dist.pdf(values)
     ln_pdf_vals = np.log(pdf)
@@ -284,9 +285,20 @@ def estimate_params2(*params, values):
     '''
     params_init = np.array(list(params))
     mle_args = (values)
-    # bnds = ((0, None), (None, None), (None, None), (None, None), (None, None)) # Want standard deviation to be positive
+    bnds = ((0.00001, None), (None, None), (None, None), (None, None), (None, None)) # Want standard deviation to be positive
 
-    results = opt.minimize(crit2, params_init, args=(mle_args))
+    results = opt.minimize(crit2, params_init, args=(mle_args), bounds = bnds,
+        method = 'SLSQP')
+    # print(results)
+
+    # Once again, SLSQP terminates successfully but we want the hessian inverse
+    # so we will pass the SLSQP results to L-BFGS-B
+    # params_init = np.array(list(results.x))
+    params_init = np.array([1,0,0,0,0])
+
+    results = opt.minimize(crit2, params_init, args=(mle_args), bounds = bnds,
+                method = 'L-BFGS-B')
+    # results = opt.minimize(crit2, params_init, args=(mle_args))
     return(results)
 
 # Exercise 2b | Likelihood ratio test
@@ -350,7 +362,7 @@ if __name__ == '__main__':
     print('The value of the log likelihood function is: {}\n'.format(
             calc_norm_likelihood(sick_dat, *(sig, b0, b1, b2, b3))))
     print('The estimated variance covariance matrix of the estimates is: {}\n'
-           .format(results.hess_inv))
+           .format(results.hess_inv.todense()))
 
     # Exercise 2b
     print('Exercise 2b')
