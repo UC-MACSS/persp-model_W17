@@ -226,7 +226,7 @@ sick= pd.read_csv('sick.txt', header = 0)
 --------------------------------------------------------------------
 '''
 # Initialise parameters
-beta0_init = 1
+beta0_init = 0
 beta1_init = 0
 beta2_init = 0
 beta3_init = 0
@@ -248,7 +248,7 @@ def log_like_sick(data, b0, b1, b2, b3, sigma):
 
 # Set up criterion function
 def crit2(params, *args):
-    b0, b1, b2, b3,sigma = params
+    b0, b1, b2, b3, sigma = params
     data = args[0]
     log_lik_val = log_like_sick(data, b0, b1, b2, b3, sigma)
     neg_log_lik_val = -log_lik_val
@@ -257,7 +257,7 @@ def crit2(params, *args):
     
 #Find MLE    
 params_init = np.array([beta0_init, beta1_init, beta2_init, beta3_init, sig_init])
-bnds = ((None, None),(None, None),(None, None),(None, None),(0.001, None))
+bnds = ((None, None),(None, None),(None, None),(None, None),(0.00001, None))
 
 results = opt.minimize(crit2, params_init, args=sick, method = "SLSQP", bounds=bnds)
 b0, b1, b2, b3, sigma = results.x
