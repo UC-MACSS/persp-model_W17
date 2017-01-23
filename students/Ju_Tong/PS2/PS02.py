@@ -1,10 +1,12 @@
 import numpy as np
+import scipy.stats as sts
+import scipy.optimize as opt
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 from matplotlib.ticker import MultipleLocator
 import os
 
-# set the seed
-np.random.seed(1234)
+
 
 ...
 graph = True
@@ -28,181 +30,455 @@ if graph:
         os.makedirs(output_dir)
 
 
+
 '''
 ------------------------------------------------------------------------
-Exercise 1a: Simulate the data
+Exercise 1a: Histogram plotting for annual incomes of MACSS graduates
 ------------------------------------------------------------------------
 plot_1a     = Boolean, =True if make a plot of one series of the
               simulated income data
-norm_errors = (lf_years, num_draws) matrix, normally distributed errors
-              with mean 0 and standard deviation sigma
 ------------------------------------------------------------------------
 '''
-plot_1a = True
+# Load the txt data
+data = np.loadtxt('incomes.txt')
 
-#set up  parameters
-mu, sigma = 0, 0.1 # mean and standard deviation
-inc0=80000.
-rou=0.2
-g=0.03
-lf_years=40
-num_draws=10000
-year_vec=list(range(2018,2058))
-# generate the normal distribution
-norm_error = np.random.normal(mu, sigma, (lf_years, num_draws))
-# create the array to collect income results.
-ln_inc=np.zeros((lf_years, num_draws))
+Plot_1a = True
 
-# simulation for the first year`s ln_income
-ln_inc[0,:]=np.log(inc0)+norm_error[0,:]
-# simulation for the following years` ln_income
-for yr in range(1,40):
-    ln_inc[yr,:]=(1-rou)*(np.log(inc0)+g*yr)+rou*ln_inc[yr-1,:]+norm_error[yr,:]
+if Plot_1a :
+    # Set the parameter, num_bins, num_obs (as the number of elements in the array),
+    # and hist_wgts, to make sure that "all the bin heights should sum to 1"
+    num_bins = 30
+    num_obs = len(data)
+    hist_wgts = (1 / num_obs) * np.ones(num_obs)
 
-inc=np.exp(ln_inc)
+    # Plot the histogram for the annual incomes
+    fig, ax = plt.subplots()
+    plt.hist(data, num_bins, weights=hist_wgts*100) # in order to get the % format, multiply the ""weights" as 0.0X by 100
 
-# Plot one lifetime income series from set of simulations
-x_vals = year_vec
-y_vals = inc[:, 0]
-fig, ax = plt.subplots()
-plt.plot(x_vals, y_vals)
+    # Label the plots
+    plt.title('Annual Incomes of MACSS Students in 2018, 2019, 2020', fontsize=15)
+    plt.xlabel(r'Annual Incomes (\$s)')
+    plt.ylabel(r'Percentage of Incomes')
 
-# for the minor ticks, use no labels; default NullFormatter
-minorLocator = MultipleLocator(1)
-ax.xaxis.set_minor_locator(minorLocator)
-plt.grid(b=True, which='major', color='0.65', linestyle='-')
-plt.title('One simulated lifetime income path', fontsize=15)
-plt.xlabel(r'Year $t$')
-plt.ylabel(r'Annual income (\$s)')
-# plt.xlim((xmin, xmax))
-# plt.ylim((ymin, ymax))
-# plt.legend(loc='upper left')
-output_path = os.path.join(output_dir, 'Fig_1a')
-plt.savefig(output_path)
-# plt.show()
-plt.close()
+    # Set the Limit of y-axis
+    plt.ylim([0,9])
+
+
+    # Format the y-axis label as "%".
+    fmt = '%.0f%%'
+    yticks = mtick.FormatStrFormatter(fmt)
+    ax.yaxis.set_major_formatter(yticks)
+
+    # Save the Graph file
+    output_path = os.path.join(output_dir, 'Fig_1a')
+    plt.savefig(output_path)
+    plt.close()
 
 '''
 ------------------------------------------------------------------------
-Exercise 1b: histogram plot for the first year income
+Exercise 1b: Plot the lognormal PDF
 ------------------------------------------------------------------------
-plot_1b     = Boolean, =True if make a plot of first year income
+plot_1b     = Boolean, =True if make a plot of one series of the
+              simulated income data
+lognorm_pdf()         function to generate the pdf values from the given
+data and parameters
+log_lik_lognorm()     function to calculate the log likelihood for given
+lognormal distribution parameters mu and sigma.
 ------------------------------------------------------------------------
 '''
+def lognorm_pdf(xvals, mu, sigma, cutoff):
+    '''
+    --------------------------------------------------------------------
+    Generate pdf values from the lognormal pdf with mean mu and standard
+    deviation sigma. If the cutoff is given, then the PDF values are
+    inflated upward to reflect the zero probability on values above the
+    cutoff. If there is no cutoff given, this function does the same
+    thing as sp.stats.norm.pdf(x, loc=mu, scale=sigma).
+    --------------------------------------------------------------------
+    INPUTS:
+    xvals  = (N,) vector, values of the lognormally distributed random
+             variable
+    mu     = scalar, mean of the lognormally distributed random variable
+    sigma  = scalar > 0, standard deviation of the lognormally distributed
+             random variable
+    cutoff = scalar or string, ='None' if no cutoff is given, otherwise
+             is scalar upper bound value of distribution. Values above
+             this value have zero probability
+
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION: None
+
+    OBJECTS CREATED WITHIN FUNCTION:
+    prob_notcut = scalar
+    pdf_vals = (N,) vector, normal PDF values for mu and sigma
+               corresponding to xvals data
+
+    FILES CREATED BY THIS FUNCTION: None
+
+    RETURNS: pdf_vals
+    --------------------------------------------------------------------
+    '''
+    if cutoff == 'None':
+        prob_notcut = 1.0
+    else:
+        prob_notcut = sts.lognorm.cdf(cutoff, scale= np.exp(mu), s = sigma, loc = mu)
+
+    pdf_vals    = ((1/(xvals*sigma * np.sqrt(2 * np.pi)) *
+                    np.exp( - (np.log(xvals) - mu)**2 / (2 * sigma**2))) /
+                    prob_notcut)
+
+    return pdf_vals
+
+
+def log_lik_lognorm(xvals, mu, sigma, cutoff):
+    '''
+    --------------------------------------------------------------------
+    Compute the log likelihood function for data xvals given lognormal
+    distribution parameters mu and sigma.
+    --------------------------------------------------------------------
+    INPUTS:
+    xvals  = (N,) vector, values of the lognormally distributed random
+             variable
+    mu     = scalar, mean of the lognormally distributed random variable
+    sigma  = scalar > 0, standard deviation of the lognormally distributed
+             random variable
+    cutoff = scalar or string, ='None' if no cutoff is given, otherwise
+             is scalar upper bound value of distribution. Values above
+             this value have zero probability
+
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        norm_pdf()
+
+    OBJECTS CREATED WITHIN FUNCTION:
+    pdf_vals    = (N,) vector, normal PDF values for mu and sigma
+                  corresponding to xvals data
+    ln_pdf_vals = (N,) vector, natural logarithm of normal PDF values
+                  for mu and sigma corresponding to xvals data
+    log_lik_val = scalar, value of the log likelihood function
+
+    FILES CREATED BY THIS FUNCTION: None
+
+    RETURNS: log_lik_val
+    --------------------------------------------------------------------
+    '''
+    pdf_vals = lognorm_pdf(xvals, mu, sigma, cutoff)
+    ln_pdf_vals = np.log(pdf_vals)
+    log_lik_val = ln_pdf_vals.sum()
+
+    return log_lik_val
+
+
+
 plot_1b = True
 
-# extract the first year`s income
-data=inc[0, :]
+if plot_1b :
+    # set up the parameters for test lognorm distribution
+    start = 0
+    end = 150000
+    num = 500
+    dist_pts = np.linspace(start, end, num)
+    # to create the linespace for the start = 0, end = 150,000, number of data points = 500
+    mu_test = 9.0
+    sig_test = 0.3
 
-# iterate the first year`s income, to calculate the percentage
-percent_lower=(sum(i< 70000 for i in data)/num_draws)*100
-percent_higher=(sum(i>100000 for i in data)/num_draws)*100
 
-print('1b. Percent of students getting more than $100k in first period: ',
-      percent_higher, '%')
-print('1b. Percent of students getting less than $70k in first period: ',
-      percent_lower, '%')
+    # Plot the test lognorm distribution
+    fig, ax = plt.subplots()
 
-fig, ax = plt.subplots()
-hist_wgts = (1 / num_draws) * np.ones(num_draws)
-num_bins = 50
-plt.hist(data, num_bins, weights=hist_wgts)
-plt.title('Histogram of first year ($t$=2018) income', fontsize=15)
-plt.xlabel(r'Annual income (\$s)')
-plt.ylabel(r'Percent of students')
+    plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_test, sig_test, 'None'),
+             linewidth=2, color='b')
+    plt.ylabel('Probability Density')
+    plt.xlabel ('Annual Incomes  (\$s)')
+    plt.title('Lognormal Distribution PDF $f(x|\mu=9,\sigma=.3)$')
 
-output_path = os.path.join(output_dir, 'Fig_1b')
-plt.savefig(output_path)
-# plt.show()
-plt.close()
+    # Save the Graph file
+    output_path = os.path.join(output_dir, 'Fig_1b')
+    plt.savefig(output_path)
+    plt.close()
+
+
+# Calculate and print the Log-likelihood value for the given parameters and data:
+print('1b. ', 'Log-likelihood value for the parameter ($\mu$=9.0,$\sigma$=0.3) is: ', log_lik_lognorm(data, mu_test, sig_test, 'None'))
+
+'''
+------------------------------------------------------------------------
+Exercise 1c: Estimate the MLE and plot the data with MLE distribution
+------------------------------------------------------------------------
+plot_1c     = Boolean, =True if make a plot of one series of the
+              simulated income data
+crit()        function to get the positive value of log likelihood
+------------------------------------------------------------------------
+'''
+
+def crit(params, *args):
+    '''
+    --------------------------------------------------------------------
+    This function computes the negative of the log likelihood function
+    given parameters and data. This is the minimization problem version
+    of the maximum likelihood optimization problem
+    --------------------------------------------------------------------
+    INPUTS:
+    mu     = scalar, mean of the lognormally distributed random variable
+    sigma  = scalar > 0, standard deviation of the lognormally distributed
+             random variable
+    xvals  = (N,) vector, values of the lognormally distributed random
+             variable
+
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        log_lik_norm()
+
+    OBJECTS CREATED WITHIN FUNCTION:
+    log_lik_val = scalar, value of the log likelihood function
+    neg_log_lik_val = scalar, negative of log_lik_val
+
+    FILES CREATED BY THIS FUNCTION: None
+
+    RETURNS: neg_log_lik_val
+    --------------------------------------------------------------------
+    '''
+    mu, sigma = params
+    xvals, cutoff = args
+    log_lik_val = log_lik_lognorm(xvals, mu, sigma, cutoff)
+    neg_log_lik_val = -log_lik_val
+
+    return neg_log_lik_val
+
+
+
+# By using scipy.optimize.minimize() function to optimize the parameters of lognormal distribution
+mu_init = 11.0
+sig_init = 0.2
+params_init = np.array([mu_init, sig_init])
+bnds = ((None, None), (0.00001, None))
+mle_args = (data, 'None')
+results = opt.minimize(crit, params_init, args=(mle_args), bounds = bnds)
+mu_MLE, sig_MLE = results.x
+
+plot_1a = True
+
+if Plot_1a :
+    fig, ax = plt.subplots()
+    # Plot the histogram for the annual incomes
+    count, bins, ignored = plt.hist(data, num_bins, normed=True)
+    # Label the plots
+    plt.title('Annual Incomes of MACSS Students (normed) with Lognormal Distribution PDFs', fontsize=12)
+    plt.xlabel(r'Annual Incomes (\$s)')
+    plt.ylabel(r'Probability Density')
+
+    # Plot the test lognormal distribution:
+    plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_test, sig_test, 'None'),
+             linewidth=2, color='b', label='1: $\mu$=9.0,$\sigma$=0.3')
+
+    # Plot the ML estimated lognormal distribution:
+    plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_MLE, sig_MLE, 'None'),
+             linewidth=2, color='r', label='2: $\mu$=11.331,$\sigma$=0.212')
+
+    plt.legend(loc='upper right')
+    # Save the Graph file
+    output_path = os.path.join(output_dir, 'Fig_1c')
+    plt.savefig(output_path)
+    plt.close()
+
+
+# The variance-covariance matrix of ML estimates
+vcv_mle = results.hess_inv.todense()
+stderr_mu_mle = np.sqrt(vcv_mle[0,0])
+stderr_sig_mle = np.sqrt(vcv_mle[1,1])
+
+
+print('1c. ', 'ML estimates for mu is ', mu_MLE, ', and the sigma is ', sig_MLE,
+     '. The value of likelihood function is ', -results.fun, '.')
+print('1c. VCV(MLE) = ', vcv_mle)
+print('1c. Standard error for mu estimate = ', stderr_mu_mle)
+print('1c. Standard error for sigma estimate = ', stderr_sig_mle)
 
 
 '''
 ------------------------------------------------------------------------
-Exercise 1c: Simulation for years when being able to pay off the debts
-------------------------------------------------------------------------
-plot_1c     = Boolean, =True if make a plot of years when students are
-able to pay off the debts
+Exercise 1d: Likelihood Ratio Test
 ------------------------------------------------------------------------
 '''
-plot_1c = True
-
-# set up the amount of debt to pay
-debt=95000
-# sum of the 0.1 times inc from year 1-40
-payment=np.cumsum(0.1*inc, axis=0)
-# convert the array of payment to a Bool array (TRUE when payment>debt)
-Bool=payment>debt
-# using np.argmax() to extract TURE from the array
-# np.argmax only return the index, so +1
-result=np.argmax(Bool, axis=0)+1
-
-percent_ten_year=(sum(i <=10 for i in result)/num_draws)*100
-
-print("1c. There will be ",percent_ten_year, "%"," of MACSS studetns to pay off loans in 10 years." )
-
-# Histogram  Plotting
-fig, ax = plt.subplots()
-hist_wgts = (1 / num_draws) * np.ones(num_draws)
-plt.hist(result, len(np.unique(result)), weights=hist_wgts)
-plt.title('Histogram of years when students can pay off the debt: $\mu2018=80000$, $\sigma=0.1$', fontsize=12)
-plt.xlabel(r'year')
-plt.ylabel(r'Percent of students')
-plt.xlim((8, 14))
-
-output_path = os.path.join(output_dir, 'Fig_1c')
-plt.savefig(output_path)
-# plt.show()
-plt.close()
-
-
+log_lik_h0 = log_lik_lognorm(data, mu_test, sig_test, 'None')
+log_lik_mle = log_lik_lognorm(data, mu_MLE, sig_MLE, 'None')
+LR_val = 2 * (log_lik_mle - log_lik_h0)
+pval_h0 = 1.0 - sts.chi2.cdf(LR_val, 2)
+print('chi squared of H0 with 2 degrees of freedom p-value = ', pval_h0)
 
 '''
 ------------------------------------------------------------------------
-Exercise 1d: Change ininitial income and sigma: repeat simulation for 1c
-------------------------------------------------------------------------
-plot_1d     = Boolean, =True if make a plot of years when students are
-able to pay off the debts
+Exercise 1e: Estimated Probability for incomes
 ------------------------------------------------------------------------
 '''
-plot_1d = True
+mu = mu_MLE
+sigma = sig_MLE
+prb_more_than = 1 - sts.lognorm.cdf(100000, scale= np.exp(mu), s = sigma, loc = mu)
+prb_less_than = sts.lognorm.cdf(75000, scale= np.exp(mu), s = sigma, loc = mu)
 
-# reset the parameters
-sigma = 0.15 # mean and standard deviation
-inc0=85000.
-# generate the normal distribution of error again
-norm_error = np.random.normal(mu, sigma, (lf_years, num_draws))
+print ('1e. According to the estimated distribution of incones, the probability that MACSS students will earn more than $1000,000 is',
+      prb_more_than, 'and the probability that they will earn less than $75,000 is ', prb_less_than, '.')
 
+'''
+------------------------------------------------------------------------
+Exercise 2a: Estimate the MLE for linear equation
+------------------------------------------------------------------------
+norm_pdf()         function to generate the pdf values from the given
+data and parameters
+log_lik_sick()     function to calculate the log likelihood for given
+normal distribution and data
+crit_sick()        function to get the positive value of log likelihood
+------------------------------------------------------------------------
+'''
 
-# repeat simulaiton in 1.a
-
-# simulation for the first year`s ln_income
-ln_inc[0,:]=np.log(inc0)+norm_error[0,:]
-# simulation for the following years` ln_income
-for yr in range(1,40):
-    ln_inc[yr,:]=(1-rou)*(np.log(inc0)+g*yr)+rou*ln_inc[yr-1,:]+norm_error[yr,:]
-# logistic transform of the data
-inc=np.exp(ln_inc)
-
-# repeat the calculation in 1.c
-payment=np.cumsum(0.1*inc, axis=0)
-Bool=payment>debt
-result=np.argmax(Bool, axis=0)+1
-percent_ten_year=(sum(i <=10 for i in result)/num_draws)*100
-
-print("1d. There will be ",percent_ten_year, "%"," of MACSS studetns to pay off loans in 10 years." )
+import pandas as pd
+# Read in the txt file
+sick = pd.read_csv('sick.txt', skiprows = 1, names = ['sick', 'age', 'children', 'avgtemp_winter'])
+# sick
 
 
-# Histogram plot
-fig, ax = plt.subplots()
-hist_wgts = (1 / num_draws) * np.ones(num_draws)
-plt.hist(result, len(np.unique(result)), weights=hist_wgts)
-plt.title('Histogram of years when students can pay off the debt: $\mu2018=85000$, $\sigma=0.15$', fontsize=12)
-plt.xlabel(r'year')
-plt.ylabel(r'Percent of students')
-plt.xlim((8, 14))
+# Define the norm_pdf() function to creat the probability of a normal distribution
+def norm_pdf(xvals, mu, sigma, cutoff):
+    '''
+    --------------------------------------------------------------------
+    Generate pdf values from the normal pdf with mean mu and standard
+    deviation sigma. If the cutoff is given, then the PDF values are
+    inflated upward to reflect the zero probability on values above the
+    cutoff. If there is no cutoff given, this function does the same
+    thing as sp.stats.norm.pdf(x, loc=mu, scale=sigma).
+    --------------------------------------------------------------------
+    INPUTS:
+    xvals  = (N,) vector, values of the normally distributed random
+             variable
+    mu     = scalar, mean of the normally distributed random variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    cutoff = scalar or string, ='None' if no cutoff is given, otherwise
+             is scalar upper bound value of distribution. Values above
+             this value have zero probability
 
-output_path = os.path.join(output_dir, 'Fig_1d')
-plt.savefig(output_path)
-# plt.show()
-plt.close()
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION: None
+
+    OBJECTS CREATED WITHIN FUNCTION:
+    prob_notcut = scalar
+    pdf_vals = (N,) vector, normal PDF values for mu and sigma
+               corresponding to xvals data
+
+    FILES CREATED BY THIS FUNCTION: None
+
+    RETURNS: pdf_vals
+    --------------------------------------------------------------------
+    '''
+    if cutoff == 'None':
+        prob_notcut = 1.0
+    else:
+        prob_notcut = sts.norm.cdf(cutoff, loc=mu, scale=sigma)
+
+    pdf_vals    = ((1/(sigma * np.sqrt(2 * np.pi)) *
+                    np.exp( - (xvals - mu)**2 / (2 * sigma**2))) /
+                    prob_notcut)
+
+    return pdf_vals
+
+
+
+# Define log likelihood function for the normal distribution given the data 'sick'
+def log_lik_sick(xdf, b0, b1, b2, b3, sigma, cutoff):
+    '''
+    --------------------------------------------------------------------
+    Compute the log likelihood function for data xvals given normal
+    distribution parameters mu and sigma.
+    --------------------------------------------------------------------
+    INPUTS:
+    xdf  = (N,) vector, values of the normally distributed random
+             variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    cutoff = scalar or string, ='None' if no cutoff is given, otherwise
+             is scalar upper bound value of distribution. Values above
+             this value have zero probability
+    b0, b1, b2, b3
+
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        norm_pdf()
+
+    RETURNS: log_lik_val
+    --------------------------------------------------------------------
+    '''
+    xvals = xdf['sick'] - b0 - b1 * xdf['age'] - b2 * xdf['children'] - b3 * xdf['avgtemp_winter']
+    pdf_vals = norm_pdf(xvals, 0, sigma, cutoff)
+    ln_pdf_vals = np.log(pdf_vals)
+    log_lik_val = ln_pdf_vals.sum()
+    return log_lik_val
+
+# Define the function crit_sick to calculate the positive value of max  log likelihood value
+def crit_sick(params, *args):
+    '''
+    --------------------------------------------------------------------
+    This function computes the negative of the log likelihood function
+    given parameters and data. This is the minimization problem version
+    of the maximum likelihood optimization problem
+    --------------------------------------------------------------------
+    INPUTS:
+    b0, b1, b2, b3     = co-effienct for the linear equation
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    xdf  = dataframe for sick people
+
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        log_lik_sick()
+
+    OBJECTS CREATED WITHIN FUNCTION:
+    log_lik_val = scalar, value of the log likelihood function
+    neg_log_lik_val = scalar, negative of log_lik_val
+
+    FILES CREATED BY THIS FUNCTION: None
+
+    RETURNS: neg_log_lik_val
+    --------------------------------------------------------------------
+    '''
+    b0, b1, b2, b3, sigma = params
+    xdf, cutoff = args
+    log_lik_val = log_lik_sick(xdf, b0, b1, b2, b3, sigma, cutoff)
+    neg_log_lik_val = -log_lik_val
+    return neg_log_lik_val
+
+
+
+# Set the initial co-effecients
+b0_init, b1_init, b2_init, b3_init, sig_init = (0, 0, 0, 0, 1)
+params_init = np.array([b0_init, b1_init, b2_init, b3_init, sig_init])
+bnds = ((None, None), (None, None), (None, None), (None, None), (.000001, None))
+mle_args = (sick, 'None')
+
+
+# First using 'SLSQP' method to get the MLE co-effecients
+results = opt.minimize(crit_sick, params_init, args=(mle_args), bounds=bnds, method='SLSQP')
+b0_MLE, b1_MLE, b2_MLE, b3_MLE, sig_MLE = results.x
+
+print('2a-1. ', 'b0_MLE=', b0_MLE, ' b1_MLE=', b1_MLE, ' b2_MLE=', b2_MLE, ' b3_MLE=', b3_MLE, ' sig_MLE=', sig_MLE)
+print('2a-2. ', 'Maximized log-likelihood : ', log_lik_sick(sick, b0_MLE, b1_MLE, b2_MLE, b3_MLE, sig_MLE, 'None'))
+
+
+# Then set these co-effecients as the initial value for the 'L-BFGS-B'
+b0_init, b1_init, b2_init, b3_init, sig_init = (b0_MLE, b1_MLE, b2_MLE, b3_MLE, sig_MLE)
+result2 = opt.minimize(crit_sick, params_init, args=(mle_args), bounds=bnds, method='L-BFGS-B')
+#print(result2)
+# But I found, in fact only using 'SLSQP' can give the best MLE result
+
+
+
+vcv_mle = result2.hess_inv.todense()
+print('2a-3. ', 'VCV(MLE) = ', vcv_mle)
+
+
+
+'''
+------------------------------------------------------------------------
+Exercise 2b: Likelihood Ratio Test and Chi square Value
+------------------------------------------------------------------------
+'''
+
+b0_init, b1_init, b2_init, b3_init, sig_init = (1, 0, 0, 0, 0.01)
+log_lik_h0 = log_lik_sick(sick,b0_init, b1_init, b2_init, b3_init, sig_init, 'None')
+log_lik_mle = log_lik_sick(sick, b0_MLE, b1_MLE, b2_MLE, b3_MLE, sig_MLE, 'None')
+LR_val = 2 * (log_lik_mle - log_lik_h0)
+pval_h0 = 1.0 - sts.chi2.cdf(LR_val, 5)
+print('2b. ', 'chi squared of H0 with 5 degrees of freedom p-value = ', pval_h0, '. It is not likely that age, number of children, and average winter temperature have no impact on the sick days.')
