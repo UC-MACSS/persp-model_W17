@@ -377,6 +377,7 @@ print('Beta1 =', b1)
 print('Beta2 =', b2)
 print('Beta3 =', b3)
 print('Sigma =', sigma)
+print('Sigma^2 =', sigma**2)
 
 # log likelihood
 log_like_val_2 = log_like_norm_2(sick_data, *results.x)
