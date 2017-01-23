@@ -159,9 +159,10 @@ def question2():
     print(normLogLike(incomeDF['sick'], incomeDF['age'], incomeDF['children'], incomeDF['temp'], *r.x))
     partAString = """# Part (a)
 
-The estimated values with a log-likelihood of {:.3f} are:
+The estimated values, with a log-likelihood of {:.3f} are:
 
     Beta_0 = {:.3f}
+    Beta_1 = {:.3f}
     Beta_2 = {:.3f}
     Beta_3 = {:.3f}
     sigma = {:.3f}
