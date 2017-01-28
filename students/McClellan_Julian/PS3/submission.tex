@@ -66,7 +66,7 @@
 \begin{document}
 
 \begin{flushleft}
-  \textbf{\large{Problem Set \#2}} \\
+  \textbf{\large{Problem Set \#3}} \\
   MACS 30100, Dr. Evans \\
   Julian McClellan
 \end{flushleft}
@@ -83,60 +83,86 @@
 
 \\
 \noindent\textbf{Part (b).} 
-\begin{figure}[htb]\centering\captionsetup{width=4.0in}
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
   \caption{\textbf{Question 1 part(b)}}\label{Figure 1b}
   \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{images/Fig_1b.png}}}
 \end{figure}
-The value of the log likelihood value for this parameterization of the distribution
-and given this data is $-8298.637$.
+2 moment (mean and standard deviation) GMM estimated the parameters of a lognormal distribution to be $\mu=11.337\quad and \quad \sigma=0.213$
+The value of the criterion function for this parameterization of the distribution
+and given this data is $1.735e-13$.
+
+\\
+Moments\\
+$mean_{data}=85276.824\quad mean_{gmm}=85276.791$
+$sd_{data}=17992.542\quad sd_{gmm}=17992.539$
 
 \\
 \noindent\textbf{Part (c).}
-Firstly, $\mu_{mle}=11.331,\sigma_{mle}=.212$. The log likelihood value of the data
-given these parameters is $-2239.535$.
-The variance-covariance matrix is: 
-\\
-\begin{bmatrix}
-0.00429& -0.00030\\ 
--0.00030& 0.00013\\ 
-\end{bmatrix}
-
-\begin{figure}[htb]\centering\captionsetup{width=4.0in}
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
   \caption{\textbf{Question 1 part(c)}}\label{Figure 1c}
   \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{images/Fig_1c.png}}}
 \end{figure}
+2 moment (mean and standard deviation) GMM with a 2-step weights matrix estimated the parameters of a lognormal distribution to be $\mu=11.081\quad and \quad \sigma=0.751$
+The value of the criterion function for this parameterization of the distribution
+and given this data is $-0.0284$.
 
+\\
+Moments:\\
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+  \caption{\textbf{Question 1 part(d)}}\label{Figure 1d}
+  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{images/Fig_1d.png}}}
+\end{figure}
+$mean_{data}=85276.824\quad mean_{gmm}=85276.791$
+$sd_{data}=17992.542\quad sd_{gmm}=33028.440$
+
+\\
 \noindent\textbf{Part (d).}
-The Likelihood Ratio Test p-value is: $0.0$. This number is really low ($< .05$) 
-so it is unlikely that the data came from the distribution in part (b).
+3 moment (bins) GMM estimated a the parameters of a lognormal distribution to be $\mu=11.337\quad and \quad \sigma=0.212$
+
+The value of the criterion function for this parameterization of the distribution and given this data is $2.382e-05$
+
+The proportion of incomes in the data between \$0 and \$75,000 = 0.300
+The proportion of incomes in the data between \$75,000 and \$100,000 = 0.500
+The proportion of incomes in the data between \$100,000 and \$150000 = 0.200
+\\
+The proportion of incomes in the model between \$0 and \$75,000 = 0.299
+The proportion of incomes in the model between \$75,000 and \$100,000 = 0.498
+The proportion of incomes in the model between \$100,000 and \$150000 = 0.200
+
 
 \\
 \noindent\textbf{Part (e).}
-The probability that I will earn more than \$100,000 is 0.196.
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+  \caption{\textbf{Question 1 part(e)}}\label{Figure 1e}
+  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{images/Fig_1e.png}}}
+\end{figure}
+3 moment (bins) GMM estimated a the parameters of a lognormal distribution to be $\mu=11.336\quad and \quad \sigma=0.197$
 
-The probability that I will earn less than \$75,000 is 0.308.
+The value of the criterion function for this parameterization of the distribution and given this data is $1.125e-13$\\
 
+The proportion of incomes in the data between \$0 and \$75,000 = 0.300\\
+The proportion of incomes in the data between \$75,000 and \$100,000 = 0.500\\
+The proportion of incomes in the data between \$100,000 and \$150000 = 0.200\\
+\\
+The proportion of incomes in the model between \$0 and \$75,000 = 0.288\\
+The proportion of incomes in the model between \$75,000 and \$100,000 = 0.528\\
+The proportion of incomes in the model between \$100,000 and \$150000 = 0.182\\
 
+\\
+\\
+\noindent\textbf{Part (f).}\\
+As one can see, utilizing a two-step weights matrix in part (b) results in a really ill-fitting lognormal pdf. Additionally, using a two-step weights matrix
+in part (e) scarcely changes the lognormal pdf from (d) (which itself is quite similar to that in part (b)). \\
+
+Even so, the pdf displayed in red in part (e), the one created using a two-step
+weights matrix with the three bin moments, seems to fit my view of the data better. Looking at the above figure, the red pdf has lower values for higher ends of the distribution than the green pdf does. This seems like a more realistic state of affairs for incomes of students just coming out of the master's program. Sure, there will be those able to achieve that level of income, but it seems more realistic to model that fewer will be able to do so.
 \\
 \noindent\textbf{Problem 2}
 \\
 \noindent\textbf{Part (a).}
-$\beta^{mle}_{0} = .252\quad \beta^{mle}_{1} = 0.013\quad\beta^{mle}_{2} = 0.401\quad \beta^{mle}_{3} = -0.009992\quad\sigma^{2}_{mle}=9.11e-06$
-The value of the log likelihood function is: $876.865$.
-Unless you round to past 7 decimal places, the variance-covariance matrix just
-looks like this:
-\begin{bmatrix}
- 1&  0&  0&  0&0 \\ 
- 0&  1&  0&  0&0 \\ 
- 0&  0&  1&  0&0 \\ 
- 0&  0&  0&  1&0 \\ 
- 0&  0&  0&  0&1
-\end{bmatrix}
-
-\noindent\textbf{Part (b).}
-Likelihood Ratio Test p-value is: 0.0
-
-This number is really low ($< .05$), so it is unlikely that age number of children, and average winter temperature have no effect onthe number of sick days.
+\\
+$\beta^{gmm}_{0} = .252\quad \beta^{gmm}_{1} = 0.013\quad\beta^{gmm}_{2} = 0.401\quad \beta^{gmm}_{3} = -0.009992\quad\sigma^{2}_{gmm}=9.11e-06$
+The  criterion function value with 2a's GMM estimates = 0.00182
 \end{document}
 % \noindent\textbf{Part (c).} 
 % \begin{figure}[h!]\centering\captionsetup{width=4.0in}
