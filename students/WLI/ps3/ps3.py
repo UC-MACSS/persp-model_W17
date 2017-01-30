@@ -241,13 +241,13 @@ def criterion(params, *args):
 
 ## part b
 mu_init = 9.0
-std_init = 0.3 
+std_init = 0.2 
 params_init = np.array([mu_init, std_init])
 W_hat = np.eye(2)
 gmm_args = (pts, W_hat)
-results = opt.minimize(criterion, params_init, args=(gmm_args), method='L-BFGS-B', 
+resultsb = opt.minimize(criterion, params_init, args=(gmm_args), method='L-BFGS-B', 
                            bounds=((None, None), (1e-10, None)))
-mu_GMM1, sig_GMM1 = results.x
+mu_GMM1, sig_GMM1 = resultsb.x
 
 params_GMM = np.array([mu_GMM1, sig_GMM1])
 mu_data, std_data = data_moments(pts)
@@ -286,11 +286,11 @@ Part (c)
 err1 = err_vec(pts, mu_GMM1, sig_GMM1, False)
 VCV2 = np.dot(err1, err1.T) / pts.shape[0]
 W_hat2 = lin.pinv(VCV2)
-params_init = np.array([mu_init, std_init])
+params_init = np.array([mu_GMM1, sig_GMM1])
 gmm_args = (pts, W_hat2)
-results = opt.minimize(criterion, params_init, args=(gmm_args), method='L-BFGS-B',          
+resultsc = opt.minimize(criterion, params_init, args=(gmm_args), method='L-BFGS-B',          
                            bounds=((None, None), (1e-10, None)))
-mu_GMM2, sig_GMM2 = results.x
+mu_GMM2, sig_GMM2 = resultsc.x
 params_GMM = np.array([mu_GMM2, sig_GMM2])
 mu_data, std_data = data_moments(pts)
 mu_model2, std_model2 = model_moments(mu_GMM2, sig_GMM2)
@@ -315,7 +315,7 @@ dist_pts = np.linspace(0, 150000, 10000)
 plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM1, sig_GMM1), linewidth=2, color='r', 
              label=  '1: $\mu$ = {:.4f}, $\sigma$ = {:.4f}'.format(mu_GMM1, sig_GMM1))
 plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM2, sig_GMM2), linewidth=2, color='pink', 
-                 label= '2: $\mu$ = {:.4f}, $\sigma$ = {:.4f}'.format(mu_GMM2, sig_GMM2))
+                 linestyle = '--', label= '2: $\mu$ = {:.4f}, $\sigma$ = {:.4f}'.format(mu_GMM2, sig_GMM2))
 plt.legend(loc='upper left', bbox_to_anchor=(0.6, 1))
 output_path = os.path.join(output_dir, '1c')
 plt.savefig(output_path, bbox_inches='tight')
@@ -488,9 +488,9 @@ std_init2 = 0.2
 params_init2 = np.array([mu_init2, std_init2])
 W_hat = np.eye(3)
 gmm_args = (pts, W_hat)
-results = opt.minimize(criterion3, params_init2, args=(gmm_args),method='L-BFGS-B', 
+results3 = opt.minimize(criterion3, params_init2, args=(gmm_args),method='L-BFGS-B', 
                            bounds=((None, None), (1e-10, None)))
-mu_GMM3, sig_GMM3 = results.x
+mu_GMM3, sig_GMM3 = results3.x
 params_GMM = np.array([mu_GMM3, sig_GMM3])
 bpct_1_dat, bpct_2_dat, bpct_3_dat = data_moments3(pts)
 bpct_1_mod, bpct_2_mod, bpct_3_mod = model_moments3(mu_GMM3, sig_GMM3)
@@ -529,9 +529,9 @@ VCV2 = np.dot(err3, err3.T) / pts.shape[0]
 W_hat2 = lin.pinv(VCV2)
 #params_init = np.array([mu_init2, std_init2])
 gmm_args = (pts, W_hat2)
-results = opt.minimize(criterion3, params_init2, args=(gmm_args), method='TNC', 
+resultse = opt.minimize(criterion3, params_init2, args=(gmm_args), method='TNC', 
                            bounds=((None, None), (1e-10, None)))
-mu_GMM4, sig_GMM4 = results.x
+mu_GMM4, sig_GMM4 = resultse.x
 params_GMM = np.array([mu_GMM4, sig_GMM4])
 bpct_1_mod2, bpct_2_mod2, bpct_3_mod2 = model_moments3(mu_GMM4, sig_GMM4)
 
