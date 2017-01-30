@@ -2,246 +2,413 @@
 # Problem Set 3
 # Name: Xinzhu Sun
 
-import pandas as pd
 import numpy as np
-from numpy import log as ln
-from numpy import exp as exp
-import numpy.linalg as lin
 import scipy.stats as sts
 import matplotlib.pyplot as plt
+import math
 import scipy.optimize as opt
+import scipy.stats as sts
 import scipy.integrate as intgr
-from scipy.stats import lognorm
+import pandas as pd
+import os
 
-df = pd.read_table('incomes.txt', names = ['incomes'])
-df_sick = pd.read_csv('sick.txt', skiprows = 1, names = ['sick', 'age', 'children', 'avgtemp_winter'])
 
 # Problem 1
-mu_init = 11
-sig_init = 0.2
+# (a) Plot the Histogram
+income = np.loadtxt("incomes.txt", comments="#", delimiter=",", unpack=False)
+count, bins, patches = plt.hist(income, 30, normed = True)
+plt.xlabel("Income")
+plt.ylabel("Density")
+plt.title("Income for MACSS Students Histogram", fontsize = 20)
+cur_path = os.path.split(os.path.abspath(__file__))[0]
+output_fldr = "images"
+output_dir = os.path.join(cur_path, output_fldr)
+if not os.access(output_dir, os.F_OK):
+    os.makedirs(output_dir)
+output_path = os.path.join(output_dir, "hist_income")
+plt.savefig(output_path, bbox_inches='tight')
+plt.show()
 
-def lognorm_pdf(xvals, mu, sigma, cutoff):
-    if cutoff == np.inf:
-        prob_notcut = 1.0
-    else:
-        prob_notcut = sts.lognorm.cdf(cutoff, s=sigma, loc=mu, scale=exp(mu))
-    pdf_vals = (1/(xvals * sigma * np.sqrt(2 * np.pi)) * exp( - (ln(xvals) - mu) ** 2 / (2 * sigma ** 2))) / prob_notcut
+
+def log_norm_pdf(xvals, mu, sigma):
+    '''
+    --------------------------------------------------------------------
+    Generate pdf values from the log normal pdf with mean mu and
+    standard deviation sigma. If the cutoff is finite, then the PDF
+    values are inflated upward to reflect the zero probability on values
+    above the cutoff. If there is no cutoff given or if it is given as
+    infinity, this function does the same thing as
+    sp.stats.norm.pdf(x, loc=mu, scale=sigma).
+    --------------------------------------------------------------------
+    INPUTS:
+    xvals  = (N,) vector, values of the normally distributed random
+             variable
+    mu     = scalar, mean of the normally distributed random variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION: None
+    
+    OBJECTS CREATED WITHIN FUNCTION:
+    prob_notcut = scalar 
+    pdf_vals = (N,) vector, normal PDF values for mu and sigma
+               corresponding to xvals data
+    
+    FILES CREATED BY THIS FUNCTION: None
+    
+    RETURNS: pdf_vals
+    --------------------------------------------------------------------
+    '''
+            
+    pdf_vals    = 1/(xvals * sigma * np.sqrt(2 * np.pi)) *\
+                    np.exp( - (np.log(xvals) - mu)**2 / (2 * sigma**2)) 
     return pdf_vals
 
-if True:
-    # (a) Plot a histogram 
-    if True:
-        num_obs = len(df['incomes'])
-        fig, ax = plt.subplots()
-        hist_wgts = (1 / num_obs) * np.ones(num_obs)
-        num_bins = 30
-        plt.hist(df['incomes'], num_bins, weights=hist_wgts, normed=True)
-        plt.xlim(0, 160000)
-        plt.title('Annual Income of MACSS Graduates in 2018-2020', fontsize=20)
-        plt.xlabel('Annual income')
-        plt.ylabel('Percent of students')
-        plt.savefig('1a')
-        plt.close()
 
-    # (b) Perform 1 step GMM 
-    if True:
-        def data_moments(xvals):
-            mean_data = xvals.mean()
-            var_data = xvals.var()
-            return mean_data, var_data
-
-        def model_moments(mu, sigma, cutoff):
-            mean_model = exp(mu + ((sigma ** 2) / 2))
-            var_model = (exp(sigma ** 2) - 1) * exp(2 * mu + sigma ** 2)
-            return mean_model, var_model
-
-        def err_vec(xvals, mu, sigma, cutoff, simple):
-            mean_data, var_data = data_moments(xvals)
-            moms_data = np.array([[mean_data], [var_data]])
-            mean_model, var_model = model_moments(mu, sigma, cutoff)
-            moms_model = np.array([[mean_model], [var_model]])
-            if simple:
-                err_vec = moms_model - moms_data
-            else:
-                err_vec = (moms_model - moms_data) / moms_data
-            return err_vec
-
-        def criterion(params, *args):
-            mu, sigma = params
-            xvals, cutoff, W = args
-            err = err_vec(xvals, mu, sigma, cutoff, simple=False)
-            crit_val = np.dot(np.dot(err.T, W), err)
-            return crit_val
-
-        params_init = np.array([mu_init, sig_init])
-        W_hat = np.eye(2)
-        gmm_args = (df['incomes'], np.inf, W_hat)
-        results = opt.minimize(criterion, params_init, args=(gmm_args), method='L-BFGS-B', bounds=((1e-10, None), (1e-10, None)))
-        mu_GMM1, sig_GMM1 = results.x
-        print('1.(b)')
-        print('mu_GMM1 =', mu_GMM1, ' sig_GMM1 =', sig_GMM1)
-        print('Criterion value_GMM1 =', criterion((mu_GMM1, sig_GMM1), df['incomes'], np.inf, W_hat))
-        mean_data, var_data = data_moments(df['incomes'])
-        mean_model, var_model = model_moments(mu_GMM1, sig_GMM1, np.inf)
-        err1 = err_vec(df['incomes'], mu_GMM1, sig_GMM1, np.inf, False).reshape(2,)
-        print('Mean of data =', mean_data, ', Variance of data =', var_data)
-        print('Mean of model =', mean_model, ', Variance of model =', var_model)
-        print('Difference in mean =', mean_data - mean_model, 'Difference in variance =', var_data - var_model)
-
-        # Plot the histogram of the data
-        count, bins, ignored = plt.hist(df['incomes'], num_bins, normed=True)
-        plt.title('Annual Income of MACSS Graduates in 2018-2020', fontsize=20)
-        plt.xlabel('Annual income')
-        plt.ylabel('Percent of students')
-        # Plot the estimated GMM PDF
-        dist_pts = np.linspace(0, 160000, 500)
-        plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM1, sig_GMM1, np.inf),
-                 linewidth=2, color='k', label='1: $\mu_{GMMb}$,$\sigma_{GMMb}$')
-        plt.legend(loc='upper left')
-        plt.savefig('1b')
-        plt.close()
+def data_moments(xvals):
+    '''
+    --------------------------------------------------------------------
+    This function computes the two data moments for GMM
+    (mean(data), variance(data)).
+    --------------------------------------------------------------------
+    INPUTS:
+    xvals = (N,) vector, test scores data
+    
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION: None
+    
+    OBJECTS CREATED WITHIN FUNCTION:
+    mean_data = scalar, mean value of test scores data
+    var_data  = scalar > 0, variance of test scores data
+    
+    FILES CREATED BY THIS FUNCTION: None
+    
+    RETURNS: mean_data, var_data
+    --------------------------------------------------------------------
+    '''
+    mean_data = xvals.mean()
+    var_data = xvals.var()
+    
+    return mean_data, var_data
 
 
-    # (c) Perform 2 step GMM
-    if True:
-        err1 = err_vec(df['incomes'], mu_GMM1, sig_GMM1, np.inf, False)
-        VCV2 = np.dot(err1, err1.T) / df['incomes'].shape[0]
-        W_hat2 = lin.pinv(VCV2)  # Use the pseudo-inverse calculated by SVD because VCV2 is ill-conditioned
+def model_moments(mu, sigma):
+    '''
+    --------------------------------------------------------------------
+    This function computes the two model moments for GMM
+    (mean(model data), variance(model data)).
+    --------------------------------------------------------------------
+    INPUTS:
+    mu     = scalar, mean of the normally distributed random variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    cutoff = scalar or string, ='None' if no cutoff is given, otherwise
+             is scalar upper bound value of distribution. Values above
+             this value have zero probability
+    
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        trunc_norm_pdf()
+        xfx()
+        x2fx()
+    
+    OBJECTS CREATED WITHIN FUNCTION:
+    mean_model = scalar, mean value of test scores from model
+    m_m_err    = scalar > 0, estimated error in the computation of the
+                 integral for the mean of the distribution
+    var_model  = scalar > 0, variance of test scores from model
+    v_m_err    = scalar > 0, estimated error in the computation of the
+                 integral for the variance of the distribution
+    
+    FILES CREATED BY THIS FUNCTION: None
+    
+    RETURNS: mean_model, var_model
+    --------------------------------------------------------------------
+    '''
+    xfx = lambda x: x * log_norm_pdf(x, mu, sigma)
+    (mean_model, m_m_err) = intgr.quad(xfx, 1e-50, 15000000, limit = 1000)
+    x2fx = lambda x: ((x - mean_model) ** 2) * log_norm_pdf(x, mu, sigma) 
+    (var_model, v_m_err) = intgr.quad(x2fx, 1e-50, 15000000, limit = 1000)
+    return mean_model, var_model
 
-        params_init = np.array([mu_init, sig_init])
-        gmm_args = (df['incomes'], np.inf, W_hat2)
-        results = opt.minimize(criterion, params_init, args=(gmm_args),
-                               method='TNC', bounds=((1e-10, None), (1e-10, None)))
-        mu_GMM2, sig_GMM2 = results.x
-        print('1.(c)')
-        print('mu_GMM2 =', mu_GMM2, ' sig_GMM2 =', sig_GMM2)
-        print('Criterion value_GMM2 =', criterion((mu_GMM2, sig_GMM2), df['incomes'], np.inf, W_hat2))
-
-        mean_data, var_data = data_moments(df['incomes'])
-        mean_model, var_model = model_moments(mu_GMM2, sig_GMM2, np.inf)
-        err1 = err_vec(df['incomes'], mu_GMM1, sig_GMM1, np.inf, False).reshape(2,)
-        print('Mean of data =', mean_data, ', Variance of data =', var_data)
-        print('Mean of model =', mean_model, ', Variance of model =', var_model)
-        print('Difference in mean =', mean_data - mean_model, 'Difference in variance =', var_data - var_model)
-
-        # Plot the histogram of the data
-        count, bins, ignored = plt.hist(df['incomes'], num_bins, normed=True)
-        plt.title('Annual Income of MACSS Graduates in 2018-2020', fontsize=20)
-        plt.xlabel('Annual income')
-        plt.ylabel('Percent of students')
-        # Plot the estimated GMM PDF
-        dist_pts = np.linspace(0, 160000, 500)
-        plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM1, sig_GMM1, np.inf),
-                 linewidth=2, color='k', label='1: $\mu_{GMMb}$,$\sigma_{GMMb}$')
-        plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM2, sig_GMM2, np.inf),
-                 linewidth=2, color='g', label='2: $\mu_{GMMc}$,$\sigma_{GMMc}$')
-        plt.legend(loc='upper left')
-        plt.savefig('1c')
-        plt.close()
-
-    # (d) Perform 1 step GMM with 3 moments
-    if True:
-        def data_moments3(xvals):
-            bpct_1_dat = xvals[xvals < 75000].shape[0] / xvals.shape[0]
-            bpct_2_dat = (xvals[(xvals >= 75000) & (xvals < 100000)].shape[0] /
-                          xvals.shape[0])
-            bpct_3_dat = xvals[xvals >= 100000].shape[0] / xvals.shape[0]
-            return bpct_1_dat, bpct_2_dat, bpct_3_dat
-
-        def model_moments3(mu, sigma, cutoff):
-            xfx = lambda x: lognorm_pdf(x, mu, sigma, cutoff)
-            (bpct_1_mod, bp_1_err) = intgr.quad(xfx, 1e-10, 75000)
-            (bpct_2_mod, bp_2_err) = intgr.quad(xfx, 75000, 100000)
-            bpct_3_mod = 1 - bpct_1_mod - bpct_2_mod
-            return bpct_1_mod, bpct_2_mod, bpct_3_mod
-
-        def err_vec3(xvals, mu, sigma, cutoff, simple):
-            bpct_1_dat, bpct_2_dat, bpct_3_dat = data_moments3(xvals)
-            moms_data = np.array([[bpct_1_dat], [bpct_2_dat], [bpct_3_dat]])
-            bpct_1_mod, bpct_2_mod, bpct_3_mod = model_moments3(mu, sigma, cutoff)
-            moms_model = np.array([[bpct_1_mod], [bpct_2_mod], [bpct_3_mod]])
-            if simple:
-                err_vec = moms_model - moms_data
-            else:
-                err_vec = 100 * ((moms_model - moms_data) / moms_data)
-            return err_vec
-
-        def criterion3(params, *args):
-            mu, sigma = params
-            xvals, cutoff, W = args
-            err = err_vec3(xvals, mu, sigma, cutoff, simple=False)
-            crit_val = np.dot(np.dot(err.T, W), err)
-            return crit_val
-
-        params_init = np.array([mu_init, sig_init])
-        W_hat = np.eye(3)
-        gmm_args = (df['incomes'], np.inf, W_hat)
-        results_3 = opt.minimize(criterion3, params_init, args=(gmm_args),
-                               method='L-BFGS-B', bounds=((1e-10, None), (1e-10, None)))
-        mu_GMM1_3, sig_GMM1_3 = results_3.x
-        print('1.(d)')
-        print('mu_GMM1_3=', mu_GMM1_3, ' sig_GMM1_3=', sig_GMM1_3)
-        print('Criterion value_GMM1_3 =', criterion3((mu_GMM1_3, sig_GMM1_3), df['incomes'], np.inf, W_hat))
-        moment1_data, moment2_data, moment3_data = data_moments3(df['incomes'])
-        moment1_model, moment2_model, moment3_model = model_moments3(mu_GMM1_3, sig_GMM1_3, np.inf)
-        err1 = err_vec3(df['incomes'], mu_GMM1_3, sig_GMM1_3, np.inf, False).reshape(3,)
-        print('Moment1 of data =', moment1_data, ', Moment2 of data =', moment2_data, 'Moment3 of data =', moment3_data)
-        print('Moment1 of model =', moment1_model, ', Moment2 of model =', moment2_model, 'Moment3 of model =', moment3_model)
-        print('Difference in moment1 =', moment1_data - moment1_model, 'Difference in moment2 =', moment2_data - moment2_model, 'Difference in moment3 =', moment3_data - moment3_model)
-
-        # Plot the histogram of the data
-        count, bins, ignored = plt.hist(df['incomes'], num_bins, normed=True)
-        plt.title('Annual Income of MACSS Graduates in 2018-2020', fontsize=20)
-        plt.xlabel('Annual income')
-        plt.ylabel('Percent of students')
-        # Plot the estimated GMM PDF
-        dist_pts = np.linspace(0, 160000, 500)
-        plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM1_3, sig_GMM1_3, np.inf),
-                 linewidth=2, color='b', label='1: $\mu_{GMMd}$,$\sigma_{GMMd}$')
-        plt.legend(loc='upper left')
-        plt.savefig('1d')
-        plt.close()
+def err_vec(xvals, mu, sigma, simple):
+    '''
+    --------------------------------------------------------------------
+    This function computes the vector of moment errors (in percent
+    deviation from the data moment vector) for GMM.
+    --------------------------------------------------------------------
+    INPUTS:
+    xvals  = (N,) vector, test scores data
+    mu     = scalar, mean of the normally distributed random variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    simple = boolean, =True if errors are simple difference, =False if
+             errors are percent deviation from data moments
+    
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        data_moments()
+        model_moments()
+    
+    OBJECTS CREATED WITHIN FUNCTION:
+    mean_data  = scalar, mean value of data
+    var_data   = scalar > 0, variance of data
+    moms_data  = (2, 1) matrix, column vector of two data moments
+    mean_model = scalar, mean value from model
+    var_model  = scalar > 0, variance from model
+    moms_model = (2, 1) matrix, column vector of two model moments
+    err_vec    = (2, 1) matrix, column vector of two moment error
+                 functions
+    
+    FILES CREATED BY THIS FUNCTION: None
+    
+    RETURNS: err_vec
+    --------------------------------------------------------------------
+    '''
+    mean_data, var_data = data_moments(xvals)
+    moms_data = np.array([[mean_data], [var_data]])
+    mean_model, var_model = model_moments(mu, sigma)
+    moms_model = np.array([[mean_model], [var_model]])
+    if simple:
+        err_vec = moms_model - moms_data
+    else:
+        err_vec = (moms_model - moms_data) / moms_data
+    
+    return err_vec
 
 
-    # (e) Perform 2 step GMM with 3 moments
-    if True:
-        err1 = err_vec3(df['incomes'], mu_GMM1_3, sig_GMM1_3, np.inf, False)
-        VCV2 = np.dot(err1, err1.T) / df['incomes'].shape[0]
-        W_hat2 = lin.pinv(VCV2)  # Use the pseudo-inverse calculated by SVD because VCV2 is ill-conditioned
+def criterion(params, *args):
+    '''
+    --------------------------------------------------------------------
+    This function computes the GMM weighted sum of squared moment errors
+    criterion function value given parameter values and an estimate of
+    the weighting matrix.
+    --------------------------------------------------------------------
+    INPUTS:
+    params = (2,) vector, ([mu, sigma])
+    mu     = scalar, mean of the normally distributed random variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    args   = length 3 tuple, (xvals, cutoff, W_hat)
+    xvals  = (N,) vector, values of the truncated normally distributed
+             random variable
+    W_hat  = (R, R) matrix, estimate of optimal weighting matrix
+    
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        norm_pdf()
+    
+    OBJECTS CREATED WITHIN FUNCTION:
+    err        = (2, 1) matrix, column vector of two moment error
+                 functions
+    crit_val   = scalar > 0, GMM criterion function value
+    
+    FILES CREATED BY THIS FUNCTION: None
+    
+    RETURNS: crit_val
+    --------------------------------------------------------------------
+    '''
+    mu, sigma = params
+    xvals, W = args
+    err = err_vec(xvals, mu, sigma, simple=False)
+    crit_val = np.dot(np.dot(err.T, W), err)    
+    return crit_val
 
-        params_init = np.array([mu_init, sig_init])
-        gmm_args = (df['incomes'], np.inf, W_hat2)
-        results = opt.minimize(criterion3, params_init, args=(gmm_args),
-                               method='TNC',
-                               bounds=((1e-10, None), (1e-10, None)))
-        mu_GMM2_3, sig_GMM2_3 = results.x
-        print('1.(e)')
-        print('mu_GMM2_3=', mu_GMM2_3, ' sig_GMM2_3=', sig_GMM2_3)
-        print('Criterion value_GMM2_3 =', criterion3((mu_GMM2_3, sig_GMM2_3), df['incomes'], np.inf, W_hat2))
+mu_init = 11
+sig_init = 0.2
+params_init = np.array([mu_init, sig_init])
+W_hat = np.eye(2)
+gmm_args = (income, W_hat)
+results = opt.minimize(criterion, params_init, args=(gmm_args),
+                       method='Nelder-Mead')
+mu_GMM1, sig_GMM1 = results.x
+error1 = err_vec(income, mu_GMM1, sig_GMM1, False)
+crit_val = criterion(results.x, income, W_hat)
+print(r"1b): The GMM estimator is: $\mu$ = {}, $\sigma$ = {}"\
+     .format(mu_GMM1, sig_GMM1))
+print("    The value of the criterion function is {}".format(crit_val))
+print("    For two data moment: {}".format(data_moments(income)))
+print("    For two model moment: {}".format(model_moments(mu_GMM1, sig_GMM1)))
+print()
 
-        moment1_data, moment2_data, moment3_data = data_moments3(df['incomes'])
-        moment1_model, moment2_model, moment3_model = model_moments3(mu_GMM2_3, sig_GMM2_3, np.inf)
-        err1 = err_vec3(df['incomes'], mu_GMM2_3, sig_GMM2_3, np.inf, True).reshape(3,)
-        print('Moment1 of data =', moment1_data, ', Moment2 of data =', moment2_data, 'Moment3 of data =', moment3_data)
-        print('Moment1 of model =', moment1_model, ', Moment2 of model =', moment2_model, 'Moment3 of model =', moment3_model)
-        print('Difference in moment1 =', moment1_data - moment1_model, 'Difference in moment2 =', moment2_data - moment2_model, 'Difference in moment3 =', moment3_data - moment3_model)
+dist_pers = np.linspace(0, 140000, 1000000)
+income = np.loadtxt("incomes.txt", comments="#", delimiter=",", unpack=False)
+count, bins, patches = plt.hist(income, 30, normed = True)
+plt.plot(dist_pers, log_norm_pdf(dist_pers, mu_GMM1, sig_GMM1), \
+         label = 'Orginal, $\mu$ = {:.3f}, $\sigma$ = {:.3f}'.format(mu_GMM1, sig_GMM1))
+plt.xlabel("Income")
+plt.ylabel("Density")
+plt.legend(loc = "upper left", prop={'size':8})
+plt.title('Income PDF GMM', fontsize = 15)
+output_path = os.path.join(output_dir, "1b")
+plt.savefig(output_path, bbox_inches='tight')
 
-        # Plot the histogram of the data
-        count, bins, ignored = plt.hist(df['incomes'], num_bins, normed=True)
-        plt.title('Annual Income of MACSS Graduates in 2018-2020', fontsize=20)
-        plt.xlabel('Annual income')
-        plt.ylabel('Percent of students')
-        # Plot the estimated GMM PDF
-        dist_pts = np.linspace(0, 160000, 500)
-        plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM1_3, sig_GMM1_3, np.inf),
-                 linewidth=2, color='b', label='1: $\mu_{GMMd}$,$\sigma_{GMMd}$')
-        plt.plot(dist_pts, lognorm_pdf(dist_pts, mu_GMM2_3, sig_GMM2_3, np.inf),
-                 linewidth=2, color='r', label='2: $\mu_{GMMe}$,$\sigma_{GMMe}$')
-        plt.legend(loc='upper left')
-        plt.savefig('1e')
-        plt.close()
+
+W_two = np.linalg.pinv(1 / len(error1) * np.dot(error1, error1.T))
+gmm_args = (income, W_two)
+params_init = np.array([mu_GMM1, sig_GMM1])
+results_two = opt.minimize(criterion, params_init,  args = (gmm_args), tol = 1e-2,\
+                       method = 'Nelder-Mead', options = {'maxiter': 1000})
+mu_GMM2, sig_GMM2 = results_two.x
+crit_val2 = criterion(results_two.x, income, W_two)
+print(r"1c): The GMM estimator is: $\mu$ = {}, $\sigma$ = {}"\
+     .format(mu_GMM2, sig_GMM2))
+print("    The value of the criterion function is {}".format(crit_val2))
+print("    For two data moment: {}".format(data_moments(income)))
+print("    For two model moment: {}".format(model_moments(mu_GMM2, sig_GMM2)))
+print()
+plt.title("Income for MACSS Students Histogram", fontsize = 20)
+plt.plot(dist_pers, log_norm_pdf(dist_pers, mu_GMM2, sig_GMM2), \
+         label = 'TWO-STEP, $\mu$ = {:.3f}, $\sigma$ = {:.3f}'.format(mu_GMM2, sig_GMM2))
+plt.xlim((0, None))
+plt.legend(loc = "upper left", prop={'size':8})
+output_path = os.path.join(output_dir, "1c")
+plt.title('Income PDF GMM (TWO-STEP)', fontsize = 15)
+plt.savefig(output_path, bbox_inches='tight', linestyle = '--')
+plt.show()
+
+def data_moments3(xvals):
+    '''
+    Given data, copute the data moment using three moment conditions
+    
+    Input:
+        xvals: the dataset
+        
+    Output:
+        np.array([per1_model, per2_model, per3_model]):
+            A numpy array that contains the three data moment value
+    '''
+    per1 = len(xvals[xvals <= 75000]) / len(xvals)
+    per2 = len(xvals[(xvals <= 100000) & (xvals > 75000)]) / len(xvals)
+    per3 = len(xvals[xvals > 100000]) / len(xvals)
+    return np.array([per1, per2, per3])
+
+def model_moments3(mu, sigma):
+    '''
+    Given the expectation and variance, compute the model moment.
+    
+    Input:
+        mu: the expectation of the model
+        sigma: the variance of the model
+        
+    Output:
+        np.array([per1_model, per2_model, per3_model]): a numpy array that
+        contains the three model moment value
+    '''
+    xfx = lambda x: log_norm_pdf(x, mu, sigma)
+    (per1_model, m_m_err1) = intgr.quad(xfx, 1e-50, 75000, limit = 1000)
+    (per2_model, m_m_err2) = intgr.quad(xfx, 75000, 100000, limit = 1000)
+    (per3_model, m_m_err3) = intgr.quad(xfx, 100000, 15000000, limit = 1000)
+    return np.array([per1_model, per2_model, per3_model])
+
+def err_vec3(xvals, mu, sigma, simple):
+    '''
+    Given the dataset and hypothesized expectation and variance
+    compute the error vector of the model and the data
+    
+    Input:
+        xvals: the dataset
+        mu: the expectation
+        sigma: the standard deviation of the model
+        simple: a boolean. True, then use the simple error
+        False, then use the percent deviatoin
+    '''
+    moms_data = data_moments3(xvals).reshape(3, 1)
+    moms_model = model_moments3(mu, sigma).reshape(3, 1)
+    if simple:
+        err_vec = moms_model - moms_data
+    else:
+        err_vec = (moms_model - moms_data) / moms_data
+    
+    return err_vec
+
+def criterion3(params, *args):
+    '''
+    --------------------------------------------------------------------
+    This function computes the GMM weighted sum of squared moment errors
+    criterion function value given parameter values and an estimate of
+    the weighting matrix.
+    --------------------------------------------------------------------
+    INPUTS:
+    params = (2,) vector, ([mu, sigma])
+    mu     = scalar, mean of the normally distributed random variable
+    sigma  = scalar > 0, standard deviation of the normally distributed
+             random variable
+    args   = length 3 tuple, (xvals, cutoff, W_hat)
+    xvals  = (N,) vector, values of the truncated normally distributed
+             random variable
+    W_hat  = (R, R) matrix, estimate of optimal weighting matrix
+    
+    OTHER FUNCTIONS AND FILES CALLED BY THIS FUNCTION:
+        norm_pdf()
+    
+    OBJECTS CREATED WITHIN FUNCTION:
+    err        = (2, 1) matrix, column vector of two moment error
+                 functions
+    crit_val   = scalar > 0, GMM criterion function value
+    
+    FILES CREATED BY THIS FUNCTION: None
+    
+    RETURNS: crit_val
+    --------------------------------------------------------------------
+    '''
+    mu, sigma = params
+    xvals, W = args
+    err = err_vec3(xvals, mu, sigma, simple=False)
+    crit_val = np.dot(np.dot(err.T, W), err) 
+    return crit_val
+
+mu_init = 10.5
+sig_init = 0.3
+params_init = np.array([mu_init, sig_init])
+W_hat = np.eye(3)
+gmm_args = (income, W_hat)
+results3 = opt.minimize(criterion3, params_init,  args = (gmm_args), \
+                       method = 'L-BFGS-B', bounds=((1e-10, None), (1e-10, None)))
+mu3_GMM, sig3_GMM = results3.x
+error1 = err_vec3(income, mu3_GMM, sig3_GMM, False)
+crit3_val = criterion3(results3.x, income, W_hat)
+print(r"1d): The GMM estimator using three moments condition is: $\mu$ = {}, $\sigma$ = {}"\
+     .format(mu3_GMM, sig3_GMM))
+print("    The value of the criterion function is {}".format(crit3_val))
+print("    For three data moment: {}".format(data_moments3(income)))
+print("    For three model moment: {}".format(model_moments3(mu3_GMM, sig3_GMM)))
+print()
+
+##Plot the PDF
+dist_pers = np.linspace(0, 140000, 1000000)
+income = np.loadtxt("incomes.txt", comments="#", delimiter=",", unpack=False)
+count, bins, patches = plt.hist(income, 30, normed = True)
+plt.plot(dist_pers, log_norm_pdf(dist_pers, mu3_GMM, sig3_GMM),\
+         label = 'Orginal, $\mu$ = {:.3f}, $\sigma$ = {:.3f}'.format(mu3_GMM, sig3_GMM))
+plt.xlabel("Income")
+plt.ylabel("PDF")
+plt.title('Income PDF Using Three Momemt Conditions', fontsize = 15)
+plt.legend(loc = "upper left", prop={'size':8})
+output_path = os.path.join(output_dir, "1d")
+plt.savefig(output_path, bbox_inches='tight')
+
+cov = 1 / len(income) * np.dot(error1, error1.T)
+W3_two = np.linalg.pinv(cov)
+gmm_args = (income, W3_two)
+params_init = np.array([mu3_GMM, sig3_GMM])
+result3_two = opt.minimize(criterion3, params_init,  args = (gmm_args), \
+                       method = 'Nelder-Mead')
+mu3_GMM2, sig3_GMM2= result3_two.x
+error2 = err_vec3(income, mu3_GMM2, sig3_GMM2, False)
+crit3_val2 = criterion3(result3_two.x, income, W_hat)
+print(r"1e): The TWO-STEP GMM estimator using three moments condition is: $\mu$ = {}, $\sigma$ = {}"\
+     .format(mu3_GMM2, sig3_GMM2))
+print("    The value of the criterion function is {}".format(crit3_val2))
+print("    For three model moment: {}".format(model_moments3(mu3_GMM2, sig3_GMM2)))
+print()
+
+plt.plot(dist_pers, log_norm_pdf(dist_pers, mu3_GMM2, sig3_GMM2), linestyle = '--',\
+         label = 'TWO-STEP, $\mu$ = {:.3f}, $\sigma$ = {:.3f}'.format(mu3_GMM2, sig3_GMM2))
+plt.title('Income PDF Using Three Momemt Conditions(TWO-STEP)', fontsize = 15)
+output_path = os.path.join(output_dir, "1e")
+plt.legend(loc = "upper left", prop={'size':8})
+plt.savefig(output_path, bbox_inches='tight')
+plt.show()
 
 # Problem 2
+df_sick = pd.read_csv('sick.txt', skiprows = 1, names = ['sick', 'age', 'children', 'avgtemp_winter'])
 if True:
     def data_moments_sick(xdf):
         moments_data = xdf['sick']
