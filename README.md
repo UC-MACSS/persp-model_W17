@@ -58,6 +58,7 @@ If you need any special accommodations, please provide us with a copy of your Ac
 All readings are required unless otherwise noted. Adjustments can be made throughout the quarter; be sure to check this repository frequently to make sure you know all the assigned readings.
 
 * [James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. New York: Springer.](http://link.springer.com.proxy.uchicago.edu/book/10.1007%2F978-1-4614-7138-7)
+* [VanderPlas, Jake. (2016). *Python Data Science Handbook*. O'Reilly Media, Inc.](http://proquestcombo.safaribooksonline.com.proxy.uchicago.edu/book/programming/python/9781491912126)
 * Varian, Hal R., "[How to Build an Economic Model in Your Spare Time](http://people.ischool.berkeley.edu/~hal/Papers/how.pdf)," in *Passion and Craft: Economists at Work*, eds. Michael Szenberg, University of Michigan Press, 1997.
 
 
