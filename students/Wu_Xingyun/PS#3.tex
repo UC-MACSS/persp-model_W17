@@ -1,0 +1,172 @@
+{\rtf1\ansi\ansicpg936\cocoartf1404\cocoasubrtf460
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \\documentclass[letterpaper,12pt]\{article\}\
+\\usepackage\{array\}\
+\\usepackage\{threeparttable\}\
+\\usepackage\{geometry\}\
+\\geometry\{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in\}\
+\\usepackage\{fancyhdr,lastpage\}\
+\\pagestyle\{fancy\}\
+\\lhead\{\}\
+\\chead\{\}\
+\\rhead\{\}\
+\\lfoot\{\}\
+\\cfoot\{\}\
+\\rfoot\{\\footnotesize\\textsl\{Page \\thepage\\ of \\pageref\{LastPage\}\}\}\
+\\renewcommand\\headrulewidth\{0pt\}\
+\\renewcommand\\footrulewidth\{0pt\}\
+\\usepackage[format=hang,font=normalsize,labelfont=bf]\{caption\}\
+\\usepackage\{listings\}\
+\\lstset\{frame=single,\
+  language=Python,\
+  showstringspaces=false,\
+  columns=flexible,\
+  basicstyle=\{\\small\\ttfamily\},\
+  numbers=none,\
+  breaklines=true,\
+  breakatwhitespace=true\
+  tabsize=3\
+\}\
+\\usepackage\{amsmath\}\
+\\usepackage\{amssymb\}\
+\\usepackage\{amsthm\}\
+\\usepackage\{harvard\}\
+\\usepackage\{setspace\}\
+\\usepackage\{float,color\}\
+\\usepackage[pdftex]\{graphicx\}\
+\\usepackage\{hyperref\}\
+\\hypersetup\{colorlinks,linkcolor=red,urlcolor=blue\}\
+\\theoremstyle\{definition\}\
+\\newtheorem\{theorem\}\{Theorem\}\
+\\newtheorem\{acknowledgement\}[theorem]\{Acknowledgement\}\
+\\newtheorem\{algorithm\}[theorem]\{Algorithm\}\
+\\newtheorem\{axiom\}[theorem]\{Axiom\}\
+\\newtheorem\{case\}[theorem]\{Case\}\
+\\newtheorem\{claim\}[theorem]\{Claim\}\
+\\newtheorem\{conclusion\}[theorem]\{Conclusion\}\
+\\newtheorem\{condition\}[theorem]\{Condition\}\
+\\newtheorem\{conjecture\}[theorem]\{Conjecture\}\
+\\newtheorem\{corollary\}[theorem]\{Corollary\}\
+\\newtheorem\{criterion\}[theorem]\{Criterion\}\
+\\newtheorem\{definition\}[theorem]\{Definition\}\
+\\newtheorem\{derivation\}\{Derivation\} % Number derivations on their own\
+\\newtheorem\{example\}[theorem]\{Example\}\
+\\newtheorem\{exercise\}[theorem]\{Exercise\}\
+\\newtheorem\{lemma\}[theorem]\{Lemma\}\
+\\newtheorem\{notation\}[theorem]\{Notation\}\
+\\newtheorem\{problem\}[theorem]\{Problem\}\
+\\newtheorem\{proposition\}\{Proposition\} % Number propositions on their own\
+\\newtheorem\{remark\}[theorem]\{Remark\}\
+\\newtheorem\{solution\}[theorem]\{Solution\}\
+\\newtheorem\{summary\}[theorem]\{Summary\}\
+%\\numberwithin\{equation\}\{section\}\
+\\bibliographystyle\{aer\}\
+\\newcommand\\ve\{\\varepsilon\}\
+\\newcommand\\boldline\{\\arrayrulewidth\{1pt\}\\hline\}\
+\
+\
+\\begin\{document\}\
+\
+\\begin\{flushleft\}\
+  \\textbf\{\\large\{Problem Set \\#3\}\} \\\\\
+  MACS 30000, Dr. Evans \\\\\
+  Xingyun Wu\
+\\end\{flushleft\}\
+\
+\\vspace\{5mm\}\
+\
+\\noindent\\textbf\{Problem 1: Some income data, lognormal distribution, and GMM\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (a).\} The histogram is shown in Figure 1.\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Histogram of the MACSS Graduates' Income of 1(a)\}\}\\label\{Fig1a\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1a.png\}\}\}\
+\\end\{figure\}\
+\
+\\textbf\{Part (b).\} The plot of estimated lognormal PDF is shown in Figure 2.\\\\\
+The value of my GMM criterion function at the estimated parameter values is: 1.84965511266e-14.\\\\\
+The data moments are: mean = 85276.8236063, standard deviation = 17992.542128.\\\\\
+The model moments are:  mean = 85276.81387602663, standard deviation = 17992.5414622.\\\\\
+The comparison of data moments and model moments shows great similarity, which means the GMM estimation is good.\\\\\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Estimated Lognormal PDF by GMM of 1(b)\}\}\\label\{Fig1b\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1b.png\}\}\}\
+\\end\{figure\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (c).\} The plot of the estimated lognormal PDF against the PDF from part(b) and the histogram from part(a) is shown in Figure 3.\\\\\
+The value of my GMM criterion function at the estimated parameter values is: 0.765715166926.\\\\\
+The data moments are: mean = 85276.8236063, standard deviation = 17992.542128.\\\\\
+The model moments are:  mean = 63620.09639498967, standard deviation = 21224.5908045.\\\\\
+Given the values of data moments, model moments and the plot, the new GMM estimation with optimal weighting matrix does not perform very well. The model moments are less close to the data moments.\\\\\
+\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Estimated Lognormal PDF by GMM of 1(c)\}\}\\label\{Fig1c\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1c.png\}\}\}\
+\\end\{figure\}\
+\
+\\textbf\{Part (d).\} The value of my GMM criterion function at the estimated parameter values is: 0.23818173309.\\\\\
+The data moments are:\\\\\
+Percent of individuals who earn less than \\$75,000 = 0.3\\\\\
+Percent of individuals who earn between \\$75,000 and \\$100,000 = 0.5\\\\\
+Percent of individuals who earn more than \\$100,000 = 0.2\\\\\
+The model moments are:\\\\\
+Percent of individuals who earn less than \\$75,000 = 0.29927245367786354\\\\\
+Percent of individuals who earn between \\$75,000 and \\$100,000 = 0.4980574552151655\\\\\
+Percent of individuals who earn more than \\$100,000 = 0.19966278324796635\\\\\
+The data moments and model moments are very close, which means that the GMM estimation performs well.\
+\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Estimated Lognormal PDF by GMM of 1(d)\}\}\\label\{Fig1c\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1d.png\}\}\}\
+\\end\{figure\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (e).\} The value of my GMM criterion function at the estimated parameter values is: -5.05831569339e-10.\\\\\
+The data moments are:\\\\\
+Percent of individuals who earn less than \\$75,000 = 0.3\\\\\
+Percent of individuals who earn between \\$75,000 and \\$100,000 = 0.5\\\\\
+Percent of individuals who earn more than \\$100,000 = 0.2\\\\\
+The model moments are:\\\\\
+Percent of individuals who earn less than \\$75,000 = 0.03709302071777423\\\\\
+Percent of individuals who earn between \\$75,000 and \\$100,000 = 0.38825270349916574\\\\\
+Percent of individuals who earn more than \\$100,000 = 0.5550946448869221\\\\\
+The data moments and model moments vary a lot, which means the estimation with the optimal weighting matrix does not provide estimation close enough to the data.\
+\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Estimated Lognormal PDF by GMM of 1(e)\}\}\\label\{Fig1c\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1e.png\}\}\}\
+\\end\{figure\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (f).\} According to the comparisons between data moments and model moments, as well as the plots, the GMM estimations in part(b) and part(d) seem to fit the data best, for their estimations are close to the data. Their estimated parameters are very close, thus it is hard to say which one is better. If I have to choose one, I would say the estimation in part(e) is better, since it includes more detailed consideration to the data. The other two estimations with weighting matrix do not provide very accurate estimation to the data. \
+\
+\\vspace\{5mm\}\
+\
+\\noindent\\textbf\{Problem 2: Linear regression and GMM\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (a).\} The value of estimated parameter values by GMM is: 0.00182128981773.\\\\\
+And the estimated parameters are:\\\\\
+\\begin\{align*\}\
+ \\beta^\{GMM\}_0 = 0.251644726617, \
+ \\beta^\{GMM\}_1 = 0.012933451003,\\\\\
+ \\beta^\{GMM\}_2 = 0.400501185497, \
+ \\beta^\{GMM\}_3 = -0.00999169581195\
+\\end\{align*\}\
+\\\\\
+\
+\
+\\end\{document\}\
+\
+}
