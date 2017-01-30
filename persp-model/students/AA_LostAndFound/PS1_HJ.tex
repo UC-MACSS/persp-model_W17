@@ -1,0 +1,158 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+% --------------------------------------------------
+\begin{document}
+
+\footnotesize
+\begin{flushleft}\centering
+  \textbf{\large{Problem Set \#1}} \\
+  Perspectives on Computational Modeling \\
+  MACS 30100, Dr. Evans \\
+  HyungJin Cho
+\end{flushleft}
+
+\vspace{3mm}
+
+% --------------------------------------------------
+\noindent\textbf{Problem 1.}
+
+\newline
+\noindent\textbf{Part (a). Article Review} \\
+The article, \textit{Benefits of Neuroeconomic Modeling:
+New Policy Interventions and Predictors of Preference} presents a model that provides computational and neurobiological account of the decision-making process. Instead of the standard economics model that mainly focuses on the outcome of decision-making, that is the resulting choice, neuroeconomics model concentrate on the process of decision-making. In this article, drift diffusion
+model (DDM) which accouts for the decision-making process from the perspectives of neuroeconomics is introduced.\\
+
+\noindent\textbf{Part (b). Article Citation} \\
+Krajbich, I., Oud, B., & Fehr, E. (2014). \textit{Benefits of neuroeconomic modeling: new policy interventions and predictors of preference.} The American Economic Review, 104(5), 501-506. \url{https://www.aeaweb.org/articles?id=10.1257/aer.104.5.501}\\
+
+
+\noindent\textbf{Part (c). Mathematical or Statistical Model} \\
+V_{t} = V_{t-1} + d(\mu_{x} - \mu_{y}) + \varepsilon_{t} \\
+with \; \varepsilon_{t}\sim N(0,\sigma\textsuperscript{2}) \\
+
+The article introduces drift diffusion model (DDM) which explains the decision-making process. The model describes temporal evolution of the relative decision value (RDV) when deciding between two choice options x and y. Assuming the distribution of the value signal follows normal distribution, the decision maker receives value signals $x_{t}$ and $y_{t}$ which derive from the two value distribution of the choice options with $\mu_{x}$ and $\mu_{y}$. The decision maker updates the relative decision value (RDV) which is denoted $V_{t}$ considering $V_{t-1}$ which is relative decision value (RDV) at t-1 based on the observation of a pair of signals at time t-1 and d which refers a parameter that governs the drift rate at which the relative decision value (RDV) evolves.\\
+
+\noindent\textbf{Part (d). Exogenous variables vs Endogenous variables}
+\begin{itemize}
+\item Exogenous variables: \textit{Drift Rate}, \textit{Mean of Value Signal Distribution}, and \textit{Standard Deviation of Value Signal Distribution}.
+\item Endogenous variables: \textit{Relative Decision Value}.
+\end{itemize}
+
+\noindent\textbf{Part (e). Static vs. Dynamic, Linear vs. Nonlinear, Deterministic vs. Stochastic}
+\begin{itemize}
+\item Dynamic Model: The drift diffusion model (DDM) describes a dynamic relationship among variables over time. The model measures the value signal at different time period to track intertemporal changes.
+\item Linear Model: The drift diffusion model (DDM) assumes linear relationship among variables. The model is expressed as a linear function instead of a polynomial function of degree n.
+\item Stochastic Model: The drift diffusion model (DDM) is a stochastic model. The model includes an error term to capture randomness of the model.
+\end{itemize}
+
+\noindent\textbf{Part (f). Possible Variable}
+\begin{itemize}
+\item
+Weight on $V_{t-1}$: One useful variable to involve in the model is $W_{V_{t-1}}$, a weight on relative decision value (RDV) of prior term. By including this variable, the model would measure the degree of influence from the previous relative decision value (RDV). This measure is expected to lead more precise outcome by the model.\\
+\end{itemize}
+
+\clearpage
+
+% --------------------------------------------------
+\normalsize
+\noindent\textbf{Problem 2.}
+
+\newline
+\vspace{5mm}
+\noindent\textbf{Part (a). Musicians Lifespan Model} \\
+A model for the lifespan of musicians:
+\begin{multline*}
+Y_{Predicted Lifespan} = \beta_{0} + \beta_{1}X_{Genetic Predisposition} + \beta_{2}X_{Gender} \\ + \beta_{3}X_{Socio-economic Status} + \beta_{4}X_{Diet} + \varepsilon \\
+\end{multline*}
+
+\noindent\textbf{Part (b). Variables}
+\begin{itemize}
+\item Dependent Variables: \textit{Predicted Lifespan}
+\item Independent Variables: \textit{Genetic Predisposition}, \textit{Gender}, \textit{Socio-economic Status}, \textit{Diet}\\
+\end{itemize}
+
+\noindent\textbf{Part (c). Data Generating Process}
+\begin{itemize}
+\item \textit{Predicted Lifespan}: Predicted value in years
+\item \textit{Genetic Predisposition}: Measures can be obtained from medical records. Measures include family medical history, susceptibility of stress hormone, etc.
+\item \textit{Gender}: Measures can be obtained from demographic information.
+\item \textit{Socio-economic Status}: Measures can be calculated by using census data.
+\item \textit{Diet}: Measures can be collected by using self-reporting survey and Body Mass Index (BMI)\\
+\end{itemize}
+
+\noindent\textbf{Part (d). Key Factors}
+The factors included in the musicians lifespan prediction model are the key factors; Genetic Predisposition, Gender, Socio-economic Status, Diet. Some of these key factors are calculated from considering multiple indexes. For example, 'Genetic Predisposition' is measured from family medical history, susceptibility of stress hormone, etc.\\
+
+\noindent\textbf{Part (e). Criteria for Key Factors}
+The key factors are selected based on recent medical research on longevity. The assumption is that the factors influencing muscians are not significantly different from those affecting normal individuals. Therefore, the factors that are found to have an effect on longevity by medical research are also adopted in this model. The two main components are a genetic factor and an environmental factor.\\
+
+\noindent\textbf{Part (f). Preliminary Test}
+There are two forms of data required in this model. Public data such as demographics can be collected by using search engine. Private data, on the other hand, can be only obtained by sending a consent form to the family member of a musician who passed away. This leads a difficult data collection process, however, since a genetic factor is the key factor of the lifespan prediction model, it can't be ignored. After collecting the data, the lifespan prediction model is tested by comparing the actual lifespan of the musicians.\\
+
+\newline
+\clearpage
+
+ % --------------------------------------------------
+\end{document}

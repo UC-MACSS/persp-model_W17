@@ -1,0 +1,167 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=0.75in,rmargin=0.75in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+%\renewcommand\headrulewidth{2pt}
+%\renewcommand\footrulewidth{2pt}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{pdflscape}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+%\usepackage{enumitem}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+\newcommand{\q}[1]{``#1''}
+
+\def\changemargin#1#2{\list{}{\rightmargin#2\leftmargin#1}\item[]}
+\let\endchangemargin=\endlist 
+
+\usepackage{graphicx}
+\graphicspath{ {images/} }
+
+\usepackage{enumerate}
+%\usepackage[shortlabels]{enumerate}
+\setlength{\parindent}{24pt}
+%\renewcommand{\baselinestretch}{2.0}
+\usepackage{lipsum} % just for the example
+\makeatletter
+\newcommand{\verbatimfont}[1]{\renewcommand{\verbatim@font}{\ttfamily#1}}
+\makeatother
+%\usepackage{enumitem}
+\usepackage{float}
+
+\verbatimfont{\small}%
+
+
+\begin{document}
+
+\begin{flushleft}
+   \textbf{\Large{Problem Set \#1}} \\
+   MACSS 30100 \\
+   Luxi Han, 10449918\\
+\end{flushleft}
+
+\noindent \textbf{\large Problem 1}\par
+
+\begin{enumerate}  [\bfseries (a)]
+	\item I'm going to choose \textit{Agricultural Productivity and Structural Transformation, Evidence from Brazil} authored by Paula Bustos, Bruno Caprettini and Jacopo Ponticelli, from \textit{American Economic Review} 2016 June Issue.\par
+	\item The full citation from the website of \textit{American Economic Review} is \par
+	Bustos, Paula, Bruno Caprettini and Jacopo Ponticelli. 2016. "Agricultural Productivity and Structural Transformation: Evidence from Brazil." \textit{American Economic Review}, 106(6): 1320-65.\par
+	\item The paper tries to understand how different factor biased technology changes affect the productivity and employment share in both agricultural and industrial sectors.  The theoretical model is as follow: \\
+	\begin{align} 
+	Q_m &= A_m L_m \\
+	Q_a &= A_a [\gamma(A_L, L_a)^{{\sigma - 1}/\sigma} + (1 - \gamma)(A_T T_a)^{[\sigma - 1]/ \sigma}]^{{\sigma - 1} / \sigma}
+	\end{align} 
+	Where subscript \(L\) represents labor augmenting technology change and subscript \(T\) represent land augmenting technology change.	\par
+	The empirical statistical model considered in this article is the following model:\\
+	\begin{equation}
+	\Delta y_j = \Delta \alpha + \beta \Delta A_j ^ {soy} + \gamma \Delta A_j ^{maize} + \sigma Rural _{j, 1991} + \theta X_{j, 1991} + \Delta \epsilon _j
+	\end{equation}
+	In the model, the subscript \(j\) represents the \(j_{th}\) muniplicity. The data takes the first difference form. The outcome of the model is denoted by \(\Delta y_j\), which is the change in output per worker and change in employment share in either agricultural and industrial sector. \(\Delta A_j ^{soy}\) represents the increase in labor productivity of soybean production if adopting the labor augmenting GE soy technology; \(\Delta A_j ^{maize}\) represents the increase in labor productivity of maize production if adopting the land augmenting second season harvesting technology in maize production. \(Rural_{j, 1991}\) represents the rural population share in the \(j_th\) muniplicity in 1991 and \(X_{j, 1991}\) represents other muniplicity characteristics as controls.\par
+	
+	\item In this model, the exogenous variable are the parameters in front of the variables; additionally, in the model the labor and land endowment and elasticity of substitution in agricultural sector are considered exogenous variables in the model (ie. output variables is not affected by factor inputs).\par
+	Endogenous variables are: output per worker and employment share of agricultural and industrial sectors (outcome variables), the productivity increase in adopting GE soybean technology and second season harvesting technology in maize production. Rural population share and other municipal characteristics are also endogenous variables though they are controls. \par
+	\item This model is a static, linear and stochastic model. \par
+	
+	\item Another variable i think would be biasing the result is the change of size of the downstream industries that require soybean or maize as inputs. Take soybean as an example, the increase in the downstream industry (like feedstuff production) can result in a upward bias in the effect of \(\Delta A_j ^{soy}\) on output and may lead to a downward bias in the effect of \(\Delta A_j ^{soy}\) on employment share change.\par
+	
+\end{enumerate}
+
+\noindent \textbf{\large Problem 2}\par
+\begin{enumerate}  [\bfseries (a)]
+	\item I model the life expectancy of a musician from four perspectives: genetic reason, lifestyle, family and career:\\
+	\begin{align}
+	\begin{split}
+	\hspace*{-2.5cm} log(life\, expectancy) =& \underbrace{\beta_{1, 1}parents\,disease+ \beta_{1, 2}Gender + \beta_{1, 3} Race + }_\text{genetic reason}\\
+	& \underbrace{\beta_{2, 1}log(num\,drug\,related\,news) + \beta_{2, 2} log(weight / height) + \beta_{2, 3}log(num\,year\,education) }_\text{lifestyle}\\
+	& \underbrace{\beta_{3,1}married + \beta_{3 ,2}log(num\,children) + }_\text{family}\\
+	& \underbrace{\beta_{4, 1} log(income) + \beta_{4, 2}log(income)^2 + \beta_{4, 3} log(num\, concert\, /year) + \beta_{4 ,4}genre} _\text{career}
+	\end{split}
+	\end{align}
+	\item \quad None
+	\item \quad None
+	\item The key factors in this model are whether parents have a chronicle disease, gender, years of education, weight and height ratio, income and genre. 
+	The reason why theses variables are important is that: 1) parents' disease is a good indicator of genetic disease that is inheritable; 2) years of education is a good proxy for self-discipline and health related knowledge; 3) weight and height ratio is a good proxy for exercise; 4) genre is a good indicator for stress related issues and different lifestyle.
+	\item There are several reasons why I choose these variables. The first reason is that they are comprehensive. A person's life expectancy should be determined by genetic?innate and other postnatal reasons. Postnatal reasons can involve their own lifestyle, family environment and work environment. In this sense, they are comprehensive.\par 
+	The second reason is that they are all very retrievable. All(except maybe parents' chronicle diseases) variables can be found on internet doing standard search and scraping. \par
+	The third reason is that they are good proxies. For example, it's hard to get information about work related pressure. Then the three career related variables may be good proxies. Income can correspond positively to pressure. But taking into account of the positive effect of career achievement on life expectancy, the effect of income may exhibit a bell curve shape. Number of concerts per year may also be a good proxy for workload. Different artists of different genres can have totally different lifestyle. It's blatantly true that drug culture is prevalent for a certain group of artists in a certain genre. Additionally, lifestyle is something that is hard to get information on. Then years of education can turn out to be a good proxy for their degree of self-discipline and their awareness of the positive effect of a healthy lifestyle.\par
+	\item The way I would test my hypothesis is that I can scrape the information particularly the variables that I propose in the linear regression equation. A first test would be to see the correlation between life expectancy and each variable. We should pay attention to whether the sign is the same as we hypothesize and how large the correlation is. Then we can train the model. I would divide my sample into two groups: one training set and the other is the test set. I can run the regression and firstly use \(R^2\) as a preliminary test. Then taking the parameters from the training set to test the fit of the model in the test set.\par
+	
+\end{enumerate}
+
+
+\end{document}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
