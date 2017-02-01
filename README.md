@@ -31,7 +31,7 @@ If you need any special accommodations, please provide us with a copy of your Ac
 ## Course schedule (lite)
 
 | Date | Day | Topic | Readings | Assignment |
-|------------|-------|---------------------------------------------------------|----------|--------------------------|
+|------------|-------|---------------------------------------------------------|--------------|------------------------------|
 | Jan.  4 | W | Model/theory building | V1997 |  |
 | Jan.  9 | M | Data generating process |  | PS1 |
 | Jan. 11 | W | Maximum likelihood estimation | Notes |  |
@@ -42,22 +42,23 @@ If you need any special accommodations, please provide us with a copy of your Ac
 | Jan. 30 | M | Simulated method of moments | Notes | PS3 |
 | Feb. 1 | W |  |  |  |
 | **Feb. 6** | **M** | **Evans Midterm** |  | PS4 |
-| Feb.  8 | W | Generalized linear models |  |  |
-| Feb. 13 | M |  |  | Linear regression PS due |
-| Feb. 15 | W |  |  |  |
-| Feb. 20 | M | Resampling methods (cross-validation and bootstrapping) |  | GLM PS due |
-| Feb. 22 | W | Non-linear modeling |  |  |
-| Feb. 27 | M | Tree-based methods |  | Resampling PS due |
-| Mar.  1 | W | Support vector machines |  |  |
-| Mar.  6 | M | Unsupervised learning - clustering |  | Classification PS due |
-| Mar.  8 | W | Unsupervised learning - Latent Direchlet allocation |  |  |
-| Mar. 13 | M |  |  | Unsupervised PS due |
+| Feb.  8 | W | Statistical learning and linear regression | ISL Ch 2-3 |  |
+| Feb. 13 | M | Logistic regression | ISL Ch 4.1-3 | Linear regression PS due |
+| Feb. 15 | W | Generalized linear models | Notes |  |
+| Feb. 20 | M | Resampling methods (cross-validation and bootstrapping) | ISL Ch 5 | GLM PS due |
+| Feb. 22 | W | Non-linear modeling | ISL Ch 7 |  |
+| Feb. 27 | M | Decision trees | ISL Ch 8.1 | Resampling/non-linear PS due |
+| Mar.  1 | W | Bagging, random forests, boosting | ISL Ch 8.2 |  |
+| Mar.  6 | M | Support vector machines | ISL Ch 9 | Trees PS due |
+| Mar.  8 | W | Unsupervised learning | ISL Ch 10 |  |
+| Mar. 13 | M |  |  | SVM/unsupervised PS due |
 
 ## References and Readings ##
 
 All readings are required unless otherwise noted. Adjustments can be made throughout the quarter; be sure to check this repository frequently to make sure you know all the assigned readings.
 
 * [James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. New York: Springer.](http://link.springer.com.proxy.uchicago.edu/book/10.1007%2F978-1-4614-7138-7)
+* [VanderPlas, Jake. (2016). *Python Data Science Handbook*. O'Reilly Media, Inc.](http://proquestcombo.safaribooksonline.com.proxy.uchicago.edu/book/programming/python/9781491912126)
 * Varian, Hal R., "[How to Build an Economic Model in Your Spare Time](http://people.ischool.berkeley.edu/~hal/Papers/how.pdf)," in *Passion and Craft: Economists at Work*, eds. Michael Szenberg, University of Michigan Press, 1997.
 
 

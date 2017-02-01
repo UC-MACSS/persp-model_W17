@@ -1,0 +1,23 @@
+1b
+mu_GMM1= 11.3369099229  sig_GMM1= 0.213027109558
+The value of the criterion function is:  [[  1.79430605e-13]]
+Data moments are: mean: 85276.8236063  std: 17992.542128
+Model moments are: mean: 85276.7903569504  std: 17992.5391492
+1c
+mu_GMM2= 11.0646211007  sig_GMM2= 0.746080276205
+The value of the criterion function is:  [[-0.03281297]]
+Data moments are: mean: 85276.8236063  std: 17992.542128
+Model moments are: mean: 55242.28362227154  std: 32916.416721
+1d
+mu_GMM3= 11.3356813274  sig_GMM3= 0.21059845372
+The value of the criterion function is:  [[  2.53478537e-11]]
+Data moments are:  0.3 0.5 0.2
+Model moments are:  0.3000000036326135 0.5000000058562853 0.1999999905111009
+1e
+mu_GMM4= 11.3381023303  sig_GMM4= 0.207327054697
+The value of the criterion function is:  [[ 102.51189532]]
+Data moments are:  0.3 0.5 0.2
+Model moments are:  0.29309956707115864 0.5073488253220612 0.1995516076067799
+2
+b0: -19.3701404677  b1: -30.769609307  b2: 0.771823148029  b3: 76.937826047
+The value of the criterion function is:  10.8342173393
