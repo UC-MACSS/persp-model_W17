@@ -1,0 +1,173 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+
+\begin{document}
+
+\begin{flushleft}
+  \textbf{\large{Problem Set \#2}} \\
+  Perspectives on Computational Modeling \\
+  MACS 30100, Dr. Evans \\
+  HyungJin Cho
+\end{flushleft}
+
+\vspace{5mm}
+
+\begin{enumerate}
+  \textbf{Problem 1.}
+\end {enumerate}
+\begin{enumerate}
+  \textbf{Part (a). Histogram}
+\par
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+   \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/1(a).png}}}
+\end{figure}
+\par\bigskip
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (b). One step GMM}
+\par
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/1(b).png}}}
+\end{figure}
+\par
+GMM lognormal parameters: mu = 11.3369, sig = 0.2130 \\
+Data moment: mu = 85276.8236, std = 17992.5421 \\
+Model moment: mu = 85276.7904, std = 17992.5391 \\
+Value of GMM criterion: 1.794297513712258e-13 \\
+\par\bigskip
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (c). Two step GMM}
+\par
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/1(c).png}}}
+\end{figure}
+\par
+GMM lognormal parameters: mu = 11.0857, sig = 0.7706 \\
+Model moment: mu = 85276.8236, std = 17992.5421 \\
+Value of GMM criterion: 0.009984728414565325 \\
+\par\bigskip
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (d). One step GMM}
+\par
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/1(d).png}}}
+\end{figure}
+\par
+Data moment: \\
+The proportion of income less than $75,000 = 0.3 \\
+The proportion of income between $75,000 and $100,000 = 0.5 \\
+The proportion of income more than $100,000 = 0.2 \\
+Model Moment: \\
+The proportion of income less than $75,000 = 0.3000 \\
+The proportion of income between $75,000 and $100,000 = 0.5000 \\
+The proportion of income more than $100,000 = 0.2000 \\
+Value of GMM criterion: 2.534788361602213e-11
+\par\bigskip
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (e). Two step GMM}
+\par
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+  \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/1(e).png}}}
+\end{figure}
+\par
+Model Moment: \\
+The proportion of income less than $75,000 = 0.2931 \\
+The proportion of income between $75,000 and $100,000 = 0.5073 \\
+The proportion of income more than $100,000 = 0.1996 \\
+Value of GMM criterion: 91.95874552987516
+\par\bigskip
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (f). Estimation comparison} \\
+\par\bigskip
+The PDF generated from 2-step GMM with 3 data moments(Part.(e)) best fits\\
+the actual data and the model moments from 2-step GMM with mean and std \\ (Part.(c)) least fits the data. Other five figures also fits the data well. \\
+\par\bigskip
+\end{enumerate}
+
+\begin{enumerate}
+  \textbf{Problem 2.}
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (a). Linear regression} \\
+\par\bigskip
+$\beta_{0}$ = 0:252 \\
+$\beta_{1}$ = 0.013 \\
+$\beta_{2}$ = 0.401 \\
+$\beta_{3}$ = -0.010 \\
+Value of GMM criterion: 0.001821 \\
+\par\bigskip
+\end {enumerate}
+
+\end{document}
