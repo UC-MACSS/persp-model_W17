@@ -44,6 +44,8 @@ def man_lognorm_pdf(x, mu, sigma): # This is unused
 
 def pdf_on_hist(mus, sigmas, xvals, figlab = '1b'):
     '''
+    This function allows us to plot pdfs of the lognorm distribution on top 
+    of a histogram of data.
     '''
     # Get the domain space, figure, and axes from histogram in part a
     domain, fig, ax = plot_income_hist(xvals, norm = True, add_on = True) 
@@ -114,6 +116,8 @@ def plot_income_hist(incomes, norm = True, add_on = False):
 
 def LN_pdf(xvals, mu, sigma):
     '''
+    Given an array of xvals, this function returns lognorm pdf values of those
+    xvals
     '''
     ln_dist = sts.lognorm(scale = np.exp(mu), s = sigma)
 
@@ -121,9 +125,11 @@ def LN_pdf(xvals, mu, sigma):
     return(rv)
 
 
-# Exercise 1c | Estimate mu and sigma with SMM
+# Exercise 1c 
 def moments(vals):
     '''
+    Given either a one or two dimensional array of vals, this function returns
+    the mean and standard deviation, the two moments of interest for those xvals.
     '''
     if vals.ndim == 2:
         mean_vec = vals.mean(axis = 0)
@@ -139,8 +145,10 @@ def moments(vals):
     return(mean, std)
 
 
-def err_vec(data_vals, sim_vals, mu, sigma):
+def err_vec(data_vals, sim_vals):
     '''
+    Given an array of data_vals and sim_vals this function 
+    calculates the error vector (percent deviation) of those values.
     '''
     mean_data, var_data = moments(data_vals)
     moms_data = np.array([[mean_data], [var_data]])
@@ -155,6 +163,9 @@ def err_vec(data_vals, sim_vals, mu, sigma):
 
 def LN_draws(num_obs, num_sims, mu, sigma):
     '''
+    Given a number of observations, number of simulations, mu, and sigma, this
+    function draws a two dimensional arrays from the appropriately formed
+    lognormal distribution.
     '''
     np.random.seed(1234)
 
@@ -168,18 +179,27 @@ def LN_draws(num_obs, num_sims, mu, sigma):
 
 def criterion(params, *args):
     '''
+    This function returns the criterion value for a given xvals, weights matrix,
+    number of simulations desired, and parameters of the lognormal distribution,
+    mu, and sigma.
     '''
     mu, sigma = params
     xvals, W_hat, num_sims = args
     sim_vals = LN_draws(len(xvals), num_sims, mu, sigma)
 
-    err = err_vec(xvals, sim_vals, mu, sigma)
+    err = err_vec(xvals, sim_vals)
     crit_val = np.dot(np.dot(err.T, W_hat), err) 
     return(crit_val)
 
 
 def estimate_params(xvals, mu_init, sig_init, num_sims = 300, two_step = False):
     '''
+    This function does everything needed for Question 1 part c and d, 
+    estimating the values of mu, and sigma via SMM using both an identity and 
+    two steps weight matrix, reports those values, as well as the criterion
+    value, model, moments, and data moments.
+
+    This function also plots the pdf(s) on top of the histogram of data.
     '''
     params_init1 = np.array([mu_init, sig_init])
 
@@ -208,7 +228,7 @@ def estimate_params(xvals, mu_init, sig_init, num_sims = 300, two_step = False):
 
         mu_SMM2, sig_SMM2 = results2.x
         print('mu_SMM2=', mu_SMM2, ' sig_SMM2=', sig_SMM2)
-        print('Critical value is: {}'.format(criterion((mu_SMM2, sig_SMM2),
+        print('Criterion value is: {}'.format(criterion((mu_SMM2, sig_SMM2),
                                             *(xvals, weights_twostep, num_sims))))
 
         
@@ -220,19 +240,14 @@ def estimate_params(xvals, mu_init, sig_init, num_sims = 300, two_step = False):
         pdf_on_hist([mu_SMM1, mu_SMM2], [sig_SMM1, sig_SMM2], xvals, figlab = '1d')
 
     else:
-
-
         print('mu_SMM1=', mu_SMM1, ' sig_SMM1=', sig_SMM1)
-        print('Critical value is: {}'.format(criterion((mu_SMM1, sig_SMM1), 
+        print('Criterion value is: {}'.format(criterion((mu_SMM1, sig_SMM1), 
                                             *(xvals, weights, num_sims))))
 
         model_moments1 = moments(sim_vals_SMM1)
         print('Data moment mu = {}, sigma = {}.\n Model Moments mu = {}, sigma = {}'
               .format(data_moments[0], data_moments[1], model_moments1[0], model_moments1[1]))
         pdf_on_hist(mu_SMM1, sig_SMM1, xvals, figlab = '1c')
-
-
-
 
 
 if __name__ == '__main__':
