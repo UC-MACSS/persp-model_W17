@@ -116,7 +116,7 @@ print('mu_SMM_1 =', mu_SMM_1, ' sigma_SMM_1 =', sigma_SMM_1)
 # Print data moments
 mean_data, var_data = moments(df['incomes'])
 print('Data mean_1 =', mean_data)
-print('Data variance_1 =', var_data)
+print('Data std_1 =', var_data ** 0.5)
 
 # Print model moments
 sim_vals_1            = lognorm_draws(unif_vals, mu_SMM_1, sigma_SMM_1)
@@ -124,10 +124,10 @@ mean_sim_1, var_sim_1 = moments(sim_vals_1)
 mean_mod_1            = mean_sim_1.mean()
 var_mod_1             = var_sim_1.mean()
 print('Model mean_1 =', mean_mod_1)
-print('Model variance_1 =', var_mod_1)
+print('Model std_1 =', var_mod_1 ** 0.5)
 
 # Compute difference between data and model moments
-print('Percentage difference in mean_1 =', (mean_data - mean_mod_1) / mean_data, 'Percentage difference in variance_1 =', (var_data - var_mod_1) / var_data)
+print('Percentage difference in mean_1 =', (mean_data - mean_mod_1) / mean_data, 'Percentage difference in std_1 =', (var_data ** 0.5 - var_mod_1 ** 0.5) / var_data ** 0.5)
 
 # Compute err matrix
 err_1 = err_vec(df['incomes'], sim_vals_1, mu_SMM_1, sigma_SMM_1, simple=False).reshape(2, )
@@ -178,7 +178,7 @@ print('mu_SMM_2 =', mu_SMM_2, ' sigma_SMM_2 =', sigma_SMM_2)
 # Print data moments
 mean_data, var_data = moments(df['incomes'])
 print('Data mean_2 =', mean_data)
-print('Data variance_2 =', var_data)
+print('Data std_2 =', var_data ** 0.5)
 
 # Print model moments
 sim_vals_2            = lognorm_draws(unif_vals, mu_SMM_2, sigma_SMM_2)
@@ -186,10 +186,10 @@ mean_sim_2, var_sim_2 = moments(sim_vals_2)
 mean_mod_2            = mean_sim_2.mean()
 var_mod_2             = var_sim_2.mean()
 print('Model mean_2 =', mean_mod_2)
-print('Model variance_2 =', var_mod_2)
+print('Model std_2 =', var_mod_2 ** 0.5)
 
 # Compute difference between data and model moments
-print('Percentage difference in mean_2 =', (mean_data - mean_mod_2) / mean_data, 'Percentage difference in variance_2 =', (var_data - var_mod_2) / var_data)
+print('Percentage difference in mean_2 =', (mean_data - mean_mod_2) / mean_data, 'Percentage difference in std_2 =', (var_data ** 0.5 - var_mod_2 ** 0.5) / var_data ** 0.5)
 
 # Compute err matrix
 err_2 = err_vec(df['incomes'], sim_vals_2, mu_SMM_2, sigma_SMM_2, simple=False).reshape(2, )

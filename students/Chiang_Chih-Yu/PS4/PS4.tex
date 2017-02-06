@@ -89,7 +89,7 @@ A histogram of annual incomes of students who graduated in 2018, 2019, and 2020 
 \noindent\textbf{Part (b). lognormal pdf function} \\
 \\
 With $\mu$ = 5.0 and $\sigma$ = 1.0, and xvals = np.array([[200.0, 270.0], [180.0, 195.5]], \\
-The lognormal PDF values are [[ 0.0019079   0.00123533] [ 0.00217547  0.0019646 ]].
+The lognormal PDF values are [[0.0019079, 0.00123533], [ 0.00217547, 0.0019646]].
 \\
 
 
@@ -105,11 +105,11 @@ The criterion value is 7.20176828929e-14. The estimated parameters are as follow
 
 \begin{center}
 \begin{tabular}{ c|c|c }
- moments & mean & $std^2$ \\
+ moments & mean & std \\
  \hline
- data & 85276.8236063 & 323731572.23 \\
- model & 85276.8464227 & 323731565.513 \\
- (data-model)/data & -2.67557875682e-07 & 2.07476758571e-08
+ data & 85276.8236063 & 17992.542128 \\
+ model & 85276.8464227 & 17992.5419414 \\
+ (data-model)/data & -2.67557875682e-07 & 1.03738379265e-08
 \end{tabular}
 \end{center}
 \\
@@ -133,13 +133,14 @@ The criterion value is 0.0120239766133. The estimated parameters are as follows:
 
 \begin{center}
 \begin{tabular}{ c|c|c }
- moments & mean & $std^2$ \\
+ moments & mean & std \\
  \hline
- data & 85276.8236063 & 323731572.23 \\
- model & 85276.8196196 & 323731368.346 \\
- (data-model)/data & 4.67498781548e-08 & 6.2979110409e-07
+ data & 85276.8236063 & 17992.542128 \\
+ model & 85276.8196196 & 17992.5364623 \\
+ (data-model)/data & 4.67498781548e-08 & 3.14895601719e-07
 \end{tabular}
 \end{center}
+This is really close to the result from (c). While the data and model moment differences are both trivial and the criterion values can't be compared with different weighting matrices, it's hard to say, the result from (c) and (d), which one is better.
 \\
 
 Lognormal pdfs with estimated parameters in previous and this questions are plotted. \\
