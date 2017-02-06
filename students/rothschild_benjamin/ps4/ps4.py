@@ -38,7 +38,6 @@ def moments(vals):
 	elif vals.ndim == 1:
 		mean = vals.mean()
 		std = vals.std()
-
 	return (mean, std)
 
 
@@ -48,12 +47,9 @@ def err_vec(data_vals, sim_vals):
 	'''
 	mean_data, var_data = moments(data_vals)
 	moms_data = np.array([[mean_data], [var_data]])
-
 	mean_model, var_model = moments(sim_vals)
 	moms_model = np.array([[mean_model], [var_model]])
-
 	err_vec = (moms_model - moms_data) / moms_data
-	
 	return err_vec
 
 
