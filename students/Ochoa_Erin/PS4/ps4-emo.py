@@ -193,15 +193,10 @@ def criterion(params, *args):
     --------------------------------------------------------------------
     '''
     mu, sigma = params
-    #xvals, unif_vals, cut_lb, cut_ub, W_hat = args
+
     xvals, w_hat, observations, rounds = args
 
-    #sim_vals = trunc_norm_draws(unif_vals, mu, sigma, cut_lb, cut_ub)
-
     sim_vals = LN_draws(mu, sigma, observations, rounds)
-
-    #err = err_vec(xvals, sim_vals, mu, sigma, cut_lb, cut_ub,
-                  #simple=False)
 
     err = err_vec(xvals, sim_vals, mu, sigma, simple=False)
 
@@ -239,7 +234,6 @@ count, bins, ignored = plt.hist(incomes, 30, normed = True, color = 'cyan')
 plt.title('MACSS Graduates\' Incomes', fontsize=20)
 plt.xlabel('Income')
 plt.ylabel('Proportion of Incomes')
-#plt.xlim([40000, 140000])
 plt.tight_layout()
 #plt.show()
 output_path = os.path.join(output_dir, fig_name_1a)
@@ -316,14 +310,7 @@ rounds = 300
 mu_1c = 11
 sig_1c = .2
 
-#uniform_vals = sts.uniform.rvs(0, 1, size=(observations, rounds))
-
-
-
-
-
 w_1c = np.eye(2)
-
 
 params_1c = np.array([mu_1c, sig_1c])
 args_1c = (incomes, w_1c, observations, rounds)
@@ -355,8 +342,6 @@ print('\nMean of incomes = {:.3f}'.format(mean_data))
 print('Mean of model  = {:.3f}'.format(mean_mdl))
 print('SD of incomes = {:.3f}'.format(sd_data))
 print('SD of model  = {:.3f}\n'.format(sd_mdl))
-
-
 
 fig_name_1c = 'Fig_1c'
 
@@ -418,11 +403,6 @@ mean_sim_1d, sd_sim_1d = gen_moments(ln_draws_1d)
 mean_mdl_1d = mean_sim_1d.mean()
 sd_mdl_1d = sd_sim_1d.mean()
 
-
-
-
-
-
 print('\nmu_smm_1d  = {:.3f}'.format(mu_smm_1d))
 print('sig_smm_1d =  {:.3f}'.format(sig_smm_1d))
 
@@ -433,10 +413,6 @@ print('\nMean of incomes = {:.3f}'.format(mean_data))
 print('Mean of model  = {:.3f}'.format(mean_mdl_1d))
 print('SD of incomes = {:.3f}'.format(sd_data))
 print('SD of model  = {:.3f}\n'.format(sd_mdl_1d))
-
-
-
-
 
 fig_name_1d = 'Fig_1d'
 
