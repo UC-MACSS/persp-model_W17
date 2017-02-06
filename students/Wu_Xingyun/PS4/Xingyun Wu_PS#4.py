@@ -365,9 +365,9 @@ crit_val_d = criterion(params_SMM_d, *smm_args_d)[0][0]
 print('Value of my SMM criterion function at the estimated parameter values:',\
       crit_val_d)
 
-# plot (c)
-plot_1c = True
-if plot_1c:
+# plot (d)
+plot_1d = True
+if plot_1d:
     # Plot the histogram of the data
     count, bins, ignored = plt.hist(income, 30, normed=True, color='pink')
     plt.title("Annual Income of U Chicago's MACSS Graduates", fontsize=14)
