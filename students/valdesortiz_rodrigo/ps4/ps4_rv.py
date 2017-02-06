@@ -72,7 +72,7 @@ def LN_pdf(xvals, mu, sigma):
     return pdf_vals
 
 print("1. Part (B)")
-testing_array = np.array([[200, 270], [180, 1995.5]])
+testing_array = np.array([[200, 270], [180, 195.5]])
 mu_test = 5
 sigma_test = 1
 print(LN_pdf(testing_array, mu_test, sigma_test))
