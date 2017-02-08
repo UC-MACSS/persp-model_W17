@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 \documentclass[letterpaper,12pt]{article}
 \usepackage{array}
 \usepackage{threeparttable}
@@ -105,4 +106,113 @@ Y_i = \alpha_{0i} + \alpha_{1i}A_i +\alpha_{2i}(A_i x T_i) + \alpha_{3i}B_i + \a
 
 \noindent\newline\textbf{Part 2f.} A preliminary test of these factors could be performed by determining whether this model holds for a dataset of 1 male and 1 female band in each of the listed musical genres (rock, pop, hip hop/rap, country). Selected bands must include both live and dead musicians so that the predicted lifespan model can be accurately tested for dead musicians, while also testing for underestimation of lifespan among live musicians.
 
+=======
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of 3}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+
+\begin{document}
+
+\begin{flushleft}
+  \textbf{\large{Problem Set \#[1]}} \\
+  MACS 30100, Dr. Evans \\
+  Joanna Tung
+\end{flushleft}
+
+\vspace{5mm}
+
+\noindent\textbf{Problem 1}
+
+\noindent\newline\textbf{Part 1b.} Goldrick-Rab, Kelchen, Harris and James Benson. "Reducing Income Inequality in Educational Attainment: Experimental Evidence on the Impact of Financial Aid on College Completion." \textit{American Journal of Sociology} 121(2016): 1762-1817. Accessed January 8, 2017. doi:10.1086/685442.
+
+\noindent\newline\textbf{Part 1c.} The following equation was used by authors to model the impact of the Wisconsin Scholars Grant (WSG) offers on on-time graduation rates for a given student i, accounting for financial and demographic characteristics of student i (page 1784). (Authors also used this same equation to model the treatment effect of the WSG grant on retention and credits earned in the fall of the third semester, but this will not be considered in this homework.) Variable \(T_i\) indicates whether an offer of the WSG was received in the first year of college; \(C_i\) indicates college fixed effects; \(X_i\) indicates the financial or demographic measure of interest; variable \(Y_i\) indicates likelihood of on-time graduation.
+
+\begin{equation}
+Y_i = \alpha_{0i} + \alpha_{1i}T_i + \alpha_{2i}C_i + \alpha_{3i}(T_i x X_i) + \alpha_{4i}C_i + \episolon_i
+\end{equation}
+
+\noindent\newline\textbf{Part 1d.} Exogenous variables in this model are \(T_i\), \(C_i\) and \(X_i\). The endogenous variable is \(Y_i\). 
+
+\noindent\newline\textbf{Part 1e.} This model is static, linear, and stochastic.
+
+\noindent\newline\textbf{Part 1f.} This model permitted researchers to account only for one financial or demographic measure of interest (race, gender, ACT score, siblings, family income, financial independence etc.) at a time. This model would be considerably strengthened if the effects of multiple combinations of financial/demographic measures of interest were measured concurrently. One variable that researchers did not consider was degree-type pursued. This could conceivably also have an effect on on-time graduation rates.
+
+\noindent\newline\textbf{Problem 2}
+
+\noindent\textbf{Part 2a.} The following equation models the predicated lifespan (in years, \(Y_i\)) for popular musican i. Variable \(A_i\) indicates primary drug use type, where 1 denotes natural or hallucinogenic drug types (marijuana, mushrooms, LSD), 2 denotes middle-range addictive drugs (alcohol, cigarettes, cocaine, prescription opiods), and 3 denotes hard-addictive drug types (methamphetamine, heroin, angel dust), where numerical value is assigned based on the most severe drug used on average 4 out of 7 days a week for a minimum of a 2 years period. Variable \(T_i\) indicates total years of drug \(A_i\) use. Variable \(B_i\) indicates first age of commerical success. Variable \(C_i\) indicates level of family support, ranging from 0-5.
+
+\begin{equation}
+Y_i = \alpha_{0i} + \alpha_{1i}A_i +\alpha_{2i}(A_i x T_i) + \alpha_{3i}B_i + \alpha_{4i}C_i + \episolon_i
+\end{equation}
+
+\noindent\newline\textbf{Part 2c.} While age at first commercial success is easily discovered for a given musician, I believe that drug use, years of drug use, and level of family support can be approximated to a reasonable accuracy using the self-accounts of musicians (think Keith Richards' and Patti Smith memoirs), interviews, and reports from friends and family of the musicians. While it is likely that this data would not be released for some musicians, it should be possible to obtain this information for at least a sizable subsest of popular musicians, especially those who have recovered from years of hard drug use and are beginning to approach end of life.
+
+\noindent\newline\textbf{Part 2d.} This model assumes that the type of persistent drug use, years of persistent drug use, age of first commercial success, and strength of family relationships are the primary factors for estimating the predicted lifespan of popular musicians.
+
+\noindent\newline\textbf{Part 2e.} I chose these factors based on the assumption that popular musicians die prematurely young due to strenous health problems caused primarily by drug use, and to a lesser degree, poor self-care. As a result, this model includes variables to account for type of chronic drug use and the length of chronic usage, where chronic is defined by a minimum of 4 out of 7 days per week usage. Poor self-care is caused by and correlated with a variety of factors: to address the variability of these factors, I focused on two factors that I believe play a large role in the ability of a given musician to properly regulate self-care practices: age of first commercial success and strength of family support mechanisms. Here, I assume that age is an indirect measure of maturity, which I take as an important factor in determining a given musician's ability to acknowledge his or her own self-care needs and ability to balance self-care concerns with commercial success. Strength of family support is used to indicate the emotional and mental support system available to the musician; I believe this is an important factor, assuming that poor self-care in musicians (separate from drug usage habits) are likely to be correlated with low levels of self-esteem. This model assumes that the better the psychological/emotional support system available to a musician, the more likely the musician is to take better care of their health. Other factors such as musical genre, magnitude of financial success, and length of career I believe to be less directly correlated to self-care; indeed, I would argue that factors such as magnitude of financial success and length of career measure levels of self-esteem, rather than the effect on a given musician's health. With these assumptions, the use of "strength of family support" better captures effect on health outcomes (and thus lifespan) than these arguably "indirect" measures on musician health.
+
+\noindent\newline\textbf{Part 2f.} A preliminary test of these factors could be performed by determining whether this model holds for a dataset of 1 male and 1 female band in each of the listed musical genres (rock, pop, hip hop/rap, country). Selected bands must include both live and dead musicians so that the predicted lifespan model can be accurately tested for dead musicians, while also testing for underestimation of lifespan among live musicians.
+
+>>>>>>> refs/remotes/UC-MACSS/master
 \end{document}
