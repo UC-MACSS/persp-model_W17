@@ -1,0 +1,87 @@
+---
+title: "Problem Set 5 | MACS 301"
+author: "Julian McClellan"
+output:
+  github_document:
+    toc: true
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+biden = read.csv('../../../assignments/PS5/data/biden.csv')
+```
+
+```{r packages, message = FALSE, warning = FALSE, cache = FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+```
+# Describe the data
+
+```{r describe}
+ggplot(biden, aes(biden)) + 
+  geom_histogram(binwidth = 1) + 
+  labs(title = 'Histogram of Joe Biden Feeling (0-100)',
+       x = 'Joe Biden Warmth Feeling score',
+       y = 'Frequency Count for given score'
+       )
+```
+As one can see from the histogram above, although there are 101 possible scores, the Joe Biden Warmth Feeling scores fall into only `r length(unique(biden$biden))` unique values, which are for the most part multiples of 5 or 10. This makese sense. It is not unreasonble to think that most people, when asked to rate their warmness to Joe Biden, would have a nuanced enough attitude to warrant scores that fall between multiples of 5 or 10.
+
+
+# Simple Linear Regression
+
+```{r simple_lr}
+# Make model
+biden_mod <- lm(biden ~ age, data = biden)
+
+# Make grid of data
+grid <- biden %>%
+  data_grid(age) %>%
+  add_predictions(biden_mod)
+
+tidy(biden_mod)
+```
+
+## 1.
+There does appear to be a relationship between the predictor (age) and the response (warmth score). Indeed, we see that the estimate for the age coefficient is `r biden_mod$coefficients[2]`. Additionally, the p-value for the age coefficient is .0563, so it appears to be significant (at least at a 90% confidence level).
+
+## 2.
+The relationship between the predictor (age) and the response (warmth score) does not appear to be that strong. Indeed, the coefficient is only .06421, so the difference in score between a 30 and 60 year old would only be ~2 points.
+
+## 3. 
+The relationship between the predictor (age) and the response (warmth score) is positive, since the coefficient for age is positive `r biden_mod$coefficients[2]`
+
+## 4.
+The $R^2$ of the model is `r summary(biden_mod)$r.squared`. Thus, age only explains $.2\%$ of the variation in warmth score This is a pretty bad model, it is hardly able to explain any of the variation in warmth score. It would not be useful for prediciton.
+
+## 5.
+```{r ci95}
+(pred_ci <- augment(biden_mod, newdata = data_frame(age = c(45))) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96))
+```
+The predicted `biden` associated with an `age` of 45 is: `r pred_ci$.fitted`. The lower bound of the 95% confidence interval is `r pred_ci$ymin` and the upper bound of the 95% confidence interval is `r pred_ci$ymax`.
+
+## 6.
+See the plot of the response and predictor with the least squares regression line below.
+```{r plot}
+# Plot Data
+ggplot(biden, aes(age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1) +
+  labs(title = 'Plot of Joe Biden Wamrth Feeling with Least Squares Regression Line',
+       y = 'Joe Biden Warmth Score')
+```
+
+
+
+
