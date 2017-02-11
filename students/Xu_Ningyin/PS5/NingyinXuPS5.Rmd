@@ -1,0 +1,210 @@
+---
+title: "Xu_Ningyin_PS5: Linear Regression"
+author: "Ningyin Xu"
+date: "2/8/2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+set.seed(1234)
+bidendata <- read_csv('data/biden.csv')
+names(bidendata) <- stringr::str_to_lower(names(bidendata))
+```
+
+## Problem 1. Describe the data
+
+```{r, include=TRUE}
+ggplot(bidendata, mapping = aes(x = biden)) + 
+   geom_histogram(binwidth = 1) +
+   labs(title = "Distribution of Biden's feeling thermometer",
+        x = "feeling thermometer",
+        y = "Frequency count of individuals")
+```
+
+From the histogram shown above, one can tell most people have high scores (greater than 50) in feeling thermometer for Joe Biden, so most people like him. However, the highest frequency count among all the bins appears in the score of 50, saying the group of people who have indifferent attitude about him is the largest one.
+
+## Problem 2. Simple linear regression
+
+The summary of simple linear regression is shown as below.
+```{r simple_lm1, echo = FALSE, include=TRUE}
+biden_age <- lm(biden ~ age, data = bidendata)
+summary(biden_age)
+```
+To make it clearer, the estimates of parameters and their standard errors, R-squared, and adjusted R-squared are the following:
+```{r simple_lm2, echo = FALSE, include=TRUE}
+tidy(biden_age)
+glance(biden_age)$r.squared
+glance(biden_age)$adj.r.squared
+```
+
+1&2). One could say there is a relationship between the predictor and the response, since the p-value of age in the summary shows that there are more than 90% chance of rejecting the null hypothesis (no relationship), but statistically speaking the relationship is not very strong/significant, which requires the probability greater than 95%.
+
+3). Positive, the positive sign of the predictor's estimate parameter shows that. 
+
+4). The R-squared is about 0.002018, and the adjusted R-squared is about 0.001465. This means only about 0.2% of variation is explained by this model, implying that age alone is not fitting the actual data well (much closer to 0 than 1).
+
+```{r simple_lm_grd, echo=FALSE, include=TRUE}
+grid <- bidendata %>%
+  data_grid(age)
+grid <- grid %>%
+  add_predictions(biden_age)
+pred_ci <- augment(biden_age, newdata = data_frame(age = c(45))) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96)
+pred_ci
+```
+
+5). The predicted "biden" with age of 45 is 62.0056, the associated 95% confidence interval is (60.91248, 63.09872).
+
+6). 
+```{r simple_lm_pred, echo = FALSE, include=TRUE}
+ggplot(bidendata, aes(age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y=pred), data = grid, color = 'red', size = 1)
+```
+
+
+## Problem 3. Multiple linear regression
+```{r multi_lm, echo = FALSE, include=TRUE}
+biden_multi3 <- lm(biden ~ age + female + educ, data = bidendata)
+tidy(biden_multi3)
+```
+
+1). From p-values of three predictors, one can tell gender and education have a statistically significant relationship with response since their p-values are both smaller than 0.0001, while age doesn't have a significant with response with a p-value of 0.198.
+
+2). This parameter means the average "biden warmth" increase from male to female. If the repondent is female, the predicted value of "biden warmth" would be 6.196 points higher.
+
+```{r multi_lm_rsquared, echo=FALSE, include=TRUE}
+glance(biden_multi3)$r.squared
+```
+
+3). Above is the $R^2$ of the model. It shows age, gender, and education together could explain 2.7% of variation of actual data. So this model is still not good, but it's better than the age-only model.
+
+```{r multi3_lm_plot, echo = FALSE, include=TRUE}
+bidendata %>%
+  add_predictions(biden_multi3) %>%
+  add_residuals(biden_multi3) %>%
+  {.} -> grid2
+griddem <- filter(grid2, dem == 1)
+gridrep <- filter(grid2, rep == 1)
+gridother <- filter(grid2, dem == 0 & rep == 0)
+
+demrsd <- lm(resid ~ pred, data = griddem)
+reprsd <- lm(resid ~ pred, data = gridrep)
+otherrsd <- lm(resid ~ pred, data = gridother)
+
+griddem <- griddem %>%
+  add_predictions(demrsd, var = 'pred1')
+gridrep <- gridrep %>%
+  add_predictions(reprsd, var = 'pred1')
+gridother <- gridother %>%
+  add_predictions(otherrsd, var = 'pred1')
+
+ggplot(grid2, aes(pred)) +
+  geom_point(aes(y = resid)) +
+  geom_line(aes(y = pred1 , color = 'Dem'), data = griddem, size = 1) +
+  geom_line(aes(y = pred1, color = 'Rep'), data = gridrep, size = 1) +
+  geom_line(aes(y = pred1, color = 'Other'), data = gridother, size = 1) +
+  scale_colour_manual("", values = c("Dem"="blue","Rep"="red", "Other"="green")) +
+  labs(title = "Predicted Value and Residuals of multiple variables regression",
+        x = "Predicted Biden Warmth Score",
+        y = "Residuals")
+```
+
+4). This model has problems. First, from the plot one can tell there's a clear pattern in scatter points, while a well-fitted model should have residuals randomly located around 0. And the three fit lines among different party IDs shows that Democrats' predicted warmth score tend to be higher than actual value, while Republicans' score tend to be lower, implying that there's relationship between party IDs and Biden warmth Score that haven't been explained by current model. One could solve the latter problem by adding party ID into the model.
+
+## Problem 4. Multiple linear regression with more variables
+```{r multi_lm_5, echo = FALSE, include=TRUE}
+biden_multi5 <- lm(biden ~ age + female + educ + dem + rep, data = bidendata)
+tidy(biden_multi5)
+```
+
+1). Comparing to outcomes of problem 2 and 3, the estimate parameter of age changed from 0.0624, 0.0418
+to 0.0483, meaning the relationship changed a little. But the p-value is still greater than 0.05, so there's no significant relationship between them.
+
+```{r multi5_lm_rsquared, echo=FALSE, include=TRUE}
+glance(biden_multi5)$r.squared
+```
+
+2). Above is the $R^2$ of the model. It shows age, gender, education, and party identification together could explain 28% of variation of actual data. So this model is better than the last one.
+
+```{r multi5_lm_plot, echo = FALSE, include=TRUE}
+bidendata %>%
+  add_predictions(biden_multi5) %>%
+  add_residuals(biden_multi5) %>%
+  {.} -> grid3
+griddem1 <- filter(grid3, dem == 1)
+gridrep1 <- filter(grid3, rep == 1)
+gridother1 <- filter(grid3, dem == 0 & rep == 0)
+
+demrsd1 <- lm(resid ~ pred, data = griddem1)
+reprsd1 <- lm(resid ~ pred, data = gridrep1)
+otherrsd1 <- lm(resid ~ pred, data = gridother1)
+
+griddem1 <- griddem1 %>%
+  add_predictions(demrsd1, var = 'pred1')
+gridrep1 <- gridrep1 %>%
+  add_predictions(reprsd1, var = 'pred1')
+gridother1 <- gridother1 %>%
+  add_predictions(otherrsd1, var = 'pred1')
+
+ggplot(grid3, aes(pred)) +
+  geom_point(aes(y = resid)) +
+  geom_line(aes(y = pred1 , color = 'Dem'), data = griddem1, size = 1) +
+  geom_line(aes(y = pred1, color = 'Rep'), data = gridrep1, size = 1) +
+  geom_line(aes(y = pred1, color = 'Other'), data = gridother1, size = 1) +
+  scale_colour_manual("", values = c("Dem"="blue","Rep"="red", "Other"="green")) +
+  labs(title = "Predicted Value and Residuals of multiple variables regression",
+        x = "Predicted Biden Warmth Score",
+        y = "Residuals")
+```
+
+3). The second problem has been fixed, now the three fit lines of different party IDs have more similar range of residuals, meaning the relationship between parties and Biden warmth score has been explained well. However, the residuals still has a pattern, which is caused by the age and education variables.
+
+
+## Problem 5. Interactive linear regression model.
+```{r inter_lm, echo = FALSE, include=TRUE}
+bidenfilter <- filter(bidendata, dem == 1 | rep == 1)
+biden_inter <- lm(biden ~ female * dem, data = bidendata)
+tidy(biden_inter)
+```
+
+```{r inter_ci, echo = FALSE, include=TRUE}
+grid3 <- bidendata %>%
+  data_grid(female, dem)
+grid3 <- grid3 %>%
+  add_predictions(biden_inter)
+
+bidenfilter %>%
+   data_grid(female, dem) %>%
+   augment(biden_inter, newdata = .) %>%
+   mutate(ymin = .fitted - .se.fit * 1.96,
+          ymax = .fitted + .se.fit * 1.96) %>%
+   rename(c('female' = 'gender', 'dem' = 'party', '.fitted' = 'warmth rating', 'ymin' = 'CI_lower_bound', 'ymax' = 'CI_upper_bound')) %>%
+  mutate(gender = ifelse(gender == 0, 'Male', 'Female'),
+         party = ifelse(party == 0, 'Republican', 'Democrats')) %>%
+         {.} -> pred_ci1
+pred_ci1
+```
+
+Both relationships differ.
+
+For different genders, the relationship between party ID and Biden warmth seems to be stronger for male. Since male Democrats tend to have 23 (73.07-50.20) points higher Biden warmth comparing to Republicans, while female Democrats are 20 (75.52 - 55.21) points higher than Republicans.
+
+For different parties, the relationship between gender and Biden warmth seems stronger for Republicans. Female Democrats are 2 points higher than male Democrats, but Female Republicans are 5 points higher than male Republicans.
+
+
+
+
+
+
+
