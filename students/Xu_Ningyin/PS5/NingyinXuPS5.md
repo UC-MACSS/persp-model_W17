@@ -1,7 +1,7 @@
 Xu\_Ningyin\_PS5: Linear Regression
 ================
 Ningyin Xu
-2/8/2017
+2/11/2017
 
 -   [Problem 1. Describe the data](#problem-1.-describe-the-data)
 -   [Problem 2. Simple linear regression](#problem-2.-simple-linear-regression)
