@@ -1,0 +1,139 @@
+{\rtf1\ansi\ansicpg936\cocoartf1404\cocoasubrtf460
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \\documentclass[letterpaper,12pt]\{article\}\
+\\usepackage\{array\}\
+\\usepackage\{threeparttable\}\
+\\usepackage\{geometry\}\
+\\geometry\{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in\}\
+\\usepackage\{fancyhdr,lastpage\}\
+\\pagestyle\{fancy\}\
+\\lhead\{\}\
+\\chead\{\}\
+\\rhead\{\}\
+\\lfoot\{\}\
+\\cfoot\{\}\
+\\rfoot\{\\footnotesize\\textsl\{Page \\thepage\\ of \\pageref\{LastPage\}\}\}\
+\\renewcommand\\headrulewidth\{0pt\}\
+\\renewcommand\\footrulewidth\{0pt\}\
+\\usepackage[format=hang,font=normalsize,labelfont=bf]\{caption\}\
+\\usepackage\{listings\}\
+\\lstset\{frame=single,\
+  language=Python,\
+  showstringspaces=false,\
+  columns=flexible,\
+  basicstyle=\{\\small\\ttfamily\},\
+  numbers=none,\
+  breaklines=true,\
+  breakatwhitespace=true\
+  tabsize=3\
+\}\
+\\usepackage\{amsmath\}\
+\\usepackage\{amssymb\}\
+\\usepackage\{amsthm\}\
+\\usepackage\{harvard\}\
+\\usepackage\{setspace\}\
+\\usepackage\{float,color\}\
+\\usepackage[pdftex]\{graphicx\}\
+\\usepackage\{hyperref\}\
+\\hypersetup\{colorlinks,linkcolor=red,urlcolor=blue\}\
+\\theoremstyle\{definition\}\
+\\newtheorem\{theorem\}\{Theorem\}\
+\\newtheorem\{acknowledgement\}[theorem]\{Acknowledgement\}\
+\\newtheorem\{algorithm\}[theorem]\{Algorithm\}\
+\\newtheorem\{axiom\}[theorem]\{Axiom\}\
+\\newtheorem\{case\}[theorem]\{Case\}\
+\\newtheorem\{claim\}[theorem]\{Claim\}\
+\\newtheorem\{conclusion\}[theorem]\{Conclusion\}\
+\\newtheorem\{condition\}[theorem]\{Condition\}\
+\\newtheorem\{conjecture\}[theorem]\{Conjecture\}\
+\\newtheorem\{corollary\}[theorem]\{Corollary\}\
+\\newtheorem\{criterion\}[theorem]\{Criterion\}\
+\\newtheorem\{definition\}[theorem]\{Definition\}\
+\\newtheorem\{derivation\}\{Derivation\} % Number derivations on their own\
+\\newtheorem\{example\}[theorem]\{Example\}\
+\\newtheorem\{exercise\}[theorem]\{Exercise\}\
+\\newtheorem\{lemma\}[theorem]\{Lemma\}\
+\\newtheorem\{notation\}[theorem]\{Notation\}\
+\\newtheorem\{problem\}[theorem]\{Problem\}\
+\\newtheorem\{proposition\}\{Proposition\} % Number propositions on their own\
+\\newtheorem\{remark\}[theorem]\{Remark\}\
+\\newtheorem\{solution\}[theorem]\{Solution\}\
+\\newtheorem\{summary\}[theorem]\{Summary\}\
+%\\numberwithin\{equation\}\{section\}\
+\\bibliographystyle\{aer\}\
+\\newcommand\\ve\{\\varepsilon\}\
+\\newcommand\\boldline\{\\arrayrulewidth\{1pt\}\\hline\}\
+\
+\
+\\begin\{document\}\
+\
+\\begin\{flushleft\}\
+  \\textbf\{\\large\{Problem Set \\#4\}\} \\\\\
+  MACS 30000, Dr. Evans \\\\\
+  Xingyun Wu\
+\\end\{flushleft\}\
+\
+\\vspace\{5mm\}\
+\
+\\noindent\\textbf\{Problem 1: Some income data, lognormal distribution, and SMM.\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (a).\} The histogram is shown in Figure 1.\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Histogram of Percentages of the MACSS Graduates\}\}\\label\{Fig1a\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1a.png\}\}\}\
+\\end\{figure\}\
+\
+\\textbf\{Part (b).\} Testing my function by inputting the given matrix and parameter values:\
+\\begin\{bmatrix\}\
+0.0019079 &  0.00123533\\\\\
+0.00217547  & 0.0019646\\\\\
+\\end\{bmatrix\}\\\\\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (c).\} Figure 2 shows the PDF of lognormal distribution by one-step SMM estimation against the histogram from part(a).\\\\\
+The estimates are: mu = 11.3306370447, sigma = 0.209229359523\\\\\
+The value of SMM criterion function is: 5.80588645143e-14\\\\\
+The data moments are: mean = 85276.8236063, standard deviation = 17992.542128\\\\\
+The model moments are: mean = 85276.8115546, standard deviation = 17992.5386167\
+\
+\\vspace\{1mm\}\
+\
+Using mu=9.0 and sigma=0.3 as the initial guess, the SMM estimation provide estimated mu and sigma as above. The model moments are very close to the data moments, which means the SMM estimation performs well.\
+\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Lognormal PDF of one-step estimation\}\}\\label\{Fig1c\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1c.png\}\}\}\
+\\end\{figure\}\
+\
+\\vspace\{2mm\}\
+\
+\\textbf\{Part (d).\} Figure 3 shows the PDF of lognormal distribution by two-step SMM estimation against the histogram from part(a) and the estimated PDF from part(c).\
+\\\\\
+The estimates are: mu = 11.3306371028, sigma = 0.209229396992\\\\\
+The value of the two-step SMM criterion function at the estimated parameter values is: 0.000903894673886 ( greater than 5.80588645143e-14)\\\\\
+The data moments are: mean = 85276.8236063, standard deviation = 17992.542128\\\\\
+The model moments of one-step estimation are: mean = 85276.8115546, standard deviation = 17992.5386167\\\\\
+The model moments of two-step estimation are: mean = 85276.8171949, standard deviation = 17992.5430962\
+\
+\\vspace\{1mm\}\
+\
+Model moments of both one-step estimation and two-step estimation are very close to the data moments. The model moments of two-step estimation are closer to the data moments. But the value of the two-step SMM criterion function are greater than the value of the one-step SMM criterion function, which means the two-step estimation is actually producing more errors. So with comparison to data moments, the two-step estimation performs better than the one-step estimation, but it does not guarantee less estimation errors.\
+\
+\\vspace\{5mm\}\
+\\noindent\\textbf\{Please see the next page for Figure 3.\}\
+\
+\\begin\{figure\}[htb]\\centering\\captionsetup\{width=4.0in\}\
+  \\caption\{\\textbf\{Lognormal PDF of two-step estimation\}\}\\label\{Fig1c\}\
+  \\fbox\{\\resizebox\{4.0in\}\{3.0in\}\{\\includegraphics\{Fig_1d.png\}\}\}\
+\\end\{figure\}\
+\
+\\end\{document\}\
+\
+}
