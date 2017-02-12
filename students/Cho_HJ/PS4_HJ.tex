@@ -1,0 +1,144 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage{array}
+\usepackage{threeparttable}
+\usepackage{geometry}
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in}
+\usepackage{fancyhdr,lastpage}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{}
+\rfoot{\footnotesize\textsl{Page \thepage\ of \pageref{LastPage}}}
+\renewcommand\headrulewidth{0pt}
+\renewcommand\footrulewidth{0pt}
+\usepackage[format=hang,font=normalsize,labelfont=bf]{caption}
+\usepackage{listings}
+\lstset{frame=single,
+  language=Python,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{harvard}
+\usepackage{setspace}
+\usepackage{float,color}
+\usepackage[pdftex]{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=red,urlcolor=blue}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{derivation}{Derivation} % Number derivations on their own
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition} % Number propositions on their own
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+%\numberwithin{equation}{section}
+\bibliographystyle{aer}
+\newcommand\ve{\varepsilon}
+\newcommand\boldline{\arrayrulewidth{1pt}\hline}
+
+
+\begin{document}
+
+\begin{flushleft}
+  \textbf{\large{Problem Set \#4}} \\
+  Perspectives on Computational Modeling \\
+  MACS 30100, Dr. Evans \\
+  HyungJin Cho
+\end{flushleft}
+
+\vspace{5mm}
+
+\begin{enumerate}
+  \textbf{Problem 1.}
+\end {enumerate}
+\begin{enumerate}
+  \textbf{Part (a). Histogram}
+\par
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+   \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/Figure_1(a).png}}}
+\end{figure}
+\\ \\ \\ \\ \\
+\par\bigskip
+\end {enumerate}
+
+\begin{enumerate}
+  \textbf{Part (b). Lognormal PDF Function}
+\\
+The Lognormal PDF Values: [[ 0.0019079   0.00123533],[ 0.00217547  0.0019646 ]]
+\end {enumerate}
+\clearpage
+
+\begin{enumerate}
+  \textbf{Part (c). One step SMM}
+\\ \\
+SMM crietron function value = 7.20176829e-14 \\
+SMM estimated mu = 11.3307149892 \\
+SMM estimated sigma = 0.208868329657 \\
+\\
+\begin{center}
+\begin{tabular}{ c|c|c }
+ Moments & Mean & Var \\
+ \hline
+ Data & 85276.8236063 &  323731572.23 \\
+ Model & 85276.8464227 & 323731565.513 \\
+ Percentage Difference & 2.67557875682e-05 & -2.07476758571e-06
+\end{tabular}
+\end{center}
+\\ \\
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+   \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/Figure_1(c).png}}}
+\end{figure}
+
+\par\bigskip
+\end {enumerate}
+\clearpage
+
+\begin{enumerate}
+  \textbf{Part (d). Two step SMM}
+\\ \\
+SMM crietron function value = 0.01202398 \\
+SMM estimated mu = 11.3307146745 \\
+SMM estimated sigma = 0.208868331657 \\
+\\
+\begin{center}
+\begin{tabular}{ c|c|c }
+ Moments & Mean & Var \\
+ \hline
+ Data & 85276.8236063 & 323731572.23 \\
+ Model & 85276.8196196 & 323731368.346 \\
+ Percentage Difference & -4.67498781548e-06 & -6.29791104274e-05
+\end{tabular}
+\end{center}
+\\ \\
+\begin{figure}[H]\centering\captionsetup{width=4.0in}
+ \fbox{\resizebox{4.0in}{3.0in}{\includegraphics{./images/Figure_1(d).png}}}
+\end{figure}
+\end{enumerate}
+
+\end{document}

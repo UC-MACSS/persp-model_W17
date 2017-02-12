@@ -1,0 +1,13 @@
+2b
+The test result is:  [[ 0.0019079   0.00123533]
+ [ 0.00217547  0.0019646 ]]
+1c
+The mu_smm =  11.330637236  and the sig_smm =  0.2092293707
+Data mean is:  85276.8236063 Data std is:  17992.542128
+model mean is:  85276.8280717 model std is:  17992.5430829
+The value of the criterion function is:  [[  5.55827975e-15]]
+1d
+The mu_smm2 =  11.3306372141  the sig_smm2 = 0.209229359136
+Data mean is:  85276.8236063 Data std is:  17992.542128
+model mean is:  85276.8259939 model std is:  17992.5416292
+The value of the criterion function is:  [[ 0.0001776]]
