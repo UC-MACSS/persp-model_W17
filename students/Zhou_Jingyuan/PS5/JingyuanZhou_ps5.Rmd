@@ -1,0 +1,192 @@
+---
+title: "Problem Set 5"
+author: "Jingyuan Zhou"
+date: "2/9/2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r packages, message = FALSE, warning = FALSE, cache =TRUE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+```
+
+# Describe the data
+According to the histogram shown below, very few people have bad feelings towards Biden, most people are neutral and some have very positive feelings towards him. This is shown by the break for scores between neutral values and extremly high values.
+```{r hist, echo = TRUE}
+data <- read.csv(file="biden.csv",head=TRUE)
+hist(data$biden,main="Histogram of biden values",xlab=" Feeling thermometer of biden",
+     ylab = 'Counts', ylim = c(0, 400)) 
+```
+
+#Simple linear regression
+Parameters and standard errors are shown below.
+```{r simple linear, echo=TRUE}
+slr_mod <- lm(biden ~ age, data = data)
+tidy(slr_mod)
+glance(slr_mod)
+```
+1.2.According to the summary, there is a relationship between the predictor and the response,
+but the relationship is very weak because age has a p-value of 5.625534e-02, which is larger than 0.025. Thus, it's not statistically significant at 95% significance level. 
+
+3.The relationship is positive since the coefficient of "age" is 0.06240535, which is positive.
+
+4.$R^2$ of this model is only 0.002017624. This means that only 0.2% of the variation of biden is explained by age. This shows that it is a really bad model.
+
+```{R simple linear prediction, echo = TRUE}
+pred_aug <- augment(slr_mod, newdata = data.frame(age = c(45)))
+(pred_ci <- mutate(pred_aug,
+                   ymin = .fitted - .se.fit * 1.96,
+                   ymax = .fitted + .se.fit * 1.96))
+```
+5.The predicted biden score with an age of 45 is 62.0056. The associated 95% confidence interval is (60.91248, 63.09872).
+
+```{R simple linear plot, echo = TRUE}
+grid <- data %>% 
+  data_grid(age) 
+grid <- grid %>% 
+  add_predictions(slr_mod) 
+
+#plot
+ggplot(data, aes(age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1) +
+  labs(title = 'Plot of Biden score against age with Least Squares Regression Line',
+        x = 'Age',y = 'BidenScore')
+```
+
+
+
+#Multiple linear regression
+```{R Multiple linear regression, echo = TRUE}
+mlr_mod <- lm(biden ~ age + female + educ, data = data)
+tidy(mlr_mod)
+glance(mlr_mod)
+```
+1.'Age' is not a statistically significant predictor at 95% significance level because its p-value is 0.198, which is larger than 0.025; both 'female' and 'educ' are statistically significant predictors at 95% significance level because their p-values, 1.863612e-08 and 7.941295e-05, are both smaller than 0.025.
+
+2.The estimated parameter of 'female' is 6.19606946. It shows that every unit increase of "female" will on avaerage increase 6.20 units of biden score. In other words, when two people have same age and same years of education, a female will on average give 6.196 scores higher than a male.
+
+3.Adjusted $R^2$ of this model is 0.02560868. This shows that around 2.56% of variation in biden score is explained by age, gender, and education. It is a better model compared to the previouse one because its $R^2$ value is larger than that of the previous model.
+
+```{R Multiple linear regression plot, echo = TRUE}
+data_d <- subset(data, dem ==1)
+res <- add_residuals(data_d, mlr_mod)['resid']
+grid_d <- add_predictions(data_d, mlr_mod)
+grid_d['resid']<- res
+d_m <- lm(pred ~ resid, data = grid_d)
+grid_d <- add_predictions(grid_d, d_m)
+
+data_r <- subset(data, rep ==1)
+res <- add_residuals(data_r, mlr_mod)['resid']
+grid_r <- add_predictions(data_r, mlr_mod)
+grid_r['resid']<- res
+r_m <- lm(pred ~ resid, data = grid_r)
+grid_r <- add_predictions(grid_r, r_m)
+
+data_i <- subset(data, (!dem==1)&(!rep==1))
+res <- add_residuals(data_i, mlr_mod)['resid']
+grid_i <- add_predictions(data_i, mlr_mod)
+grid_i['resid']<- res
+i_m <- lm(pred ~ resid, data = grid_i)
+grid_i <- add_predictions(grid_i, i_m)
+
+res <- add_residuals(data, mlr_mod)['resid']
+grid <- add_predictions(data, mlr_mod)
+grid['resid']<- res
+
+# plot
+ggplot(grid, aes(resid)) + 
+  geom_point(aes(y = pred))+
+  geom_line(aes(y= pred, color = 'Democrat'), data = grid_d) +
+  geom_line(aes(y=pred, color = 'Republican'), data = grid_r) +
+  geom_line(aes(y=pred, color = 'Independent'), data = grid_i) +
+  labs(title = 'Plot of predicted Biden score against residual with lines for each party ID type',
+       x = 'Residual',y = 'Predicted BidenScore')
+```
+4. These is a problem for this model because when we separate people according to their party IDs, we can observe from the plot that the three smooth fit lines have different slopes. This suggests that changes in residual could affect the predicted Biden score of people with different party IDs differently.
+
+#Multiple linear regression model (with even more variables!) 
+```{R Multiple linear regression model (with even more variables!), echo = TRUE}
+mlr2_mod <- lm(biden ~ age + female + educ + dem + rep, data = data)
+tidy(mlr2_mod)
+glance(mlr2_mod)
+```
+1.Yes, the relationship between gender and Biden score changed. With this model, per unit increase in 'female' will on average increase Biden score with 4.10323009, which is smaller than the amount, 6.19606946, from last model.
+
+2.Adjusted R^2 of this model is 0.2795445. This suggests that age, gender, education, and party identification explains 28.0% variability of the data. Since this number is larger than that of the previous model, it is a better model than age + gender + education model.
+
+```{R Multiple linear regression model (with even more variables!) plot, echo=TRUE}
+data_d <- subset(data, dem ==1)
+res <- add_residuals(data_d, mlr2_mod)['resid']
+grid_d <- add_predictions(data_d, mlr2_mod)
+grid_d['resid']<- res
+d_m <- lm(pred ~ resid, data = grid_d)
+grid_d <- add_predictions(grid_d, d_m)
+
+data_r <- subset(data, rep ==1)
+res <- add_residuals(data_r, mlr2_mod)['resid']
+grid_r <- add_predictions(data_r, mlr2_mod)
+grid_r['resid']<- res
+r_m <- lm(pred ~ resid, data = grid_r)
+grid_r <- add_predictions(grid_r, r_m)
+
+data_i <- subset(data, (!dem==1)&(!rep==1))
+res <- add_residuals(data_i, mlr2_mod)['resid']
+grid_i <- add_predictions(data_i, mlr2_mod)
+grid_i['resid']<- res
+i_m <- lm(pred ~ resid, data = grid_i)
+grid_i <- add_predictions(grid_i, i_m)
+
+res <- add_residuals(data, mlr2_mod)['resid']
+grid <- add_predictions(data, mlr2_mod)
+grid['resid']<- res
+
+# plot
+ggplot(grid, aes(resid)) + 
+  geom_point(aes(y = pred))+
+  geom_line(aes(y= pred, color = 'Democrat'), data = grid_d) +
+  geom_line(aes(y=pred, color = 'Republican'), data = grid_r) +
+  geom_line(aes(y=pred, color = 'Independent'), data = grid_i) +
+  labs(title = 'Plot of predicted Biden score against residual with lines for each party ID type',
+       x = 'Residual',y = 'Predicted BidenScore')
+```
+
+3.We have fixed the problem by using party ID as a factor. Observing from the new plot, we can see that three smooth fit lines referring to three party IDs have almost the same slope but only different y-intercept. This suggests that residual does not change based on party ID.
+
+#Interactive linear regression model
+```{R Interactive linear regression model, echo=TRUE}
+data_noind <- subset(data, !(dem==0 & rep==0))
+ilr_mod <- lm(biden ~ female*dem, data = data_noind)
+tidy(ilr_mod)
+
+pred_data_ <- data_frame(female = c(1,1,0,0), dem = c(0,1,0,1))
+# use augment to generate predictions
+pred_aug_ <- augment(ilr_mod, newdata = pred_data_)
+# Calculate 95% confidence intervals
+pred_ci <- mutate(pred_aug_,
+                   ymin = .fitted - .se.fit * 1.96,
+                   ymax = .fitted + .se.fit * 1.96)
+pred_ci
+```
+
+Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence interval for female Democrats is (73.77813, 77.25953); that for female Republicans is (43.03778, 48.51662); that for male Democrats is (70.87959, 75.25949); that for male Republicans is (36.52951, 42.23453).
+
+The relationship between party ID and Biden warmth differ for males/females. For females, Democrats give around 30 points higher than Republicans; for males, Democrats give around 34 points higher than Republicans. We could also see that "female", the variable that indicates gender, has a p-value of 1.568102e-03, which shows that it makes statistically significant difference on the Biden score at the confidence interval of 95%. And since the interactive term is not statistically significant with a p-value of 1.106513e-01, we can conclude that gender makes statistically significant difference.
+
+The relationship between gender and Biden warmth also differ for Democrats/Republicans. For Democrats, females give around 3 points higher than males; for Replublicans, females give around 6.3 points higher than males. We could also see that "dem", the variable that indicates party ID, has a p-value of 3.295008e-66, which shows that it makes statistically significant difference on the Biden score at the confidence interval of 95%. Due to the insignificant interactive term, we could conclude that party affiliation makes significant difference on the relationship between gender and Biden warmth.
