@@ -82,7 +82,7 @@ Problem 3. Multiple linear regression
 
 ![](NingyinXuPS5_files/figure-markdown_github/multi3_lm_plot-1.png)
 
-4). This model has problems. First, from the plot one can tell there's a clear pattern in scatter points, while a well-fitted model should have residuals randomly located around 0. And the three fit lines among different party IDs shows that Democrats' predicted warmth score tend to be higher than actual value, while Republicans' score tend to be lower, implying that there's relationship between party IDs and Biden warmth Score that haven't been explained by current model. One could solve the latter problem by adding party ID into the model.
+4). This model has problems. First, from the plot one can tell there's a clear pattern in scatter points, while a well-fitted model should have residuals randomly located around 0. And the three fitted lines among different party IDs shows that Democrats' predicted warmth score tend to be higher than actual value, while Republicans' score tend to be lower, implying that there's relationship between party IDs and Biden warmth Score that haven't been explained by current model. One could solve the latter problem by adding party ID into the model.
 
 Problem 4. Multiple linear regression with more variables
 ---------------------------------------------------------

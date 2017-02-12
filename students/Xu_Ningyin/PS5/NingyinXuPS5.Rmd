@@ -97,30 +97,18 @@ bidendata %>%
 griddem <- filter(grid2, dem == 1)
 gridrep <- filter(grid2, rep == 1)
 gridother <- filter(grid2, dem == 0 & rep == 0)
-
-demrsd <- lm(resid ~ pred, data = griddem)
-reprsd <- lm(resid ~ pred, data = gridrep)
-otherrsd <- lm(resid ~ pred, data = gridother)
-
-griddem <- griddem %>%
-  add_predictions(demrsd, var = 'pred1')
-gridrep <- gridrep %>%
-  add_predictions(reprsd, var = 'pred1')
-gridother <- gridother %>%
-  add_predictions(otherrsd, var = 'pred1')
-
 ggplot(grid2, aes(pred)) +
   geom_point(aes(y = resid)) +
-  geom_line(aes(y = pred1 , color = 'Dem'), data = griddem, size = 1) +
-  geom_line(aes(y = pred1, color = 'Rep'), data = gridrep, size = 1) +
-  geom_line(aes(y = pred1, color = 'Other'), data = gridother, size = 1) +
+  geom_smooth(aes(y = resid , color = 'Dem'), data = griddem, size = 1) +
+  geom_smooth(aes(y = resid, color = 'Rep'), data = gridrep, size = 1) +
+  geom_smooth(aes(y = resid, color = 'Other'), data = gridother, size = 1) +
   scale_colour_manual("", values = c("Dem"="blue","Rep"="red", "Other"="green")) +
   labs(title = "Predicted Value and Residuals of multiple variables regression",
         x = "Predicted Biden Warmth Score",
         y = "Residuals")
 ```
 
-4). This model has problems. First, from the plot one can tell there's a clear pattern in scatter points, while a well-fitted model should have residuals randomly located around 0. And the three fit lines among different party IDs shows that Democrats' predicted warmth score tend to be higher than actual value, while Republicans' score tend to be lower, implying that there's relationship between party IDs and Biden warmth Score that haven't been explained by current model. One could solve the latter problem by adding party ID into the model.
+4). This model has problems. First, from the plot one can tell there's a clear pattern in scatter points, while a well-fitted model should have residuals randomly located around 0. And the three fitted lines among different party IDs shows that Democrats' predicted warmth score tend to be higher than actual value, while Republicans' score tend to be lower, implying that there's relationship between party IDs and Biden warmth Score that haven't been explained by current model. One could solve the latter problem by adding party ID into the model.
 
 ## Problem 4. Multiple linear regression with more variables
 ```{r multi_lm_5, echo = FALSE, include=TRUE}
@@ -146,22 +134,11 @@ griddem1 <- filter(grid3, dem == 1)
 gridrep1 <- filter(grid3, rep == 1)
 gridother1 <- filter(grid3, dem == 0 & rep == 0)
 
-demrsd1 <- lm(resid ~ pred, data = griddem1)
-reprsd1 <- lm(resid ~ pred, data = gridrep1)
-otherrsd1 <- lm(resid ~ pred, data = gridother1)
-
-griddem1 <- griddem1 %>%
-  add_predictions(demrsd1, var = 'pred1')
-gridrep1 <- gridrep1 %>%
-  add_predictions(reprsd1, var = 'pred1')
-gridother1 <- gridother1 %>%
-  add_predictions(otherrsd1, var = 'pred1')
-
 ggplot(grid3, aes(pred)) +
   geom_point(aes(y = resid)) +
-  geom_line(aes(y = pred1 , color = 'Dem'), data = griddem1, size = 1) +
-  geom_line(aes(y = pred1, color = 'Rep'), data = gridrep1, size = 1) +
-  geom_line(aes(y = pred1, color = 'Other'), data = gridother1, size = 1) +
+  geom_smooth(aes(y = resid , color = 'Dem'), data = griddem1, size = 1) +
+  geom_smooth(aes(y = resid, color = 'Rep'), data = gridrep1, size = 1) +
+  geom_smooth(aes(y = resid, color = 'Other'), data = gridother1, size = 1) +
   scale_colour_manual("", values = c("Dem"="blue","Rep"="red", "Other"="green")) +
   labs(title = "Predicted Value and Residuals of multiple variables regression",
         x = "Predicted Biden Warmth Score",
