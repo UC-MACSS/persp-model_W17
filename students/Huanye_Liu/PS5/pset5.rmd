@@ -1,0 +1,98 @@
+---
+title: "Biden"
+author: "Huanye Liu"
+date: "2017/2/12"
+output: html_document
+---
+
+```{r read, echo=TRUE}
+bd = read.csv("biden.csv",header=T)
+```
+
+## Describe the data
+```{r histogram, echo=TRUE}
+hist(bd$biden,breaks=c(0:100),main = "Histogram of feeling thermometer",xlab = "feeling thermometer",ylab="frequency")
+```
+
+We can see from the histogram above that most of participants of the survey gave scores above 50, which shows a general positive feeling towards Biden.
+The mode is around 50 and there are several other peaks above 50. One interesting feature is that most scores takes one of the following values: 0,15, 30,40,50,60,70,85,100. Therefore we can observe 9 peaks. One reason may be related to the design of the survey. Maybe the survey provided several discrete scores for participants to choose from. Another reason is that participants are more likely to give scores the number value of which ends with 0 or 5.
+
+## Simple linear regression
+```{r sim, echo=TRUE}
+sim <- lm(biden~age,data = bd)
+summary(sim)
+```
+The estimated intercept is $$beta_{0} = 59.19736 $$ and its standard error is 1.64792. The estimated coefficient of variable age is $$beta_{1} = 0.06241 $$ and its standard error is 0.03267.
+
+
+1. From the summary of the linear model we can see there is a relationship between age and feeling thermometer since the p value of the coefficient of variable age is 0.0563, which means we accept that the coefficient is not zero if the significant level is above 0.0563, and the p-value of the F test of the model is also 0.0562, so the relationship between variable biden and variable age exists.
+2. But the relationship between variable age and variable biden is very weak since the estimated coefficient of variable age is only 0.06241, a number close to zero. 
+3. The relationship is positive because the estimated coefficient of variable age is positive.
+4. The R squared of the model is 0.002018, and the adjusted R squared is 0.001465. If using the former one, only 0.2018 percent of the variation in variable biden can variable age alone explain, which means the linear model using age alone will probably be a bad model because the change in variable biden can be barely explained or predicted by the variable age alone.
+```{r sim predition, echo = TRUE}
+predict(sim,list(age=45),interval="confidence")
+```
+
+5. The predicted biden value associated with age of 45 is 62.0056, and the associated 95% confidence interval is [60.91177 63.09943].
+6 The graph is shown below.
+```{r sim plot,echo = TRUE}
+plot(bd$age,bd$biden,pch=20,xlab='age',ylab='biden',main='Variable biden v.s. variable age')
+abline(sim,col='red')
+```
+## Multiple linear regression
+```{r mul1, echo=TRUE}
+mul1 <- lm(biden~age+female+educ,data = bd)
+summary(mul1)
+```
+The estimated intercept is $$beta_{0} = 68.62101 $$ and its standard error is 3.59600. The estimated coefficient of variable age is $$beta_{1} = 0.04188 $$ and its standard error is 0.03249. The estimated coefficient of variable female is $$beta_{2} = 6.19607 $$ and its standard error is 1.09670. The estimated coefficient of variable education is $$beta_{3} = -0.88871 $$ and its standard error is 0.22469.
+
+1. From the p-values of those predictors we can see that there is significant replationship between variable biden and variable female or gender,  and the relationship is also significant between varible biden and variable education , but not between varible biden and variable age.
+2. The estimated coefficient 6.19607 of variable female means that keeping other preditors fixed, on average female participants of the survey gave feeling thermometer score 6.19607 higher than the male participants did. If the sample data is representative, this means Biden seems more popular among the female than among the male. 
+3. Teh R squared of the model is 0.02723, and the adjusted R squared is 0.02561. Based on the former one, only 2.723% variation in the variable biden can age, gender plus education explain. Compared with the age-only model, the adjusted R squared improves from 0.001465 to 0.02561, so this model is better.
+4. The graph is shown below:
+```{r mul res plot,echo = TRUE}
+plot(predict(mul1),residuals(mul1),pch=20)
+dem_index = (bd$dem==1)
+rep_index = (bd$rep==1)
+indep_index = (bd$dem==0)&(bd$rep==0)
+abline(lm(residuals(mul1)[dem_index]~predict(mul1)[dem_index]),col='blue')
+abline(lm(residuals(mul1)[rep_index]~predict(mul1)[rep_index]),col='red')
+abline(lm(residuals(mul1)[indep_index]~predict(mul1)[indep_index]),col='green')
+legend(72,-40,legend = c("democratics","republicans",'independents'),col=c('blue','red','green'),lty=1,cex = 0.6,text.font=2)
+```
+
+From the above graph we can see the residuals of variable biden strongly depends on the party ID type. In terms of the residual values of varible biden, the line fitting the data from democratics is strictly above the one fitting the data from independents in the middle, which is then strictly above the line fitting the data from republicans, and there is not any crossing between any two lines, which means the party ID type is a strong predictor of the variable biden. However, the model doesn't include the party ID type as one of the predictors and therefore is a less predictive model, which can also makes the estimated coefficients of predictors included in the model less precise.
+
+## Multiple linear regression model with even more variables
+```{r mul2, echo=TRUE}
+mul2 <- lm(biden~age+female+educ+dem+rep,data = bd)
+summary(mul2)
+```
+The estimated intercept is $$beta_{0} = 58.81126 $$ and its standard error is 3.12444. The estimated coefficient of variable age is $$beta_{1} = 0.04826 $$ and its standard error is 0.02825. The estimated coefficient of variable female is $$beta_{2} = 4.10323 $$ and its standard error is 0.94823. The estimated coefficient of variable education is $$beta_{3} = -0.34533 $$ and its standard error is 0.19478.The estimated coefficient of variable dem is $$beta_{4} = 15.42426 $$ and its standard error is 1.06803.The estimated coefficient of variable rep is $$beta_{5} = -15.84951 $$ and its standard error is 1.31136.
+1. Compared with the previous model, the estimated coefficients of variable gender decreases from 6.19607 to 4.10323, which means after adding the party ID predictors, part of the original effects of gender on Baiden warmth can be attributed to the effects of party ID on Baiden warmth and the relationship between gender and party ID.
+2. The R squared of the model is 0.2815, and the adjusted R squared is 0.2795. Based on the former one, 28.15% variation in the variable biden can age, gender, education plus party ID explain. Compared with the previous model, there is a great improvement in adjusted R squared from 0.02561 to 0.2795. So this model is much better than the previous one.
+3. The graph is shown below. 
+```{r mul2 res plot,echo = TRUE}
+plot(predict(mul2),residuals(mul2),pch=20)
+dem_index = (bd$dem==1)
+rep_index = (bd$rep==1)
+indep_index = (bd$dem==0)&(bd$rep==0)
+abline(lm(residuals(mul2)[dem_index]~predict(mul2)[dem_index]),col='blue')
+abline(lm(residuals(mul2)[rep_index]~predict(mul2)[rep_index]),col='red')
+abline(lm(residuals(mul2)[indep_index]~predict(mul2)[indep_index]),col='green')
+legend(72,-40,legend = c("democratics","republicans",'independents'),col=c('blue','red','green'),lty=1,cex = 0.6,text.font=2)
+```
+From the above graph after including the party ID predictors, we can see now three fitted lines cross each other, which means the residuals no longer strongly depend on the party ID and seem more random compared with the previous model, which is a sign for a good variable selection for the model. 
+
+## Interactive linear regression model
+
+```{r inter, echo=TRUE}
+bd = bd[bd$rep==1|bd$dem==1,]
+interactive <- lm(biden~female*dem,data = bd)
+summary(interactive)
+```
+The estimated intercept is $$beta_{0} = 39.382 $$ and its standard error is 1.455. The estimated coefficient of variable female is $$beta_{1} = 6.395 $$ and its standard error is 2.018. The estimated coefficient of variable dem is $$beta_{2} = 33.688 $$ and its standard error is 1.835. The estimated coefficient of interaction term female*dem is $$beta_{3} = -3.946 $$ and its standard error is 2.472.
+```{r interactive predition, echo = TRUE}
+predict(interactive,list(female=c(1,1,0,0),dem=c(1,0,1,0)),interval="confidence")
+```
+1.The predicted Biden warmth associated with female Democrats is 75.51883, and its 95% confidence interval is [73.77632 77.26133]. The predicted Biden warmth associated with female Republicans is 45.77720, and its 95% confidence interval is [43.03494 48.51947].The predicted Biden warmth associated with male Democrats is 73.06954, and its 95% confidence interval is [70.87731 75.26176].The predicted Biden warmth associated with male Republicans is 39.38202, and its 95% confidence interval is [36.52655 42.23750]. So we can see the relationship between party ID and Biden warmth does differ for males and females based on the model: when gender is female, the average effects of Party ID on Biden warmth is 75.51883-45.77720 = 29.74163, but when gender is male the average effects of Party ID on Biden warmth is 73.06954-39.38202=33.68752. The difference in the effects 29.74163-33.68752=-3.94589 is exactly the coefficients of the interaction term. Similarly, the relationship between gender and Biden warmth does differ for Democrats and Republicans: for Democrats, the average effects of gender on Biden warmth is 75.51883-73.06954=2.44929, but for Republicans, the average effects of gender on Biden warmth is 45.77720-39.38202=6.39518. Again, the difference in the effects 2.44929-6.39518 = -3.94589 is exactly the coefficients of the interaction term.
