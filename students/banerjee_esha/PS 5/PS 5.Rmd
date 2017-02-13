@@ -2,9 +2,7 @@
 title: "PS #5: Linear Regression"
 author: "Esha Banerjee"
 date: Feb 13, 2017
-output:
-  github_document:
-    toc: true
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -12,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r Loading packages}
+library (rmarkdown)
 library (knitr)
 library(tidyverse)
 library(modelr)

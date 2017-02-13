@@ -3,13 +3,8 @@ PS \#5: Linear Regression
 Esha Banerjee
 Feb 13, 2017
 
--   [Describe the data](#describe-the-data)
--   [Simple Linear Regression](#simple-linear-regression)
--   [Multiple Linear Regression](#multiple-linear-regression)
--   [Multiple linear regression model (with even more variables!)](#multiple-linear-regression-model-with-even-more-variables)
--   [Interactive linear regression model](#interactive-linear-regression-model)
-
 ``` r
+library (rmarkdown)
 library (knitr)
 library(tidyverse)
 ```
