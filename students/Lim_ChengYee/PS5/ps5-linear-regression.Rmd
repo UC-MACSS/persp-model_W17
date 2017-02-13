@@ -7,7 +7,7 @@ output:
 ---
 
 ```{r setup, echo = FALSE, include = FALSE, warning = FALSE, message = FALSE}
-knitr::opts_chunk$set(cache = TRUE, echo = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, message = FALSE)
 library(tidyverse)
 library(broom)
 library(modelr)
@@ -218,7 +218,8 @@ joe5 <- joe %>%
   filter(dem == 1 | rep == 1) #filter independent respondents 
 
 joe_mod5 <- lm(biden ~ female + dem + female*dem, data = joe5)
-tidy(joe_mod5)
+tidy(joe_mod5) %>%
+  kable()
 ```
 
 ##a. Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?
