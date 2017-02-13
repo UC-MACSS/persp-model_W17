@@ -6,7 +6,7 @@ February 13, 2017
 Describe the data
 =================
 
-![](PS5_HJ_files/figure-markdown_github/histogram-1.png) **1.In a few sentences, describe any interesting features of the graph.** The plotted histogram has a mode of 50 and a left-skewed shape. The Feeling Thermometer of 50 has the highest counts. The left-skewed shape indicates that more people feel Biden as warm rather than as cold.
+![](histogram-1.png) **1.In a few sentences, describe any interesting features of the graph.** The plotted histogram has a mode of 50 and a left-skewed shape. The Feeling Thermometer of 50 has the highest counts. The left-skewed shape indicates that more people feel Biden as warm rather than as cold.
 
 Simple linear regression
 ========================
@@ -43,7 +43,7 @@ Simple linear regression
 
 **5.What is the predicted `biden` associated with an `age` of 45? What are the associated 95% confidence intervals?** The predicted Biden's feeling thermometer is 62.0056 when it is associated with the age of 45. The associated 95% confidence intervals are (60.91248, 63.09872).
 
-**6.Plot the response and predictor. Draw the least squares regression line.** ![](PS5_HJ_files/figure-markdown_github/simple%20linear%20regression%203-1.png)
+**6.Plot the response and predictor. Draw the least squares regression line.** ![](simple%20linear%20regression%203-1.png)
 
 Multiple linear regression
 ==========================
@@ -75,7 +75,7 @@ Multiple linear regression
 
 **3.Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, and education explain? Is this a better or worse model than the age-only model?** The *R*<sup>2</sup> of 0.02723 indicates that age, gender, adn education explains 2.723% of the variation in Biden's feeling thermometer. This is a better model than the age-only model.
 
-![](PS5_HJ_files/figure-markdown_github/multiple%20linear%20regression%201-2-1.png) **4.Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?** The difference in residual distribution implies that this model doesn't take party ID type into account which appears a significant factor.
+![](multiple%20linear%20regression%201-2-1.png) **4.Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?** The difference in residual distribution implies that this model doesn't take party ID type into account which appears a significant factor.
 
 Multiple linear regression model (with even more variables)
 ===========================================================
@@ -107,7 +107,7 @@ Multiple linear regression model (with even more variables)
 
 **2.Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?** The *R*<sup>2</sup> of 0.2815 suggests that age, gender, education, and party identification exaplains 28.15% of the variation in Biden's feeling thermometer. This is a better model than the previous model.
 
-![](PS5_HJ_files/figure-markdown_github/multiple%20linear%20regression%202%20plot-1.png) **3.Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?** The differences in residual distribution of Democrat, Republican, and Independent are around zero which imply that this model fixed the previous problem.
+![](multiple%20linear%20regression%202%20plot-1.png) **3.Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?** The differences in residual distribution of Democrat, Republican, and Independent are around zero which imply that this model fixed the previous problem.
 
 Interactive linear regression model
 ===================================
