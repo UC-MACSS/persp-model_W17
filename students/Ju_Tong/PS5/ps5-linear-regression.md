@@ -25,7 +25,7 @@ ggplot(data = df, aes(x = biden)) +
 
 ![](ps5-linear-regression_files/figure-markdown_github/Histogram-1.png)
 
-The feelings of respondents toward Biden (surveyed in 2008, ranging from 0 to 100) appears to be approximately normally distributed with left skew. The histogram result suggests that more respondnets feel positive than negative toward Mr. Biden. Since almost all the response values fall on the multiple of 5, and it is unlikely that 1,807 respondents would have naturally responded in such a manner, it is highly possible that the feeling thermometer is evaluated by a 0-100 scale with 5-unit brackets. However, we also find there are two responses do not fall on the multiple of 5 (one is between 5 and 10, and the other close to 90). We postulate these two values perhaps are the "outliers"", which might be caused by miscoding.
+The feelings of respondents toward Biden (surveyed in 2008, ranging from 0 to 100) appears to be approximately normally distributed with left skew. The histogram result suggests that more respondnets feel positive than negative toward Mr. Biden. Since almost all the response values fall on the multiple of 5, and it is unlikely that 1,807 respondents would have naturally responded in such a manner, it is highly possible that the feeling thermometer is evaluated by a 0-100 scale with 5-unit brackets. However, we also find there are two responses do not fall on the multiple of 5 (one is between 5 and 10, and the other close to 90). Perhaps these two values are the "outliers" caused by miscoding.
 
 2) Simple linear regression
 ===========================
@@ -99,15 +99,17 @@ pander(summary(lm_1))
 </tbody>
 </table>
 
-The linear model returns a \(\beta_0\) coefficient of 59.2 (with a standard error of 1.648) and a \(\beta_1\) coefficient of 0.06241(with a standard error of 0.03267). 1. According to the plotting, we find that there would be a linear relationship between the predictor, age, and the response, warmth toward Mr. Biden. However, given that the p-value of this model is 0.05626 (smaller than 0.1), such relationship is not so statistically significant (merely statistically significant at a 90% condifence level).
+The linear model returns a \(\beta_0\) coefficient of 59.2 (with a standard error of 1.648) and a \(\beta_1\) coefficient of 0.06241(with a standard error of 0.03267).
 
-1.  The relationship between the predictor and the response is rather weak, because coeffecient on the predictor, age is 0.06241, indicating a 10-year increase in age would averagely induce around 0.6 unit (out of 100) increase of the warmth toward biden. Combined with question 1, there is a weak association, with statistically moderate significance, between the predictor and the response.
+1.  According to the plotting, we find that there would be a linear relationship between the predictor, age, and the response, warmth toward Mr. Biden. However, given that the p-value of this model is 0.05626 (smaller than 0.1), such relationship is not so statistically significant (merely statistically significant at a 90% condifence level).
 
-2.  The relationship between the predictor, age, and the response, warmth toward Mr. Biden, is positive (0.06241), indicating that a one-year increase in age is estimated to be associated with an average increase in warmth of 0.06241 toward Mr. Biden. To sum up (question 1 - 3), there is a weak and positive association, with statistically moderate significance, between the predictor and the response.
+2.  The relationship between the predictor and the response is rather weak, because coeffecient on the predictor, age is 0.06241, indicating a 10-year increase in age would averagely induce around 0.6 unit (out of 100) increase of the warmth toward biden. Combined with question 1, there is a weak association, with statistically moderate significance, between the predictor and the response.
 
-3.  The \(R^2\) of this model is 0.002018, implying that this model only explains \(.2\%\) of the variation in warmth score.With such a low percentage of variance explained, it is a poor model.
+3.  The relationship between the predictor, age, and the response, warmth toward Mr. Biden, is positive (0.06241), indicating that a one-year increase in age is estimated to be associated with an average increase in warmth of 0.06241 toward Mr. Biden. To sum up (question 1 - 3), there is a weak and positive association, with statistically moderate significance, between the predictor and the response.
 
-4.  The predicted warmth associated with an age of 45 is 62.0056. Its associated 95% confidence interval is (60.91248, 63.09872).
+4.  The \(R^2\) of this model is 0.002018, implying that this model only explains \(.2\%\) of the variation in warmth score.With such a low percentage of variance explained, it is a poor model.
+
+5.  The predicted warmth associated with an age of 45 is 62.0056. Its associated 95% confidence interval is (60.91248, 63.09872).
 
 ``` r
 # Prediction for the feeling thermometer when age is 45, and 
@@ -146,7 +148,7 @@ pander(pred_data)
 </tbody>
 </table>
 
-The plotting is shown as below. Based on this plot and least regression line, there is a positive relation between between the age and the warmth toward biden, although, the relationship is weak.
+The plotting is shown as below. Based on this plot and least regression line, there is a positive relation between the age and the warmth toward biden, although, the relationship is weak.
 
 ``` r
 #--Plot
@@ -177,7 +179,7 @@ We construct a more complex model to estimate the effects of age, gender, and ye
 
 \[Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3\]
 
-where \(Y\) is the Biden feeling thermometer, \(X_1\) is age, \(X_2\) is gender, and \(X_3\) is education. The statistical data is summarized in the table below:
+where \(Y\) is the Biden feeling thermometer, \(X_1\) is age, \(X_2\) is gender, and \(X_3\) is education. The statistical data is summarized in the table below: The co-effecients are 68.62101, for the intercept, 0.04188, for age, 6.19607, for female, and -0.88871, for educ; the standard errors are 3.59600, for the intercept, 0.03249, for age, 1.09670, for female, and 0.22469, for educ.
 
 ``` r
 # Multiple Linear Regression Model
@@ -297,7 +299,7 @@ We construct an even more detailed model to estimate the effects of age, gender,
 
 \[Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5\]
 
-where \(Y\) is the Joe Biden feeling thermometer, \(X_1\) is age, \(X_2\) is gender, \(X_3\) is education, \(X_4\) is Democrat, and \(X_5\) is Republican. The statistical data is summarized in the table below:
+where \(Y\) is the Joe Biden feeling thermometer, \(X_1\) is age, \(X_2\) is gender, \(X_3\) is education, \(X_4\) is Democrat, and \(X_5\) is Republican. The statistical data is summarized in the table below: The co-effecients are 58.81126, for the intercept, 0.04826, for age, 4.10323, for female, -0.34533, for educ, 15.42426, for dem, and -15.84951, for rep; the standard errors are 3.12444, for the intercept, 0.02825, for age, 0.94823, for female, 0.19478, for educ, 1.06803, for dem, and 1.31136, for rep.
 
 ``` r
 # Multiple Linear Regression Model
@@ -519,6 +521,8 @@ pander(summary(lm_4))
 
 The co-effecients are 39.382, for the intercept, 6.395, for female, 33.688, for dem, and -3.946, for the interactive term of female and dem; the standard errors are 1.455, for the intercept, 2.018, for female, 1.835, for dem. and 2.472, for the interactive term of female and dem.
 
+1.  the estimated Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans are summarized in the table below:
+
 ``` r
 #Prediction
 #Create data for prediction
@@ -589,7 +593,11 @@ pander(pred_ci)
 </tbody>
 </table>
 
-The relationship between party ID and Biden warmth does appear to differ for males/females. According to the table (95% confidence intervals for four categories of respondents) above and plottings below, we can find that female Republicans have a predicted warmth rating over 6 points higher than their male Republican counterparts.This difference also appears to be significant at the 95% level, since the 95% CI lower bound for for female Republicans, 43.04 is greater than the 95% CI upper bound for male Republicans 42.23). In addition, there is much less difference in the gender's response for the Democratic party than Republican party, the predicted warmth rating for female Democrats is just over 2 points higher than male Democrats (the 95% CI lower bound for for female Democrats, 73.78 is lower than the 95% CI upper bound for male Democrats, 75.26), while there is about 6 points higher for female Republicans than male Republican.
+2.Based on the table above and the plot below, it appears that the party ID and Biden warmth do not have an obvious variation between male and female. For both male and female respondents, eing a Democrat has a significant positive effect (p-value &lt; 0.001) on warmth toward Mr. Biden. The lower bound (70.88) and upper bound (75.26) of 95% CI of male Democrats are much higher than that (lower 36.53, upper 42.23) of male Republicans. Also, the lower bound (73.78) and upper bound (77.26) of 95% CI of female Democrats are much higher than that (lower 43.04, upper 48.52) of female Republicans.
+
+3.The effect of being a woman on warmth toward Mr. Biden for Democrats is not as strong as it is for Republicans. Female Republicans have a predicted warmth rating over 6 points higher than their male Republican counterparts.This difference also appears to be significant at the 95% level, since the 95% CI lower bound for for female Republicans, 43.04 is greater than the 95% CI upper bound for male Republicans 42.23). However, there is much less difference in the gender's response for the Democratic party than Republican party, the predicted average warmth rating for female Democrats is just over 2 points higher than male Democrats (but we need to note that the 95% CI lower bound for for female Democrats, 73.78 is slightly lower than the 95% CI upper bound for male Democrats, 75.26). Also,it is remarkable that the gender factor has a negative (-3.946) and weak effect (p-value = 0.11065, not statistically significant even at a 90% confidence level) on the party ID factor's relationship with warmth toward Mr Biden.
+
+To sum up, the effect of party ID is rather strong for both male and female, while the effect of gender varies for Democrats/Republicans.
 
 ``` r
 # Plotting:
