@@ -1,6 +1,6 @@
 ---
 title: "Problem set #5: linear regression"
-author: "MACS 30100 - Perspectives on Computational Modeling"
+author: Weijia Li
 date: "**Due Monday February 13th at 11:30am**"
 output:
   github_document:
@@ -10,10 +10,6 @@ output:
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(cache = TRUE)
 ```
-
-![](https://s3.amazonaws.com/media.thecrimson.com/photos/2014/10/02/103651_1299339.jpg)
-
-[Joe Biden](https://en.wikipedia.org/wiki/Joe_Biden) was the 47th Vice President of the United States. He was the subject of [many memes](http://distractify.com/trending/2016/11/16/best-of-joe-and-obama-memes), [attracted the attention of Leslie Knope](https://www.youtube.com/watch?v=NvbMB_GGR6s), and [experienced a brief surge in attention due to photos from his youth](http://www.huffingtonpost.com/entry/joe-young-hot_us_58262f53e4b0c4b63b0c9e11).
 
 `biden.csv` contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards Joe Biden. The variables are coded as follows:
 
@@ -52,6 +48,9 @@ ggplot(biden, mapping = aes(x = biden)) +
        y = "Frequency count of individuals")
 
 ```
+The histogram looks interesting that not all numbers between 0 and 100 are recorded in the data, in fact, there are only a small set of numbers are recorded as feeling thermometer of Biden. This is probably because people will generally give a multiple of 5 when they are asked to score something.
+
+
 # Simple linear regression (2 points)
 
 Estimate the following linear regression:
@@ -271,23 +270,5 @@ tidy(biden_int)
 Comparing feeling warmth between genders inside parties, warmth for male is generally lower than that of for female (39.38202 vs 45.77720 for Republicans and 73.06954 vs 75.51883 for Democrats) but significant. On the other hand, when comparing feelings for Biden between parties for each gender, there appear a large differnce in the numbers with 39.38202 vs 73.06954 for male and 45.77720 vs 75.51883 for female. Similar patterns can be found in 95% confidnet intervals as well. 
 
 
-
-
-
-
-# Submission instructions
-
-Assignment submission will work the same as earlier assignments. Submit your work as a pull request before the start of class on Monday. Store it in the same locations as you've been using. However the format of your submission should follow the procedures outlined below.
-
-## If you use R
-
-Submit your assignment as a single [R Markdown document](http://rmarkdown.rstudio.com/). R Markdown is similar to Juptyer Notebooks and compiles all your code, output, and written analysis in a single reproducible file.
-
-## If you use Python
-
-Either:
-
-1. Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a $\LaTeX$ generated PDF document with your results and substantive analysis.
-1. Submit your assignment as a single Jupyter Notebook with your code, output, and written analysis compiled there.
 
     
