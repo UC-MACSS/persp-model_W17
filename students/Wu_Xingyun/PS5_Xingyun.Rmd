@@ -3,8 +3,8 @@ title: 'Perspectives on Computational Modeling: PS#5'
 author: "Xingyun Wu"
 date: "02/12/2017"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -154,7 +154,8 @@ ggplot(grid3, aes(pred)) +
 
 ## Problem 5: Interactive linear regression model (2 points)
 ```{r problem5}
-problem5 <- lm(biden ~ female * dem, data = mydata)
+data_filter <- mydata[(mydata$dem == 1)|(mydata$rep == 1), ]
+problem5 <- lm(biden ~ female * dem, data_filter)
 summary(problem5)
 ```
 1. 
@@ -165,9 +166,9 @@ inter_pred <- inter_pred%>%
          ymax = .fitted + 1.96 * .se.fit)
 inter_pred
 ```
-a) For female Democrats: predicted feeling thermometer is 75.51883, with 95% confidence intervals (73.65979, 77.37787). 
-b) For female Republicans: predicted feeling thermometer is 55.21113, with 95% confidence intervals (53.43046, 56.99180).
-c) For male Democrats: predicted feeling thermometer is 73.06954, with 95% confidence intervals (70.73071, 75.40837).
-d) For male Republicans: predicted feeling thermometer is 50.19763 with 95% confidence intervals (48.39076, 52.00450).
-e) Yes, the relationship between party ID and `biden` differ by gender, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for males, the Democrats report on average 22.8719 more feeling thermometers than the Republicans. But for females, the difference between Democrats and Republicans shrinkes to about 20.3077.
-f) Yes, the relationship between gender and `biden` differ by party ID, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for Republicans, female report on average 5.0135 more feeling thermometer. But for Democrats, the difference between females and males shrinks to about 2.4493.
+a) For female Democrats: predicted feeling thermometer is 75.51883, with 95% confidence intervals (73.77813, 77.25953). 
+b) For female Republicans: predicted feeling thermometer is 45.77720, with 95% confidence intervals (43.03778, 48.51662).
+c) For male Democrats: predicted feeling thermometer is 73.06954, with 95% confidence intervals (70.87959, 75.25949).
+d) For male Republicans: predicted feeling thermometer is 39.38202 with 95% confidence intervals (36.52951, 42.23453).
+e) Yes, the relationship between party ID and `biden` differ by gender, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for males, the Democrats report on average 33.688 more feeling thermometers than the Republicans. But for females, the difference between Democrats and Republicans shrinkes to about 29.742.
+f) Yes, the relationship between gender and `biden` differ by party ID, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for Republicans, female report on average 6.395 more feeling thermometer. But for Democrats, the difference between females and males shrinks to about 2.449.

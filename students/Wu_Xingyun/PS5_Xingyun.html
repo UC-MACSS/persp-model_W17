@@ -247,43 +247,44 @@ summary(problem4)</code></pre>
 </div>
 <div id="problem-5-interactive-linear-regression-model-2-points" class="section level2">
 <h2>Problem 5: Interactive linear regression model (2 points)</h2>
-<pre class="r"><code>problem5 &lt;- lm(biden ~ female * dem, data = mydata)
+<pre class="r"><code>data_filter &lt;- mydata[(mydata$dem == 1)|(mydata$rep == 1), ]
+problem5 &lt;- lm(biden ~ female * dem, data_filter)
 summary(problem5)</code></pre>
 <pre><code>## 
 ## Call:
-## lm(formula = biden ~ female * dem, data = mydata)
+## lm(formula = biden ~ female * dem, data = data_filter)
 ## 
 ## Residuals:
 ##     Min      1Q  Median      3Q     Max 
-## -75.519 -13.070  -0.198  11.930  49.802 
+## -75.519 -13.070   4.223  11.930  55.618 
 ## 
 ## Coefficients:
 ##             Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)  50.1976     0.9219  54.452  &lt; 2e-16 ***
-## female        5.0135     1.2943   3.874 0.000111 ***
-## dem          22.8719     1.5079  15.168  &lt; 2e-16 ***
-## female:dem   -2.5642     1.9997  -1.282 0.199902    
+## (Intercept)   39.382      1.455  27.060  &lt; 2e-16 ***
+## female         6.395      2.018   3.169  0.00157 ** 
+## dem           33.688      1.835  18.360  &lt; 2e-16 ***
+## female:dem    -3.946      2.472  -1.597  0.11065    
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
-## Residual standard error: 20.74 on 1803 degrees of freedom
-## Multiple R-squared:  0.2201, Adjusted R-squared:  0.2188 
-## F-statistic: 169.6 on 3 and 1803 DF,  p-value: &lt; 2.2e-16</code></pre>
+## Residual standard error: 19.42 on 1147 degrees of freedom
+## Multiple R-squared:  0.3756, Adjusted R-squared:  0.374 
+## F-statistic:   230 on 3 and 1147 DF,  p-value: &lt; 2.2e-16</code></pre>
 <ol style="list-style-type: decimal">
 <li></li>
 </ol>
 <pre><code>##   female dem  .fitted   .se.fit     ymin     ymax
-## 1      1   1 75.51883 0.9484884 73.65979 77.37787
-## 2      1   0 55.21113 0.9085045 53.43046 56.99180
-## 3      0   1 73.06954 1.1932803 70.73071 75.40837
-## 4      0   0 50.19763 0.9218722 48.39076 52.00450</code></pre>
+## 1      1   1 75.51883 0.8881114 73.77813 77.25953
+## 2      1   0 45.77720 1.3976638 43.03778 48.51662
+## 3      0   1 73.06954 1.1173209 70.87959 75.25949
+## 4      0   0 39.38202 1.4553632 36.52951 42.23453</code></pre>
 <ol style="list-style-type: lower-alpha">
-<li>For female Democrats: predicted feeling thermometer is 75.51883, with 95% confidence intervals (73.65979, 77.37787).</li>
-<li>For female Republicans: predicted feeling thermometer is 55.21113, with 95% confidence intervals (53.43046, 56.99180).</li>
-<li>For male Democrats: predicted feeling thermometer is 73.06954, with 95% confidence intervals (70.73071, 75.40837).</li>
-<li>For male Republicans: predicted feeling thermometer is 50.19763 with 95% confidence intervals (48.39076, 52.00450).</li>
-<li>Yes, the relationship between party ID and <code>biden</code> differ by gender, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for males, the Democrats report on average 22.8719 more feeling thermometers than the Republicans. But for females, the difference between Democrats and Republicans shrinkes to about 20.3077.</li>
-<li>Yes, the relationship between gender and <code>biden</code> differ by party ID, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for Republicans, female report on average 5.0135 more feeling thermometer. But for Democrats, the difference between females and males shrinks to about 2.4493.</li>
+<li>For female Democrats: predicted feeling thermometer is 75.51883, with 95% confidence intervals (73.77813, 77.25953).</li>
+<li>For female Republicans: predicted feeling thermometer is 45.77720, with 95% confidence intervals (43.03778, 48.51662).</li>
+<li>For male Democrats: predicted feeling thermometer is 73.06954, with 95% confidence intervals (70.87959, 75.25949).</li>
+<li>For male Republicans: predicted feeling thermometer is 39.38202 with 95% confidence intervals (36.52951, 42.23453).</li>
+<li>Yes, the relationship between party ID and <code>biden</code> differ by gender, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for males, the Democrats report on average 33.688 more feeling thermometers than the Republicans. But for females, the difference between Democrats and Republicans shrinkes to about 29.742.</li>
+<li>Yes, the relationship between gender and <code>biden</code> differ by party ID, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for Republicans, female report on average 6.395 more feeling thermometer. But for Democrats, the difference between females and males shrinks to about 2.449.</li>
 </ol>
 </div>
 
