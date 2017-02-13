@@ -83,8 +83,10 @@ variable age is
     plot(bd$age,bd$biden,pch=20,xlab='age',ylab='biden',main='Variable biden v.s. variable age')
     abline(sim,col='red')
 
-![](pset5_files/figure-markdown_strict/sim%20plot-1.png) \#\# Multiple
-linear regression
+![](pset5_files/figure-markdown_strict/sim%20plot-1.png)
+
+Multiple linear regression
+--------------------------
 
     mul1 <- lm(biden~age+female+educ,data = bd)
     summary(mul1)

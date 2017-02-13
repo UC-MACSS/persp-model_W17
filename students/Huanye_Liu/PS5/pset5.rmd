@@ -2,7 +2,7 @@
 title: "Biden"
 author: "Huanye Liu"
 date: "2017/2/12"
-output: md_document
+output: html_document
 ---
 
 ```{r read, echo=TRUE}
@@ -39,6 +39,7 @@ predict(sim,list(age=45),interval="confidence")
 plot(bd$age,bd$biden,pch=20,xlab='age',ylab='biden',main='Variable biden v.s. variable age')
 abline(sim,col='red')
 ```
+
 ## Multiple linear regression
 ```{r mul1, echo=TRUE}
 mul1 <- lm(biden~age+female+educ,data = bd)
