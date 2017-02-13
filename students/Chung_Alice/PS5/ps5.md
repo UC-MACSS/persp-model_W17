@@ -1,5 +1,5 @@
-MACSS PS5  Alice Mee Seon Chung
-===============================
+MACSS PS\#5 Alice Mee Seon Chung
+================================
 
 -   [Problem 1. Describe the data](#problem-1.-describe-the-data)
 -   [Problem 2. Simple linear
@@ -368,15 +368,18 @@ biden warmth feeling thermometer ratings is 73.06954. The upper bound of
 95% confidence interval is 75.25949 and the lower bound is 70.87959. For
 male Republicans, estimate predicted biden warmth feeling thermometer
 ratings is 39.38202. The upper bound of 95% confidence interval is
-42.23453 and the lower bound is 36.52951. The relationship between
-between party ID and Biden warmth differs for males/ females. The
-relationship between party ID types and biden warmth seems to be
-stronger for male than female. The difference of biden warmth between
-Democrats and Republicans is about 29.74683 for female. On the other
-hands, for male, the difference of Biden warmth between Democrats and
-Republicans is about 33.68752. The relationship between gender and biden
-warmth differs for Democrats/Republicans. The Republican party seems to
-have stronger relationship between gender and biden warmth than the
-Democratic party. For Republican party, the difference between male and
-female is approximately 6.3952. Whereas the difference between male and
-female is approximately 2.4493 for democratic party.
+42.23453 and the lower bound is 36.52951.
+
+The relationship between between party ID and Biden warmth differs for
+males/ females. The relationship between party ID types and biden warmth
+seems to be stronger for male than female. The difference of biden
+warmth between Democrats and Republicans is about 29.74683 for female.
+On the other hands, for male, the difference of Biden warmth between
+Democrats and Republicans is about 33.68752.
+
+The relationship between gender and biden warmth differs for
+Democrats/Republicans. The Republican party seems to have stronger
+relationship between gender and biden warmth than the Democratic party.
+For Republican party, the difference between male and female is
+approximately 6.3952. Whereas the difference between male and female is
+approximately 2.4493 for democratic party.
