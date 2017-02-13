@@ -1,3 +1,5 @@
+MACSS PS5  Alice Mee Seon Chung
+
 -   [Problem 1. Describe the data](#problem-1.-describe-the-data)
 -   [Problem 2. Simple linear
     regression](#problem-2.-simple-linear-regression)
