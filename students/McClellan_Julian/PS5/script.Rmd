@@ -102,7 +102,7 @@ The $R^2$ of the model is `r summary(biden_mmod)$r.squared`. Thus, the percentag
 
 ## 4.
 ```{r residpredplot, echo = FALSE}
-biden %>%
+biden %>% 
   select(age, educ, female, biden, dem, rep) %>%
   add_predictions(biden_mmod, var = 'pred0') %>%
   add_residuals(biden_mmod) %>%
@@ -133,9 +133,9 @@ ggplot(grid, aes(pred0, resid)) +
        y = 'Residual value',
        x = 'Predicted warmth score') +
   geom_point() +
-  geom_line(aes(y = pred, color = "DEM"), data = griddem, size = 1, show.legend = TRUE) +
-  geom_line(aes(y = pred, color = "REP"), data = gridrep, size = 1, show.legend = TRUE) +
-  geom_line(aes(y = pred, color = "IND"), data = gridind, size = 1, show.legend = TRUE) +
+  geom_smooth(aes(color = "DEM"), data = filter(grid, dem == 1), method = lm) +
+  geom_smooth(aes(color = "REP"), data = filter(grid, rep == 1), method = lm) +
+  geom_smooth(aes(color = "IND"), data = filter(grid, (dem == 0) & (rep == 0)), method = lm) +
   scale_color_manual('', values = c("DEM" = "blue", "REP" = "red", "IND" = "green"))
 ```
 
