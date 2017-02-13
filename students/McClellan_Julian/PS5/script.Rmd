@@ -108,26 +108,6 @@ biden %>%
   add_residuals(biden_mmod) %>%
   {.} -> grid
 
-griddem = filter(grid, dem == 1)
-gridrep = filter(grid, rep == 1)
-gridind = filter(grid, dem == 0 & rep == 0)
-
-dem_resid_lm = lm(resid ~ pred0, data = griddem)
-rep_resid_lm = lm(resid ~ pred0, data = gridrep)
-ind_resid_lm = lm(resid ~ pred0, data = gridind)
-
-griddem %>%
-  add_predictions(dem_resid_lm) %>%
-  {.} -> griddem
-
-gridrep %>%
-  add_predictions(rep_resid_lm) %>%
-  {.} -> gridrep
-
-gridind %>%
-  add_predictions(ind_resid_lm) %>%
-  {.} -> gridind
-
 ggplot(grid, aes(pred0, resid)) +
   labs(title = 'Residuals vs. Predicted values of Warmth Score',
        y = 'Residual value',
