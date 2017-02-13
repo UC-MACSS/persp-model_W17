@@ -9,8 +9,6 @@ output:
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(cache = TRUE)
-
 library(tidyverse)
 library(modelr)
 library(broom)
