@@ -1,7 +1,7 @@
 
-
 ```R
-###problem 1 
+Describe the data (1 point)
+===========================
 library(ggplot2)
 install.packages("dplyr")
 library(dplyr)
