@@ -1,0 +1,181 @@
+---
+title: "Bobae's PS 5 for MACS 30100 - Perspectives on Computational Modeling"
+author: "Bobae Kang"
+date: "February 13, 2017"
+output:
+  github_document
+---
+
+```{r setup, include=FALSE}
+# import pacakges
+library(tidyverse)
+library(modelr)
+library(broom)
+library(knitr)
+
+# import data
+data <- read_csv('data/biden.csv')
+```
+
+This is an R Markdown document for Perspectives on Computational Modeling course Problem Set 5. In this exercise, I will perform some linear regression analyses of `biden.csv` data, which contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards Joe Biden. The variables are coded as follows:
+
+* `biden` - feeling thermometer ranging from 0-100
+* `female` - 1 if respondent is female, 0 if respondent is male
+* `age` - age of respondent in years
+* `dem` - 1 if respondent is a Democrat, 0 otherwise
+* `rep` - 1 if respondent is a Republican, 0 otherwise
+* `educ` - number of years of formal education completed by respondent
+* `17` - 17+ years (aka first year of graduate school and up)
+
+# Describe the data (1 point)
+
+The following histogram provides an illustration of the data. First of all, the overall shape of the histogram, which is skewed to the left, suggests that people generally have positive (or warm) feeling toward Biden. However, the thermometer score of 50 has the highest count, indicating that many respondents (more than one sixth of all) still feel neutral toward Biden despite the general positive feeling toward him. Additionally, the histogram, with its `binwidth` set to `1`, shows that most people's answers converged on a small set of numbers (notably the multiples of 5) rather than distributed throughout all the possible scores.
+```{r histogram, echo=FALSE}
+ggplot(data = data, aes(biden)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = 'Feeling thermometer score',
+       y = 'Count',
+       title = 'Histogram of the feeling thermometer scores')
+```
+
+# Simple linear regression
+
+Let's try a simple linear regression, where age($X_1$), the intercept($\beta_0$), the coefficient for age($\beta_1$) are the exogenous variables and the feeling thermometer score for Biden($Y$) is the enogenous variable. $\beta_0$ and $\beta_1$ are parameters of this linear regression. The result suggests that $\beta_1$ is 0.06241, which means that every increase in age by 1 is correlated with an increase in Biden's feeling thermometer score by 0.06241. Therefore, the relationship between `biden` and `age`  is positive. However, the relatively hight p-value, 0.0563, suggests that the coefficient is not statistically significant. In addition, the model's $R^2$ value is 0.002018, which means that the variable of `age` explains only about 0.2% of the variation of `biden`. Therefore, the model is doing a poor job.  
+```{r simple linear regression, echo=FALSE}
+# fit the model
+sim = lm(biden ~ age, data = data)
+
+# summary of the model
+(summary(sim))
+```
+
+The following shows the predicted `biden` value for a 45-year-old person, with the 95% confidence interval.
+```{r simple linear regression (part 2), echo=FALSE}
+# predicted value for age = 45 with the 95% confidence intervals 
+(augment(sim, newdata = data_frame(age = c(45))) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96))
+```
+
+The follwoing is a plot of the response and predictor, with the least squares regression line.
+```{r simple linear regression plot, echo=FALSE}
+# plot
+data %>%
+  data_grid(age) %>%
+  add_predictions(sim) %>%
+  ggplot(aes(x = age)) +
+  geom_line(aes(y = pred), color = 'red', size = 1) +
+  geom_point(data = data, aes(y = biden)) +
+  labs(x = 'Age', 
+     y = 'Feeling thermometer score',
+     title = 'Simple linear regression model')
+
+```
+
+# Multiple linear regression 1
+The second linear regression uses the same response variable, `biden`, and the following two more predictors in addition to `age`: `female` and `educ`. The result of this new model suggests that the coefficients for `female` and `educ` are statistically significant; the p-values for these three coefficients are all smaller than 0.001. The estimated value of $\beta_{2}$ is `6.19607`. In other words, controlling for age and education level, being female leads to an increase in Biden's feeling thermometer score by, on average, 6.19607 units. The $R^2$ score indicates that the three predictors, together, explains about 2.7% of the variation in `biden`. Also, the adjusted $R^2$ score for this model is `0.025`. Therefore, the current model is better than the previous, `age`-only model. 
+```{r multiple linear regression 1, echo=FALSE}
+# fit the model
+mul1 <- lm(biden ~ age + female + educ, data = data)
+
+# show the summary
+(summary(mul1))
+
+```
+
+The follwoing plot for the current model also illustrates three different smooth fit lines. Two of the smooth fit lines indicate that being affiliated with the Republican party and the Democratic party are systematically different from 0. This is an indication that party affiliation may have some additional explanatory power with respect to the variation in `biden`. 
+```{r multiple linear regression 1 plot, echo=FALSE}
+# prepare the data for plot
+grid_mul1 <- data %>%
+  add_predictions(mul1) %>%
+  add_residuals(mul1)
+
+# filter by party affiliation
+grid_dems1 <- grid_mul1 %>%
+  filter(dem == 1)
+grid_reps1 <- grid_mul1 %>%
+  filter(rep == 1)
+grid_others1 <- grid_mul1 %>%
+  filter(dem == 0 & rep == 0)
+
+# final plot
+grid_mul1 %>% ggplot(aes(x = pred)) + 
+  geom_point(aes(y=resid), alpha = 0.5) +
+  geom_smooth(data = grid_dems1, aes(y = resid, color = 'Democrat'), size=1) +
+  geom_smooth(data = grid_reps1, aes(y = resid, color = 'Republican'), size=1) +
+  geom_smooth(data = grid_others1, aes(y = resid, color = 'Other'), size=1) +
+  scale_color_manual('Party affiliation',
+                     values = c('Democrat' = 'blue', 'Republican' = 'red', 'Other' = 'green')) + 
+  labs(x = 'Predicted values', 
+       y = 'Residuals',
+       title = 'Multiple linear regression model with three predictors')
+```
+
+# Multiple linear regression 2
+
+The second linear regression uses the same response variable, `biden`, and the following four more predictors in addition to `age`: `female`, `educ`, `dem` and `rep`. The result of this new model suggests that the coefficients for `female`, `dem`, and `rep` are statistically significant; the p-values for these three coefficients are all smaller than 0.001. The estimated value of $\beta_{2}$ is now 4.1023, which is less than by the previous estimate, 6.19607. The $R^2$ value of the model is 0.2815 and the adjusted $R^2$ value is 0.2795. The now exaplains about 28% of the variation in `biden`, which makes it better than the previous model.
+```{r multiple linear regression 2, echo=FALSE}
+# fit the model
+mul2 <- lm(biden ~ age + female + educ + dem + rep, data = data)
+
+# show the summary
+(summary(mul2))
+```
+
+The follwoing plot is for the new multiple regression model with five predictors. The plot illustrates that there are three residual clusters, each of which nicely corresponds to each party affiliation (Democrat, Republican and Other). Each smooth fit line shows systematicl difference from 0 to a much less extent. To the same extent, the current model 'fixes' the problem the previous model had.  
+```{r multiple linear regression 2 plot, echo=FALSE}
+# prepare the data for plot
+grid_mul2 <- data %>%
+  add_predictions(mul2) %>%
+  add_residuals(mul2)
+
+# filter by party affiliation
+grid_dems2 <- grid_mul2 %>%
+  filter(dem == 1)
+grid_reps2 <- grid_mul2 %>%
+  filter(rep == 1)
+grid_others2 <- grid_mul2 %>%
+  filter(dem == 0 & rep == 0)
+
+# final plot
+grid_mul2 %>% ggplot(aes(x = pred)) + 
+  geom_point(aes(y=resid), alpha = 0.5) +
+  geom_smooth(data = grid_dems2, aes(y = resid, color = 'Democrat'), size=1) +
+  geom_smooth(data = grid_reps2, aes(y = resid, color = 'Republican'), size=1) +
+  geom_smooth(data = grid_others2, aes(y = resid, color = 'Other'), size=1) +
+    scale_color_manual('Party affiliation',
+                     values = c('Democrat' = 'blue', 'Republican' = 'red', 'Other' = 'green')) + 
+  labs(x = 'Predicted values', 
+       y = 'Residuals',
+       title = 'Multiple linear regression model with five predictors')
+```
+
+
+# Interactive linear regression
+In this model, we are only useing the observations that are either Democrats or Republicans. The current interactive linear regression model has four parameters: $X_0$ (intercept), $X_1$ (coefficient for `female`), $X_2$ (coefficient for `dem`), and $X_3$ (coefficient for the interaction term). The estimated value of $X_0$ is 39.382 and the standard error is 1.455. The estimated value of $X_1$ is 6.395 and is statistically significant with the p-value = 0.00157. Its standard error is 2.018. The estimated value of $X_2$ is 33.688 and is statistically significant with the p-value < 2e-16. Its standard error is 1.835. The estimated value of $X_3$ is -3.946 and is not statistically significant with the p-value = 0.11065. Its standard error is 2.472.
+```{r interactive linear regression, echo=FALSE}
+# filter out the non-Democrat, non-Republican observations
+data_int <- data %>%
+  filter(dem == 1 | rep == 1)
+
+# fit the model
+int <- lm(biden ~ female * dem, data = data_int)
+
+# show the summary
+(summary(int))
+```
+
+The following then illustrates how gender and bipartisanship related to each other with respect to the feeling thermometer score, with the 95% confidence intervals. The result shows that the feeling thermometer score is the lowest for male Republicans (39.38202 on average) and the highest for female Democrats (75.51883 on average). For both Democrats Republicans, on average, being female leads to a small increase in feeling thermometer score. However, in case of Democrats, the difference is within the 95% confidence interval and therefore not statistically significant. For both females and males, on average, being Democrats lead to a noticable increase in feeling thermometer score.   
+```{r interactive linear regression (part 2), echo=FALSE}
+# get the mean values for each gender-party category
+data_int1 <- data_int %>%
+  group_by(female, dem) %>%
+  summarise(biden = mean(biden))
+
+# predicted values for gender and bipartisanship with the 95% confidence intervals 
+(augment(int, newdata = data_int1) %>%
+    select(-biden) %>%
+    mutate(ymin = .fitted - .se.fit * 1.96,
+           ymax = .fitted + .se.fit * 1.96))
+
+```
