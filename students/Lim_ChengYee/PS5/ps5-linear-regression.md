@@ -17,6 +17,7 @@ MACS 30100 - Perspectives on Computational Modeling
     -   [c. Report the *R*<sup>2</sup> of the model. What percentage of the variation in biden does age, gender, and education explain? Is this a better or worse model than the age-only model?](#c.-report-the-r2-of-the-model.-what-percentage-of-the-variation-in-biden-does-age-gender-and-education-explain-is-this-a-better-or-worse-model-than-the-age-only-model)
     -   [d. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?](#d.-generate-a-plot-comparing-the-predicted-values-and-residuals-drawing-separate-smooth-fit-lines-for-each-party-id-type.-is-there-a-problem-with-this-model-if-so-what)
 -   [Multiple linear regression model (with even more variables!) (3 points)](#multiple-linear-regression-model-with-even-more-variables-3-points)
+    -   [b. Report the *R*<sup>2</sup> of the model. What percentage of the variation in biden does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?](#b.-report-the-r2-of-the-model.-what-percentage-of-the-variation-in-biden-does-age-gender-education-and-party-identification-explain-is-this-a-better-or-worse-model-than-the-age-gender-education-model)
 -   [Interactive linear regression model (2 points)](#interactive-linear-regression-model-2-points)
 
 [Joe Biden](https://en.wikipedia.org/wiki/Joe_Biden) was the 47th Vice President of the United States. He was the subject of [many memes](http://distractify.com/trending/2016/11/16/best-of-joe-and-obama-memes), [attracted the attention of Leslie Knope](https://www.youtube.com/watch?v=NvbMB_GGR6s), and [experienced a brief surge in attention due to photos from his youth](http://www.huffingtonpost.com/entry/joe-young-hot_us_58262f53e4b0c4b63b0c9e11).
@@ -252,10 +253,54 @@ Estimate the following linear regression:
 
 where *Y* is the Joe Biden feeling thermometer, *X*<sub>1</sub> is age, *X*<sub>2</sub> is gender, *X*<sub>3</sub> is education, *X*<sub>4</sub> is Democrat, and *X*<sub>5</sub> is Republican.[2] Report the parameters and standard errors.
 
-1.  Did the relationship between gender and Biden warmth change?
+``` r
+joe_mod3 <- lm(biden ~ age + female + educ + dem + rep, data = joe) 
+tidy(joe_mod3) %>%
+  kable()
+```
 
-2.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
-3.  Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?
+| term             |        estimate|     std.error|     statistic|                                              p.value|
+|:-----------------|---------------:|-------------:|-------------:|----------------------------------------------------:|
+| (Intercept)      |      58.8112590|     3.1244366|     18.822996|                                            0.0000000|
+| age              |       0.0482589|     0.0282474|      1.708438|                                            0.0877274|
+| female           |       4.1032301|     0.9482286|      4.327258|                                            0.0000159|
+| educ             |      -0.3453348|     0.1947796|     -1.772952|                                            0.0764057|
+| dem              |      15.4242556|     1.0680327|     14.441745|                                            0.0000000|
+| rep              |     -15.8495061|     1.3113624|    -12.086290|                                            0.0000000|
+| \#\#a. Did the r |  elationship be|  tween gender|  and Biden wa|                                         rmth change?|
+| Yes, the relat   |  ionship betwee|  n gender and|  Biden warmth|  became less positive, changing from 6.197 to 4.103.|
+
+b. Report the *R*<sup>2</sup> of the model. What percentage of the variation in biden does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+``` r
+summary(joe_mod3)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = biden ~ age + female + educ + dem + rep, data = joe)
+    ## 
+    ## Residuals:
+    ##     Min      1Q  Median      3Q     Max 
+    ## -75.546 -11.295   1.018  12.776  53.977 
+    ## 
+    ## Coefficients:
+    ##              Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)  58.81126    3.12444  18.823  < 2e-16 ***
+    ## age           0.04826    0.02825   1.708   0.0877 .  
+    ## female        4.10323    0.94823   4.327 1.59e-05 ***
+    ## educ         -0.34533    0.19478  -1.773   0.0764 .  
+    ## dem          15.42426    1.06803  14.442  < 2e-16 ***
+    ## rep         -15.84951    1.31136 -12.086  < 2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 19.91 on 1801 degrees of freedom
+    ## Multiple R-squared:  0.2815, Adjusted R-squared:  0.2795 
+    ## F-statistic: 141.1 on 5 and 1801 DF,  p-value: < 2.2e-16
+
+1.  Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?
 
 Interactive linear regression model (2 points)
 ==============================================
