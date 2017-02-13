@@ -3,8 +3,8 @@ title: "PS 5"
 author: "Yuqing Zhang"
 date: "2/10/2017"
 output:
-  pdf_document: default
-  html_document: default
+  github_document:
+   toc: true
 ---
 
 ```{r setup, include=FALSE}
