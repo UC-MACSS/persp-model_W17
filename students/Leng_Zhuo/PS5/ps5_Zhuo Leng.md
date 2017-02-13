@@ -18,61 +18,6 @@ ggplot(data = biden_data, aes(x=biden)) +
 
 ```
 
-    Updating HTML index of packages in '.Library'
-    Making 'packages.html' ... done
-    The following object is masked _by_ .GlobalEnv:
-    
-        female
-    
-    The following objects are masked from biden_data (pos = 3):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 4):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 5):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 10):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 11):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 12):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 13):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 14):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 15):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 16):
-    
-        age, biden, dem, educ, female, rep
-    
-    The following objects are masked from biden_data (pos = 17):
-    
-        age, biden, dem, educ, female, rep
-    
-
-
-
-
-
 ![png](output_0_2.png)
 
 
@@ -108,7 +53,7 @@ summary(lm.fit1)
     (Intercept) 59.19736    1.64792   35.92   <2e-16 ***
     age          0.06241    0.03267    1.91   0.0563 .  
     ---
-    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+    Signif. codes:  0 ???***??? 0.001 ???**??? 0.01 ???*??? 0.05 ???.??? 0.1 ??? ??? 1
     
     Residual standard error: 23.44 on 1805 degrees of freedom
     Multiple R-squared:  0.002018,	Adjusted R-squared:  0.001465 
@@ -236,7 +181,7 @@ summary(lm.fit2)
     female       6.19607    1.09670   5.650 1.86e-08 ***
     educ        -0.88871    0.22469  -3.955 7.94e-05 ***
     ---
-    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+    Signif. codes:  0 ???***??? 0.001 ???**??? 0.01 ???*??? 0.05 ???.??? 0.1 ??? ??? 1
     
     Residual standard error: 23.16 on 1803 degrees of freedom
     Multiple R-squared:  0.02723,	Adjusted R-squared:  0.02561 
@@ -333,7 +278,7 @@ summary(lm.fit3)
     dem          15.42426    1.06803  14.442  < 2e-16 ***
     rep         -15.84951    1.31136 -12.086  < 2e-16 ***
     ---
-    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+    Signif. codes:  0 ???***??? 0.001 ???**??? 0.01 ???*??? 0.05 ???.??? 0.1 ??? ??? 1
     
     Residual standard error: 19.91 on 1801 degrees of freedom
     Multiple R-squared:  0.2815,	Adjusted R-squared:  0.2795 
