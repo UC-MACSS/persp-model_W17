@@ -24,7 +24,17 @@ Describe the data (1 point)
 
 Plot a histogram of `biden` with a binwidth of `1`. Make sure to give the graph a title and proper *x* and *y*-axis labels. In a few sentences, describe any interesting features of the graph.
 
-![](ps5-linear-regression_files/figure-markdown_github/unnamed-chunk-1-1.png) The histogram looks interesting that not all numbers between 0 and 100 are recorded in the data, in fact, there are only a small set of numbers are recorded as feeling thermometer of Biden. This is probably because people will generally give a multiple of 5 when they are asked to score something.
+``` r
+ggplot(biden, mapping = aes(x = biden)) +
+  geom_histogram(binwidth = 1, alpha=0.7) +
+  labs(title = "Distribution of feeling thermometer of Biden",
+       x = "Feeling thermometer",
+       y = "Frequency count of individuals")
+```
+
+![](ps5-linear-regression_files/figure-markdown_github/unnamed-chunk-1-1.png)
+
+The histogram looks interesting that not all numbers between 0 and 100 are recorded in the data, in fact, there are only a small set of numbers are recorded as feeling thermometer of Biden. This is probably because people will generally give a multiple of 5 when they are asked to score something.
 
 Simple linear regression (2 points)
 ===================================
@@ -73,15 +83,23 @@ tidy(biden_mod)
 
 *β*<sub>0</sub> is 59.19736 and *β*<sub>1</sub> is 0.06241. The intercept means the estimated feeling warmth is ~59.2 when *X*<sub>1</sub> is 0. The standard error for *β*<sub>0</sub> is 1.64792 and is 0.03267 for *β*<sub>1</sub>.
 
-1.  Is there a relationship between the predictor and the response? p-value is 0.05626 so there is a relationship between the predictor and the response at significant level 0.01.
+1.  Is there a relationship between the predictor and the response?
 
-2.  How strong is the relationship between the predictor and the response? Estimated *β* is 0.06241, that means 20 years age difference only makes 1.2 point change.
+p-value is 0.05626 so there is a relationship between the predictor and the response at significant level 0.01.
 
-3.  Is the relationship between the predictor and the response positive or negative? 0.0624 is positive, so the relationship is positive.
+1.  How strong is the relationship between the predictor and the response?
 
-4.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does `age` alone explain? Is this a good or bad model? The *R*<sup>2</sup> is 0.002018, that is, the age variation only explains 0.2% of the variation in feeling thermometer. This is a bad model that is not explainary.
+Estimated *β* is 0.06241, that means 20 years age difference only makes 1.2 point change.
 
-5.  What is the predicted `biden` associated with an `age` of 45? What are the associated 95% confidence intervals?
+1.  Is the relationship between the predictor and the response positive or negative?
+
+0.0624 is positive, so the relationship is positive.
+
+1.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does `age` alone explain? Is this a good or bad model?
+
+The *R*<sup>2</sup> is 0.002018, that is, the age variation only explains 0.2% of the variation in feeling thermometer. This is a bad model that is not explainary.
+
+1.  What is the predicted `biden` associated with an `age` of 45? What are the associated 95% confidence intervals?
 
 ``` r
 (pred_ci <- augment(biden_mod, newdata = data_frame(age = c(45))) %>%
@@ -130,9 +148,11 @@ tidy(biden_mult)
 
 There is a statistically significant relationship between the predictors and response. The predictors 'female' and 'educ' both have very small p-values (1.863612e-08 and 7.941295e-05 respectively) yet 'age' is not significant anymore with p-value 0.1975 &gt; 0.1.
 
-1.  What does the parameter for `female` suggest? The coefficient for 'female' is 6.196, that means there will be on average ~6.2 points higher if the respondent is female(with age and education to be constants).
+1.  What does the parameter for `female` suggest?
 
-2.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, and education explain? Is this a better or worse model than the age-only model?
+The coefficient for 'female' is 6.196, that means there will be on average ~6.2 points higher if the respondent is female(with age and education to be constants).
+
+1.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, and education explain? Is this a better or worse model than the age-only model?
 
 ``` r
 summary(biden_mult)$r.squared
@@ -177,7 +197,9 @@ ggplot(grid, aes(pred, resid)) +
         y = "Residuals")
 ```
 
-![](ps5-linear-regression_files/figure-markdown_github/unnamed-chunk-7-1.png) There is indeed a problem. While we can see political preferences has distinct effects on residue values, the model did not seperate the data by the party effects. Thus, we need to include party identification into our model.
+![](ps5-linear-regression_files/figure-markdown_github/unnamed-chunk-7-1.png)
+
+There is indeed a problem. While we can see political preferences has distinct effects on residue values, the model did not seperate the data by the party effects. Thus, we need to include party identification into our model.
 
 Multiple linear regression model (with even more variables!) (3 points)
 =======================================================================
@@ -201,9 +223,11 @@ tidy(biden_mm)
     ## 5         dem  15.42425563 1.0680327  14.441745 8.144928e-45
     ## 6         rep -15.84950614 1.3113624 -12.086290 2.157309e-32
 
-1.  Did the relationship between gender and Biden warmth change? It indeed changed. The relationship between gender and Biden warmth was 1.863612e-08 but now is 1.592601e-05 when 'dem' and 'rep' are considered.
+1.  Did the relationship between gender and Biden warmth change?
 
-2.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
+It indeed changed. The relationship between gender and Biden warmth was 1.863612e-08 but now is 1.592601e-05 when 'dem' and 'rep' are considered.
+
+1.  Report the *R*<sup>2</sup> of the model. What percentage of the variation in `biden` does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
 
 ``` r
 summary(biden_mm)$r.squared
@@ -253,7 +277,9 @@ ggplot(grid, aes(pred, resid)) +
   scale_color_manual('', values = c("DEM" = "blue", "REP" = "red", "IND" = "green"))
 ```
 
-![](ps5-linear-regression_files/figure-markdown_github/unnamed-chunk-10-1.png) We did solve the previous problem. Now all three lines have slope and intercepts approximately 0 and such similar pattern suggests
+![](ps5-linear-regression_files/figure-markdown_github/unnamed-chunk-10-1.png)
+
+We did solve the previous problem. Now all three lines have slope and intercepts approximately 0 and such similar pattern suggests
 
 Before the, the smooth fit regression lines for each of the three possible party affiliations was distinct, with slightly differing slopes and very different (visually) intercepts. Now, however, after we have included party affiliation into our model, we see that all three smooth fit lines for Democrats, Republicans, and Independents have a slope of approximately 0 as well as a 0 intercept. They are all quite similar now, suggesting that in our current model that party affiliation, or lack thereof, has no effect on our residuals.
 

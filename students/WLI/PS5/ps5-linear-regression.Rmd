@@ -40,7 +40,7 @@ biden <- read.csv('data/biden.csv')
 # attach(biden)
 ```
 
-```{r, echo=FALSE}
+```{r}
 ggplot(biden, mapping = aes(x = biden)) +
   geom_histogram(binwidth = 1, alpha=0.7) +
   labs(title = "Distribution of feeling thermometer of Biden",
@@ -48,6 +48,8 @@ ggplot(biden, mapping = aes(x = biden)) +
        y = "Frequency count of individuals")
 
 ```
+
+
 The histogram looks interesting that not all numbers between 0 and 100 are recorded in the data, in fact, there are only a small set of numbers are recorded as feeling thermometer of Biden. This is probably because people will generally give a multiple of 5 when they are asked to score something.
 
 
@@ -69,19 +71,29 @@ grid <- biden %>%
 
 tidy(biden_mod)
 ```
+
+
 $\beta_0$ is 59.19736 and $\beta_1$ is 0.06241. The intercept means the estimated feeling warmth is ~59.2 when $X_1$ is 0. The standard error for $\beta_0$ is 1.64792 and is 0.03267 for $\beta_1$.
 
 1. Is there a relationship between the predictor and the response?
+
+
 p-value is 0.05626 so there is a relationship between the predictor and the response at significant level 0.01.
 
 2. How strong is the relationship between the predictor and the response?
+
+
 Estimated $\beta$ is 0.06241, that means 20 years age difference only makes 1.2 point change. 
 
 3. Is the relationship between the predictor and the response positive or negative?
+
+
 0.0624 is positive, so the relationship is positive.
 
 
 4. Report the $R^2$ of the model. What percentage of the variation in `biden` does `age` alone explain? Is this a good or bad model?
+
+
 The $R^2$ is 0.002018, that is, the age variation only explains 0.2% of the variation in feeling thermometer. This is a bad model that is not explainary.
 
 5. What is the predicted `biden` associated with an `age` of 45? What are the associated 95% confidence intervals?
@@ -90,6 +102,7 @@ The $R^2$ is 0.002018, that is, the age variation only explains 0.2% of the vari
   mutate(ymin = .fitted - .se.fit * 1.96,
          ymax = .fitted + .se.fit * 1.96))
 ``` 
+
 
 The predicted feeling for Biden at age 45 is 62.0056, and the associated 95% confidence intervals are (60.91248, 63.09872).
 
@@ -117,10 +130,13 @@ tidy(biden_mult)
 
 1. Is there a statistically significant relationship between the predictors and response?
 
+
 There is a statistically significant relationship between the predictors and response. The predictors 'female' and 'educ' both have very small p-values (1.863612e-08 and 7.941295e-05 respectively) yet 'age' is not significant anymore with p-value 0.1975 > 0.1.
 
 
 2. What does the parameter for `female` suggest?
+
+
 The coefficient for 'female' is 6.196, that means there will be on average ~6.2 points higher if the respondent is female(with age and education to be constants).
 
 
@@ -128,6 +144,8 @@ The coefficient for 'female' is 6.196, that means there will be on average ~6.2 
 ```{r}
 summary(biden_mult)$r.squared
 ```
+
+
 $R^2$ is 0.027, thus age, gender and education only explains 2.7% of variation in 'biden'.
 
 4. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?
@@ -165,6 +183,8 @@ ggplot(grid, aes(pred, resid)) +
 
 
 ```
+
+
 There is indeed a problem. While we can see political preferences has distinct effects on residue values, the model did not seperate the data by the party effects. Thus, we need to include party identification into our model.
 
 
@@ -174,7 +194,9 @@ Estimate the following linear regression:
 
 $$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5$$
 
+
 where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.^[Independents must be left out to serve as the baseline category, otherwise we would encounter perfect multicollinearity.] Report the parameters and standard errors.
+
 
 ```{r}
 biden_mm = lm(biden ~ age + female + educ + dem + rep, data = biden)
@@ -183,12 +205,16 @@ tidy(biden_mm)
 
 
 1. Did the relationship between gender and Biden warmth change?
+
+
 It indeed changed. The relationship between gender and Biden warmth was 1.863612e-08 but now is 1.592601e-05 when 'dem' and 'rep' are considered.
 
 2. Report the $R^2$ of the model. What percentage of the variation in `biden` does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
 ```{r}
 summary(biden_mm)$r.squared
 ```
+
+
 The $R^2$ of the model is 0.2815391, i.e. 28.15% of the variation in 'biden' was explained by age, gender, education and party identification. Though this number is not good enough, but is still significantly higher than the previous models.
 
 
@@ -230,6 +256,8 @@ ggplot(grid, aes(pred, resid)) +
   geom_line(aes(y = pred1, color = "IND"), data = gridind, size = 1) +
   scale_color_manual('', values = c("DEM" = "blue", "REP" = "red", "IND" = "green"))
 ```
+
+
 We did solve the previous problem. Now all three lines have slope and intercepts approximately 0 and such similar pattern suggests 
 
 Before the, the smooth fit regression lines for each of the three possible party affiliations was distinct, with slightly differing slopes and very different (visually) intercepts. Now, however, after we have included party affiliation into our model, we see that all three smooth fit lines for Democrats, Republicans, and Independents have a slope of approximately 0 as well as a 0 intercept. They are all quite similar now, suggesting that in our current model that party affiliation, or lack thereof, has no effect on our residuals.
@@ -267,6 +295,8 @@ tidy(biden_int)
 
 
 ```
+
+
 Comparing feeling warmth between genders inside parties, warmth for male is generally lower than that of for female (39.38202 vs 45.77720 for Republicans and 73.06954 vs 75.51883 for Democrats) but significant. On the other hand, when comparing feelings for Biden between parties for each gender, there appear a large differnce in the numbers with 39.38202 vs 73.06954 for male and 45.77720 vs 75.51883 for female. Similar patterns can be found in 95% confidnet intervals as well. 
 
 
