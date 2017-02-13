@@ -206,8 +206,6 @@ pander(summary(lm_4))
 
 The co-effecients are 39.382, for the intercept, 6.395, for female, 33.688, for dem, and -3.946, for the interactive term of female and dem; the standard errors are 1.455, for the intercept, 2.018, for female, 1.835, for dem. and 2.472, for the interactive term of female and dem.
 
-The relationship between party ID and Biden warmth does appear to differ for males/females. According to the table (95% confidence intervals for four categories of respondents) and plottings below, we can find that  female Republicans have a predicted warmth rating over 6 points higher than their male Republican counterparts.This difference also appears to be significant at the 95% level, since the 95% CI lower bound for for female Republicans, 43.04 is greater than the 95% CI upper bound for male Republicans 42.23). In addition, there is much less difference in the gender's response for the Democratic party than Republican party, the predicted warmth rating for female Democrats is just over 2 points higher than male Democrats (the 95% CI lower bound for for female Democrats, 73.78 is lower than the 95% CI upper bound for male Democrats, 75.26), while there is about 6.4 points higher for female Republicans than male Republican. 
-
 ```{r Interactive-residual}
 #Prediction
 #Create data for prediction
@@ -222,6 +220,10 @@ pred_ci <- mutate(pred_aug,
                   ymax = .fitted + .se.fit * 1.96)
 pander(pred_ci)
 ```
+
+The relationship between party ID and Biden warmth does appear to differ for males/females. According to the table (95% confidence intervals for four categories of respondents) above and plottings below, we can find that  female Republicans have a predicted warmth rating over 6 points higher than their male Republican counterparts.This difference also appears to be significant at the 95% level, since the 95% CI lower bound for for female Republicans, 43.04 is greater than the 95% CI upper bound for male Republicans 42.23). In addition, there is much less difference in the gender's response for the Democratic party than Republican party, the predicted warmth rating for female Democrats is just over 2 points higher than male Democrats (the 95% CI lower bound for for female Democrats, 73.78 is lower than the 95% CI upper bound for male Democrats, 75.26), while there is about 6 points higher for female Republicans than male Republican. 
+
+
 
 ```{r Interactive-plotting}
 # Plotting:
