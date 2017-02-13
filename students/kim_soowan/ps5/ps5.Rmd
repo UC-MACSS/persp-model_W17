@@ -1,0 +1,212 @@
+---
+title: "Problem set #5: linear regression"
+author: "Soo Wan Kim"
+date: "February 12, 2017"
+output:
+  html_document:
+    code_folding: hide
+    keep_md: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+
+library(tidyverse)
+library(modelr)
+library(broom)
+
+set.seed(1234)
+bidenfeels <- read.csv("data/biden.csv")
+```
+
+# Describe the data (1 point)
+
+Plot a histogram of `biden` with a binwidth of `1`. Make sure to give the graph a title and proper $x$ and $y$-axis labels. In a few sentences, describe any interesting features of the graph.
+
+```{r histogram, message=FALSE, warning=FALSE}
+ggplot(data = bidenfeels, mapping = aes(biden)) + 
+  geom_histogram(bindwidth = 1) + 
+  labs(title = "Histogram of Biden warmth",
+       x = "Biden warmth", 
+       y = "Number of observations") + 
+  theme_bw()
+```
+
+The bin with the highest number of observations is 50, the neutral bin. However, there were many more people who felt warmly about Joe Biden than those who felt coldly, indicating that he was popular among respondents.
+
+# Simple linear regression (2 points)
+
+  1. **Is there a relationship between the predictor and the response?**
+  2. **How strong is the relationship between the predictor and the response?**
+  3. **Is the relationship between the predictor and the response positive or negative?**
+
+```{r simple_linear_regression123}
+slr_mod <- lm(biden ~ age, data = bidenfeels)
+tidy(slr_mod)
+```
+
+There is a weak positive relationship between the predictor and the response. The regression output suggests that an increase in age by one year would increase Biden warmth by about `r round(tidy(slr_mod)$estimate[[2]],2)` points.
+
+  4. **Report the $R^2$ of the model. What percentage of the variation in `biden` does `age` alone explain? Is this a good or bad model?**
+
+```{r simple_linear_regression4}
+glance(slr_mod)
+```
+
+The $R^2$ of the model is `r glance(slr_mod)$r.squared`. `age` explains only `r glance(slr_mod)$r.squared*100`% of the variation in `biden`, which suggests this is a bad model.
+
+  5. **What is the predicted `biden` associated with an `age` of 45? What are the associated 95% confidence intervals?**
+
+```{r simple_linear_regression5}
+(pred_ci <- augment(slr_mod, newdata = data.frame(age = 45)) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96))
+```
+
+The predicted `biden` associated with `age` = 45 is `r pred_ci$.fitted`. The associated 95% confidence intervals are (`r pred_ci$ymin`, `r pred_ci$ymax`).
+
+  6. **Plot the response and predictor. Draw the least squares regression line.**
+
+```{r simple_linear_regression6}
+#make grid of data points
+grid <- bidenfeels %>% 
+  data_grid(age) %>% 
+  add_predictions(slr_mod) 
+
+#plot response and predictor + least squares regression line
+ggplot(data = bidenfeels, aes(x = age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1) +
+  labs(title = "Respondent age vs. Biden warmth",
+       x = "Age", 
+       y = "Biden warmth") + 
+  theme_bw() 
+```
+
+
+# Multiple linear regression (2 points)
+
+  1. **Is there a statistically significant relationship between the predictors and response?**
+  2. **What does the parameter for `female` suggest?**
+
+```{r multiple_linear_regression12}
+mlr_mod <- lm(biden ~ age + female + educ, data = bidenfeels)
+tidy(mlr_mod)
+```
+
+There is a statistically significant relationship between the response and the predictors gender and education at the 0.05 level. The parameter for `female` suggests that being female is likely to raise a person's feelings of warmth toward Joe Biden by about 6 points.
+
+  3. **Report the $R^2$ of the model. What percentage of the variation in `biden` does age, gender, and education explain? Is this a better or worse model than the age-only model?**
+  
+```{r multiple_linear_regression3}
+glance(mlr_mod)
+```
+  
+The $R^2$ for this model is `r glance(mlr_mod)$r.squared`. Age, gender, and education explain `r glance(mlr_mod)$r.squared*100`% of the variation in `biden`. This is still pretty low, but an improvement over the age-only model.
+  
+  4. **Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?**
+  
+```{r multiple_linear_regression4, message=FALSE}
+bidenfeels_mlr <- bidenfeels %>%
+  add_predictions(mlr_mod) %>% #add predictions
+  add_residuals(mlr_mod) %>% #add residuals
+  mutate(partyID = "Independent") #create party variable
+bidenfeels_mlr$partyID[bidenfeels$rep == 1] <- "Republican" 
+bidenfeels_mlr$partyID[bidenfeels$dem == 1] <- "Democrat"
+bidenfeels_mlr$partyID <- as.factor(bidenfeels_mlr$partyID) #set as factor variable
+bidenfeels_mlr$partyID <- factor(bidenfeels_mlr$partyID, #reorder (make plot legend more intuitive?)
+                                 levels = c("Democrat", "Republican", "Independent"))
+
+#plot predicted values and residuals + least squares regression lines
+ggplot(data = bidenfeels_mlr, mapping = aes(x = pred, y = resid)) +
+  geom_point() + 
+  geom_smooth(data = bidenfeels_mlr, aes(color = partyID)) + 
+  labs(title = "Predicted Biden warmth vs. residuals, by party",
+       subtitle = "Biden warmth ~ age + gender + education",
+       x = "Predicted Biden warmth", 
+       y = "Residual",
+       color = "Party") + 
+  theme_bw() + 
+  theme(plot.subtitle = element_text(face="italic"))
+```
+
+The model does not take into account party identification, which appears to be a significant factor in the outcome judging by the differences in residual distribution. The model underestimates Biden warmth for Democrats and overestimates it for Republicans.  
+
+# Multiple linear regression model (with even more variables!) (3 points)
+
+  1. **Did the relationship between gender and Biden warmth change?**
+
+```{r multiple_linear_regression2_1}
+mlr2_mod <- lm(biden ~ age + female + educ + dem + rep, data = bidenfeels)
+tidy(mlr2_mod)
+```
+
+The relationship between gender and Biden warmth is weaker with this model, but still positive and statistically significant. Party identification appears to have a much stronger effect than gender.
+
+  2. **Report the $R^2$ of the model. What percentage of the variation in `biden` does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?**
+
+```{r multiple_linear_regression2_2}
+glance(mlr2_mod)
+```
+
+The $R^2$ for this model is `r glance(mlr2_mod)$r.squared`. Age, gender, education, and party identification explain `r glance(mlr2_mod)$r.squared*100`% of the variation in `biden`, much higher than in the previous two models. This model is a significant improvement, at least based on $R^2$.
+  
+  3. **Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?**
+
+```{r multiple_linear_regression2_3, message = FALSE}
+bidenfeels_mlr2 <- bidenfeels %>%
+  add_predictions(mlr2_mod) %>% #add predictions
+  add_residuals(mlr2_mod) %>% #add residuals
+  mutate(partyID = "Independent") #create party variable
+bidenfeels_mlr2$partyID[bidenfeels$rep == 1] <- "Republican" 
+bidenfeels_mlr2$partyID[bidenfeels$dem == 1] <- "Democrat"
+bidenfeels_mlr2$partyID <- as.factor(bidenfeels_mlr2$partyID) #set as factor variable
+bidenfeels_mlr2$partyID <- factor(bidenfeels_mlr2$partyID, #reorder (make plot legend more intuitive?)
+                                 levels = c("Democrat", "Republican", "Independent"))
+
+#plot predicted values and residuals + least squares regression lines
+ggplot(data = bidenfeels_mlr2, mapping = aes(x = pred, y = resid)) +
+  geom_point() + 
+  geom_smooth(data = bidenfeels_mlr2, aes(color = partyID)) + 
+  labs(title = "Predicted Biden warmth vs. residuals, by party",
+       subtitle = "Biden warmth ~ age, gender, education, party identification",
+       x = "Predicted Biden warmth", 
+       y = "Residual",
+       color = "Party") + 
+  theme_bw() + 
+  theme(plot.subtitle = element_text(face="italic"))
+
+```
+
+
+This model generates residuals that are roughly centered around zero for Democrats, Republicans, and independents, which fixes the problem with the previous model.
+
+# Interactive linear regression model (2 points)
+
+  1. **Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?**
+
+```{r interactive}
+bidenfeels_noInd <- bidenfeels %>%
+  filter(rep == 1 | dem == 1) #filter out independents
+
+mlr3_mod <- lm(biden ~ female * dem, data = bidenfeels_noInd) #fit linear model
+tidy(mlr3_mod)
+
+#make grid of values
+int_grid <- bidenfeels_noInd %>% 
+  data_grid(female, dem) %>% 
+  add_predictions(mlr3_mod) 
+
+#get confidence intervals
+(pred_ci <- augment(mlr3_mod, newdata = int_grid) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96))
+  
+```
+
+For both Republicans and Democrats, women exhibit greater warmth for Biden. On the other hand, both male and female Democrats exhibit much greater Biden warmth than either male or female Republicans. The difference in Biden warmth between Democrats and Republicans for men (about `r round((pred_ci$pred[2] - pred_ci$pred[1]), 1)` points) is higher than that for women (about `r round((pred_ci$pred[4] - pred_ci$pred[3]), 1)` points), indicating a stronger negative interaction between party ID and Biden warmth among men than among women. The difference in predicted warmth between males and females for Republicans (about `r round((pred_ci$pred[3] - pred_ci$pred[1]), 1)` points) is higher than that for Democrats (about `r round((pred_ci$pred[4] - pred_ci$pred[2]), 1)` points), indicating a stronger positive interaction between being female and Biden warmth among Republicans.
+
+```{r session_info, include=FALSE}
+devtools::session_info()
+```
+    
