@@ -1,0 +1,167 @@
+---
+title: "Pset5"
+author: "MACS 30100 - Perspectives on Computational Modeling<br> Luxi Han 10449918"
+output: 
+  html_document:
+    toc: true
+    keep_md: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+```
+
+## Problem 1
+
+The following is the graph for the histogram of the variable `biden`:
+
+```{r library}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+```
+
+```{r biden}
+biden_table <- read_csv("data/biden.csv")
+ggplot(biden_table, aes(biden))+
+  geom_histogram(binwidth = 1)+
+  labs(x = "Biden Warmth",
+       y = "Count",
+       title  = 'Biden Warmth Histogram')
+```
+
+  In general people feels positively towards Biden since most of the ratings are above 50 points. But the biggest cohort is the people having 50 points of Biden warmth.
+  
+  Another insteresting fact is that even though the feeling thermometer is ranging from 1 to 100, most people choose a rounding number, most likely mutiples of 10.
+  
+## Problem 2
+  
+```{r biden_simple}
+biden_simple <- lm(biden ~ age, biden_table)
+summary(biden_simple)
+age_predict <- augment(biden_simple, newdata = data.frame(age = c(45)))%>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96)
+print(age_predict)
+```
+According to above results, the following is my answers:
+
+1. There is a relationship between age and the feeling thermometer towards Biden.
+
+2. Although the p-value is close to 0 meaning the null hypothesis that the effect of age on feeling thermometer is 0 can be rejected, the relationship between these two variables are not strong considering the scale of the feeling thermometer. The estimator of the age variable is 0.06240535. This is saying that one year increase in age will increase 0.06240535 point of the feeling thermometer of Biden. This is relatively very small compared to the 1 - 100 rating scale.
+
+3. The relationship between age and the feeling thermometer is positive, meaning the older is the interviewee the more positive his or her attitude towards Biden.
+
+4. The $R_2$ of model is about 0.002018. Approximately 0.2 percent of the variation of the feeling thermometer of Biden can be explained by the age of the interviewee. In general, this is a bad model.
+
+5. The predicted value of the variable `biden` is 62.0056. The 95% confidence interval is $[60.91248, 63.09872]$
+
+6. Below is the graph:
+
+```{r plot_biden_simple}
+biden_reg_line <- biden_table%>%
+  data_grid(age)%>%
+  add_predictions(biden_simple)
+ggplot(biden_reg_line, aes(x = age, y  = pred))+
+  geom_point(aes(y = biden), data = biden_table)+
+  geom_line(aes(colour = "Regression Line"), size = 1.5)+
+  scale_color_manual("", values = c("Regression Line" = "blue"))+
+  labs(x = 'Age',
+       y = 'Biden Warmth',
+       title= 'Biden Warmth vs Age')
+```
+
+
+## Problem 3
+
+```{r biden_multiple}
+biden_multiple <- lm(biden ~ age + female + educ, biden_table)
+summary(biden_multiple)
+```
+
+1. According to the regression result, we can see that gender and education do have relationships with the response variable. But we can't reject the null hypothesis that age and the response variable have no linear relationships.
+
+2. The parameter for females suggests that when education and age are the same, female on average has a 6.19607 point higher feeling thermometer towards Biden compared to their male counterparts.
+
+3. The $R_2$ of this model is about 0.0273. This suggests that this model expalins about 2.73 percent of the variation of the response variable. This model is slightly better than the previous model(even when using adjusted R square).
+
+4. The plot is as following.
+The plot demonstrates a potential problem that the residual value is systematically different for different types of party identification types. Specifically, for democrats, the regression model systematically underestiamtes their Biden warmth (meaning positive residuals). For republicans, the regression model systematically overestiamtes their Biden warmth (meaning negative residual). This suggests that for people with different party affiliations, their average Biden warmth is different.
+
+```{r biden_multiple_graph}
+multiple_predict <- augment(biden_multiple, biden_table)
+multiple_dem = multiple_predict[multiple_predict$dem == 1, ]
+multiple_rep = multiple_predict[multiple_predict$rep == 1, ]
+multiple_no = multiple_predict[(multiple_predict$dem != 1) & (multiple_predict$rep != 1), ]
+ggplot(multiple_predict, aes(.fitted, .resid))+
+  geom_smooth(aes(color = "Democrat"), method = 'lm', data = multiple_dem)+
+  geom_smooth(aes(color = 'Republican'), method = 'lm', data = multiple_rep)+
+  geom_smooth(aes(color = 'Others'), method = 'lm', data = multiple_no)+
+  scale_colour_manual("", values = c("Democrat"="blue", "Republican"="red", "Others"="yellow"))+
+  theme(legend.position="right")+
+  geom_point()+
+  labs(x = "Fitted Value for Biden Warmth",
+       y = "Residual of Linear Regression Model",
+       title = "Fitted Value and Residual Plot")
+```
+
+## Problem 4
+```{r biden_multiple2}
+biden_multiple2 <- lm(biden ~ age + female + educ + dem + rep, biden_table)
+summary(biden_multiple2)
+```
+
+1. The relationship between Biden warmth and gender changes. The magnitude does decrease but the sign of the relationship doesn't change. The estimator dcreseases from 6.19607 to 4.10323.
+
+2. The $R_2$ of the model is 0.2815 and the adjusted R square is 0.2795. Thus, age, gender, education, and party identification jointly exlain 28.15 percent of the variation of Biden warmth.
+
+3. This model does fix the problem in the previous problem. Now the residual values for people with different party affiliation all center around 0.
+
+```{r biden_multiple_graph2}
+multiple_predict2 <- augment(biden_multiple2, biden_table)
+multiple_dem2 = multiple_predict2[multiple_predict$dem == 1, ]
+multiple_rep2 = multiple_predict2[multiple_predict2$rep == 1, ]
+multiple_no2 = multiple_predict2[(multiple_predict2$dem != 1) & (multiple_predict2$rep != 1), ]
+ggplot(multiple_predict2, aes(.fitted, .resid))+
+  geom_smooth(aes(color = "Democrat"), method = 'lm', data = multiple_dem2)+
+  geom_smooth(aes(color = 'Republican'), method = 'lm', data = multiple_rep2)+
+  geom_smooth(aes(color = 'Others'), method = 'lm', data = multiple_no2)+
+  scale_colour_manual("", values = c("Democrat"="blue", "Republican"="red", "Others"="yellow"))+
+  theme(legend.position="right")+
+  geom_point()+
+  labs(x = "Fitted Value for Biden Warmth",
+       y = "Residual of Linear Regression Model",
+       title = "Fitted Value and Residual Plot(Controlling Party Identification)")
+```
+
+## Problem 5
+
+Refer the below regression results for details.
+
+1. The effect of party identification on Biden warmth does differ for male and female. For male, democrats have on 33.688 higher Biden warmth than Republicans. But for female, this number shrink: female democrats on average has 29.742 points higher Biden warmth than female republicans.
+
+2. The relationship between gender and Biden warmth does differ on party identification. For democrats, the difference between different genders is smaller than that of republicans. On average, female democrats have 6.395 - 3.946 = 2.449 points higher Biden warmth than male democrats. But for republicans, female has 6.395 points higher Biden warmth than Republican males. 
+```{r biden_inter}
+biden_filter <- biden_table[(biden_table$dem == 1)|(biden_table$rep == 1), ]
+biden_inter <- lm(biden ~ female * dem, biden_filter)
+summary(biden_inter)
+```
+
+```{r biden_inter_predict}
+inter_pred <- augment(biden_inter, newdata = data.frame(female = c(1, 0, 1, 0), dem = c(1, 1, 0, 0)))
+inter_pred <- inter_pred%>%
+  mutate(ymin = .fitted - 1.96 * .se.fit,
+         ymax = .fitted + 1.96 * .se.fit)
+inter_pred
+```
+
