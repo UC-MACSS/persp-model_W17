@@ -2,7 +2,7 @@
 title: "Biden"
 author: "Huanye Liu"
 date: "2017/2/12"
-output: html_document
+output: md_document
 ---
 
 ```{r read, echo=TRUE}
