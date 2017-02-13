@@ -11,7 +11,7 @@ Yiqing Zhu
 Problem 1: Describe the data
 ----------------------------
 
-![](PS5_files/figure-markdown_github/unnamed-chunk-1-1.png)
+![](PS5_files/figure-markdown_github/unnamed-chunk-3-1.png)
 
 From the histogram shown above, we can see that a lot more people feel positive or neutral (feeling thermometer &gt;= 50) towards Joe Biden, and the percenatge of people who feel neutral(feeling thermometer = 50) towards Joe Biden is the biggest.
 
@@ -70,7 +70,7 @@ The predicted `biden` associated with an `age` of 45 is 62.0056. The associated 
 
 **6. Plot the response and predictor. Draw the least squares regression line.**
 
-![](PS5_files/figure-markdown_github/unnamed-chunk-4-1.png)
+![](PS5_files/figure-markdown_github/unnamed-chunk-6-1.png)
 
 Problem 3: Multiple linear regression
 -------------------------------------
@@ -120,7 +120,7 @@ The *R*<sup>2</sup> of the model is 0.02723, which means that `age`, `gender`, a
 
 **4. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?**
 
-![](PS5_files/figure-markdown_github/unnamed-chunk-6-1.png)
+![](PS5_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
 There is a problem with this model. As shown in the plot above, The overall residuals are not around 0, and Republicans have higher feeling thermometer than predicted, while Democtratics have lower feeling thermometer than predicted. Being in different parties have much effect on the residuals, implying that party should be one of the preditors to the feeling thermometer.
 
@@ -170,7 +170,7 @@ The *R*<sup>2</sup> of the model is 0.2815, which means that `age`, `gender`, `e
 
 **3. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?**
 
-![](PS5_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](PS5_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
 We did fix the previous problem. As shown in the plot above, the residuals are more or less around 0 and that for Democrats, Republicans, and other parties are now in similar range. However, there is still a specific pattern of the three smooth fit lines of residuals, which indicates the inaccuracy of the model.
 
