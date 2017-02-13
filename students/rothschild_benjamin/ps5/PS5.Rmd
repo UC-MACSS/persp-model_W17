@@ -35,10 +35,10 @@ summary(fit)
 ```
 
 #### Q: Is there a relationship between the predictor and the response?  
-Yes there is a relationship between the predictor and response.  We know this because the coefficient for age is not zero (0.06241).
+Yes there is a relationship between the predictor and response.  We know this because the coefficient for age is not zero (0.06241).  THe p-value is .0563 so the variable is significant at the 90% confidence level.
 
 #### Q: How strong is the relationship between the predictor and the response?  
-The relationship between predictor and response is not strong.  We know this because the reported t-statistic is 0.0563 which is only significant at the 0.1 level.
+The relationship between predictor and response is not strong.  We know this because the reported t-statistic is 0.0563 which is only significant at the 0.1 level.  Additionally the coefficient is small.  (A 10 year increase in age only produces a .5 increase in warmth)
 
 #### Q: Is the relationship between the predictor and the response positive or negative?
 The relationship between predictor and response is positive.  We know this because the B1 value is greater than zero (0.06241).  This means that on average older people are warmer towards Joe Biden than younger.
@@ -80,7 +80,7 @@ summary(mlr)
 Yes there is a stasiticaly significant relationship between gender and education level with the response variable.  We know this becasue the P-value shows significance at the .001 level.
 
 #### Q: What does the parameter for female suggest?
-The female paramter which is 6.19 suggests that on average a female will rate biden 6.19 points higher than a male.
+The female paramter which is 6.19 suggests that on average a female will rate biden 6.19 points higher than a male.  This would be when education and age are held constant.
 
 #### Q: Report the R2 of the model. What percentage of the variation in biden does age, gender, and education explain? Is this a better or worse model than the age-only model?
 The R2 of the model is .027 which suggests that this model explains 2.7% of the variation of the response variable.  This is a better model than the age-only model which had a smaller R2.
