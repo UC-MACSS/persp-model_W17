@@ -1,0 +1,199 @@
+---
+title: "Problem set #5: linear regression"
+author: "MACS 30100 - Perspectives on Computational Modeling"
+date: "**Due Monday February 13th at 11:30am**"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+library(tidyverse)
+library(broom)
+library(modelr)
+library(knitr)
+```
+
+[Joe Biden](https://en.wikipedia.org/wiki/Joe_Biden) was the 47th Vice President of the United States. He was the subject of [many memes](http://distractify.com/trending/2016/11/16/best-of-joe-and-obama-memes), [attracted the attention of Leslie Knope](https://www.youtube.com/watch?v=NvbMB_GGR6s), and [experienced a brief surge in attention due to photos from his youth](http://www.huffingtonpost.com/entry/joe-young-hot_us_58262f53e4b0c4b63b0c9e11).
+
+`biden.csv` contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards Joe Biden. The variables are coded as follows:
+
+* `biden` - feeling thermometer ranging from 0-100^[Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.]
+* `female` - 1 if respondent is female, 0 if respondent is male
+* `age` - age of respondent in years
+* `dem` - 1 if respondent is a Democrat, 0 otherwise
+* `rep` - 1 if respondent is a Republican, 0 otherwise
+* `educ` - number of years of formal education completed by respondent
+    * `17` - 17+ years (aka first year of graduate school and up)
+    
+```{r import}
+joe <- read.csv("./data/biden.csv")
+```
+# 1. Describe the data (1 point)
+
+Plot a histogram of `biden` with a binwidth of `1`. Make sure to give the graph a title and proper $x$ and $y$-axis labels. In a few sentences, describe any interesting features of the graph.
+
+```{r describe}
+joe %>%
+  ggplot() + 
+  geom_histogram(aes(x = biden), binwidth = 1) + 
+  labs(title = "Histogram of Joe Biden's Feeling Thermometer Scores", 
+       x = "Joe Biden's feeling score",
+       y = "Frequency")
+```
+
+# 2. Simple linear regression (2 points)
+
+Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1$$
+
+where $Y$ is the Joe Biden feeling thermometer and $X_1$ is age. Report the parameters and standard errors.
+
+```{r 2a,b,c}
+#part (a), (b), (c)
+joe_mod <- lm(biden ~ age, data = joe)
+tidy(joe_mod) %>% 
+  kable()
+```
+
+##a. Is there a relationship between the predictor and the response?  
+Yes, there is a relationship between age and the Joe Biden feeling thermometer at 10% significance level. 
+
+##b. How strong is the relationship between the predictor and the response?  
+The relationship between age and the Joe Biden feeling thermometer is rather strong as the probability of finding the observed results when there is no relationship between age and the Joe Biden feeling thermometer is 5.63%.
+
+##c. Is the relationship between the predictor and the response positive or negative?  
+The relationship betweeen age and Joe Biden feeling thermometer is positive. A year increase in age results in an increase of 0.0624 in the Joe Biden feeling thermometer. 
+
+##d. Report the $R^2$ of the model. What percentage of the variation in biden does age alone explain? Is this a good or bad model?
+```{r 2d}
+#part (d)
+glance(joe_mod) %>%
+  kable()
+```
+
+The $R^2$ of the model is 0.00202. `age` alone explains 0.2% of the variation in `biden`. This is a bad model as a good model should be able to capture almost all the variation in `biden` and the $R^2$ would be close to 1. 
+
+##e. What is the predicted biden associated with an age of 45? What are the associated 95% confidence intervals?    
+```{r 2e}
+#part(e)
+newdata <- data.frame(age = 45)
+
+predict(joe_mod, newdata, interval = "confidence") %>%
+  kable(colnames(c("Predicted", "5% CI", "95% CI")))
+
+```
+
+
+##f. Plot the response and predictor. Draw the least squares regression line.   
+```{r 2f}
+joe %>%
+  ggplot() + 
+  geom_point(aes(x=age, y=biden)) + 
+  geom_smooth(aes(x = age, y = biden)) + 
+  labs(title = "Joe Biden Feeling Thermometer and Age",
+       y = "Joe Biden Feeling Thermometer Score", 
+       x = "Age")
+```
+
+
+# 3. Multiple linear regression (2 points)
+
+It is unlikely `age` alone shapes attitudes towards Joe Biden. Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, and $X_3$ is education. Report the parameters and standard errors.
+
+```{r multivariate}
+joe_mod2 <- lm(biden ~ age + female + educ, data = joe) 
+tidy(joe_mod2) %>%
+  kable()
+
+summary(joe_mod2)
+```
+
+##a. Is there a statistically significant relationship between the predictors and response?  
+There is a statistically significant relationship between the predictors and the Joe Biden feeling thermometer. The joint null hypothesis where age, gender and education all have no relationship between the Joe Biden feeling thermometer is rejected at 1% significance level, as the p-value of the model is $8.86 * 10^-11$.  
+  
+Individually, female and education have statistically significant relationship with the Joe Biden feeling thermometer at 1% significance level. The p-value of female and education is 0.00 and $7.94 * 10^-5$. However, age does not have a statiscally significant at 1%, 5% and 10% significance level. The p-value for age is 0.1975. 
+
+##b. What does the parameter for female suggest?  
+The estimated coefficient for `female` suggests that an average female has a higher feeling thermometer score towards Joe Biden by 6.197 than an average male.
+
+##c. Report the $R^2$ of the model. What percentage of the variation in biden does age, gender, and education explain? Is this a better or worse model than the age-only model?  
+```{r 3c}
+glance(joe_mod2) %>%
+  kable()
+```
+
+The $R^2$ of the model is 0.0272. `age`, `gender` and `education` explains 2.72% of the variation in `biden`. It is a better model than the age-only model, as it explains for more variation in `biden`. 
+
+##d. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?
+
+There is a problem with this model. The plot shows that there are different effects on the residual values for each party affliation. This suggests that party affliation should be included in the model, as democrats-affliated, republican-affliated and politically independent individuals should be differentiated in the model. 
+
+```{r 3d}
+joe3d <- joe %>%
+  add_predictions(joe_mod2) %>%
+  add_residuals(joe_mod2) 
+
+demo <- joe3d %>%
+  subset(dem == 1)
+
+repu <- joe3d %>%
+  subset(rep == 1)
+
+ind <- joe3d %>% 
+  subset(dem == 0 & rep == 0)
+
+ggplot() + 
+  geom_point(data = joe3d, aes(x = pred, y = resid)) + 
+  geom_smooth(data = demo, aes(x = pred, y = resid, color = "Democrat")) + 
+  geom_smooth(data = repu, aes(x = pred, y = resid, color = "Republican")) + 
+  geom_smooth(data = ind, aes(x = pred, y = resid, color = "Independent")) + 
+  labs(title = "Predicted Values and Residuals with Smooth-fit lines for party IDs", 
+       x = "Predicted Values of Joe Biden Feeling Thermometer",
+       y = "Residuals") +
+  theme_bw()
+
+```
+
+# Multiple linear regression model (with even more variables!) (3 points)
+
+Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.^[Independents must be left out to serve as the baseline category, otherwise we would encounter perfect multicollinearity.] Report the parameters and standard errors.
+
+```{r multivariate4}
+joe_mod3 <- lm(biden ~ age + female + educ + dem + rep, data = joe) 
+tidy(joe_mod3) %>%
+  kable()
+
+```
+##a. Did the relationship between gender and Biden warmth change?
+Yes, the relationship between gender and Biden warmth became less positive, changing from 6.197 to 4.103. 
+
+##b. Report the $R^2$ of the model. What percentage of the variation in biden does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
+```{r 4b}
+summary(joe_mod3)
+
+```
+
+1. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?
+
+# Interactive linear regression model (2 points)
+
+Let's explore this relationship between gender and Biden warmth more closely. Perhaps the effect of gender on Biden warmth differs between partisan affiliation. That is, not only do we need to account for the effect of party ID in our linear regression model, but that gender has a different effect for Democrats and Republicans. Democrats are already predisposed to favor Joe Biden and have warm thoughts about him, whereas Republicans are predisposed to dislike him. But because Biden is so charming, he can woo female Republicans better than male Republicans. This suggests an **interactive** relationship between gender and party ID.
+
+Filter your dataset to remove any independent respondents (keeping only those who identify as Democrats or Republicans), and estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_{1}X_{2}$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is gender, and $X_2$ is Democrat. Report the parameters and standard errors.
+
+1. Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?
