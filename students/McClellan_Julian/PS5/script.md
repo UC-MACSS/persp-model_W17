@@ -141,7 +141,7 @@ The *R*<sup>2</sup> of the model is 0.0272273. Thus, the percentage of variation
 
 ![](script_files/figure-markdown_github/residpredplot-1.png)
 
-There is indeed a problem in the model. By plotting 3 smooth fit regression lines for the residuals on the predicted values of warmth score for each of the three possible affiliations (Democrat, Republican, and Independent), we see that being a Democrat, Indepndent, or Republican have distinct effects on the residual values! This suggests that we should include party affiliation within our model, as we want to integrate these separate party effects into our model.
+There is indeed a problem in the model. By plotting 3 smooth fit regression lines and corresponding 95% confidence intervals for the residuals on the predicted values of warmth score for each of the three possible affiliations (Democrat, Republican, and Independent), we see that being a Democrat, Independent, or Republican have distinct effects on the residual values! This suggests that we should include party affiliation within our model, as we want to integrate these separate party effects into our model.
 
 Multiple Linear Regression Model (More Variable)
 ================================================
@@ -174,7 +174,7 @@ The *R*<sup>2</sup> of the model is 0.2815391. Thus, the percentage of variation
 
 ![](script_files/figure-markdown_github/residpredplot2-1.png)
 
-We did indeed fix the previous problem. Before the, the smooth fit regression lines for each of the three possible party affiliations was distinct, with slightly differing slopes and very different (visually) intercepts. Now, however, after we have included party affiliation into our model, we see that all three smooth fit lines for Democrats, Republicans, and Independents have a slope of approximately 0 as well as a 0 intercept. They are all quite similar now, suggesting that in our current model that party affiliation, or lack thereof, has no effect on our residuals.
+We did indeed fix the previous problem. Before the, the smooth fit regression lines and corresponding confidence intervals for each of the three possible party affiliations was distinct, with slightly differing slopes and very different (visually) intercepts. Now, however, after we have included party affiliation into our model, we see that all three smooth fit lines for Democrats, Republicans, and Independents have a slope of approximately 0 as well as a 0 intercept. They are all quite similar now, suggesting that in our current model that party affiliation, or lack thereof, has no effect on our residuals.
 
 Note however, that there is still a distinct pattern to the residuals. While this is not ideal, it is because `age`, and years of education (`educ`) are only measured as integers in our data, and since we did not include them as factors (which would be cumbersome, to be honest) in our model, they are treated as if they exist in the real numbers.
 
