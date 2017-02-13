@@ -1,7 +1,15 @@
 
+problem set PS5
+==================
+
+by Zhuo Leng
+------------------
+2/13/2017
+------------------
+
+
 ```R
-Describe the data (1 point)
-===========================
+###problem 1 
 library(ggplot2)
 install.packages("dplyr")
 library(dplyr)
@@ -18,20 +26,19 @@ ggplot(data = biden_data, aes(x=biden)) +
 
 ```
 
-![png](output_0_2.png)
+![png](output_1_2.png)
 
 
 
 Problem 1:
+------------------
 
 
 There are some interesting features shown by the histogram. Answer given by people are not cover all intergers. Most people will give a number looks like of 50,55,60,65,70. What's more, most feeling thermometer towards Biden are in the range of 50-80, which can indicate positive feeling of people.
 
 
-##################################
-
 Problem 2 simple linear regression
-##################################
+------------------
 
 
 ```R
@@ -118,13 +125,12 @@ ggplot(biden_data, aes(x = age)) +
 
 
 
-![png](output_7_1.png)
+![png](output_8_1.png)
 
 
-########################################
 
 Problem3. Multi linear regression
-########################################
+------------------
 
 
 
@@ -215,7 +221,7 @@ ggplot(grid2, aes(.fitted, .resid)) +
 
 
 
-![png](output_13_1.png)
+![png](output_14_1.png)
 
 
 4.This model seems has several problems. First, from the plot, We could clearly see there is a pattern in residual scatter plot. Actually, if the model fit well, the residual should randomly distributed with mean = 0. It should not has certain pattern. Second, the three different party types have different biden score value. So we need to add party ID variables in our model to make it more accurate.
@@ -312,15 +318,14 @@ ggplot(grid3, aes(.fitted, .resid)) +
 
 
 
-![png](output_21_1.png)
+![png](output_22_1.png)
 
 
  3.By adding variables for party ID to the regression model,we fix the previous problem. The residual value are now seems more randomly distributed around 0 now.
 
-#############################################
 
 problem4: Interactive Linear regression model
-#############################################
+------------------
 
 
 ```R
