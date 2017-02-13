@@ -1,3 +1,13 @@
+-   [Problem 1. Describe the data](#problem-1.-describe-the-data)
+-   [Problem 2. Simple linear
+    regression](#problem-2.-simple-linear-regression)
+-   [Problem 3. Multiple linear
+    regression](#problem-3.-multiple-linear-regression)
+-   [Problem 4. Multiple linear regression with more
+    variables](#problem-4.-multiple-linear-regression-with-more-variables)
+-   [Problem 5. Interactive linear
+    regression model.](#problem-5.-interactive-linear-regression-model.)
+
 1 Describe the data
 -------------------
 
