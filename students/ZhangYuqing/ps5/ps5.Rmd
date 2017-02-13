@@ -24,7 +24,8 @@ qplot(mydata$biden,
       geom="histogram",
       binwidth = 1,  
       main = "Histogram for biden", 
-      xlab = "biden")
+      xlab = "biden",
+      ylab = 'Frequency count of individuals')
 ```
 
 The graph is not continuous, with high counts at some point for example, at a feeling thermometer of 70 and then suddenly drops to a very low count, for example, to 20 at a feeling thermomether of 75. More people feel positive or neutral towards biden. 
@@ -64,7 +65,10 @@ grid <- grid %>%
 
 ggplot(mydata, aes(x = age)) +
   geom_point(aes(y = biden)) +
-  geom_line(aes(y =pred ), data = grid, color = "red", size = 1)
+  geom_line(aes(y =pred ), data = grid, color = "red", size = 1) +
+  labs(title = "Relationship between Agef and Biden Feeling",
+        x = "Age",
+        y = "Biden Feeling")  
 ```
 
 ##Problem3: Multiple Linear Regression
@@ -114,7 +118,7 @@ lm.4<-lm(formula = biden ~ age+female+educ+dem+rep, data=mydata)
 summary(lm.4)
 ```
 
-The parameter beta0 is 58.8113, beta1 is 0.0483, std error is 3.12444, beta2 is 4.1032,std error is 0.02825. beta_3 is -0.3453, std error is 0.19478. beta4 is 15.4243, std error is 1.06803. beta5 is -15.8495, std error is 1.31136.
+The parameter beta0 is 58.8113, beta1 is 0.0483, std error is 3.12444, beta2 is 4.1032,std error is 0.02825. beta3 is -0.3453, std error is 0.19478. beta4 is 15.4243, std error is 1.06803. beta5 is -15.8495, std error is 1.31136.
 
 1. The parameter for gender in problem3 was larger than 4.10323. When we hold constant party identification in addition to age and education,the relationship between gender and Biden warmth becomes smaller, which means the ratings of feeling thermometer towards Biden of a female respondent than a male respondent is lower
 
@@ -165,7 +169,6 @@ grid4 <- grid4 %>%
                    ymin = .fitted - .se.fit * 1.96,
                    ymax = .fitted + .se.fit * 1.96))
 
-pred_ci_2
 ```
 
 The predicted Biden warmth feeling thermometer ratings for female Democrats is 75.51883, the 95% confidence intervals are 73.78813 and 77.25953; 45.7772 for female Republicans and 95% confidence intervals are 43.03778 and 48.51662; 73.06954 for male Democrats, 95% confidence intervals are 70.87959 and 75.2595; 39.38202 for male Republicans and  95% confidence intervals are 36.52951 and 42.23453.
