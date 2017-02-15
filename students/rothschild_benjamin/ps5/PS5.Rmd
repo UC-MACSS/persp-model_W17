@@ -1,0 +1,169 @@
+---
+title: "PS5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(ggplot2)
+library(modelr)
+library(dplyr)
+library(broom)
+biden <- read_csv("~/Desktop/biden.csv")
+```
+
+## Describe the Data
+
+Below is a temperature histogram of how people feel towards Joe Biden (0 indicates cold 100 indicates warm)
+
+```{r biden graph}
+ggplot( data = biden, mapping = aes(x=biden)) + 
+        geom_histogram(binwidth = 1) + 
+        labs( x ="Warmth towards Joe Biden", 
+              y="Number of People",
+              title="Feeling thermometer towards Joe Biden")
+```
+
+It appears that most respondents answer the question in an interval of 5 which makes sense on such a wide range of possible answers.  The distribution is not uniform, it looks slightly skewed to the right with the median and mean above 50, however the mode is 50.
+
+## Simple Linear Regression
+
+```{r biden linear regression}
+fit <- lm(biden ~ age, data=biden)
+summary(fit) 
+```
+
+#### Q: Is there a relationship between the predictor and the response?  
+Yes there is a relationship between the predictor and response.  We know this because the coefficient for age is not zero (0.06241).  THe p-value is .0563 so the variable is significant at the 90% confidence level.
+
+#### Q: How strong is the relationship between the predictor and the response?  
+The relationship between predictor and response is not strong.  We know this because the reported t-statistic is 0.0563 which is only significant at the 0.1 level.  Additionally the coefficient is small.  (A 10 year increase in age only produces a .5 increase in warmth)
+
+#### Q: Is the relationship between the predictor and the response positive or negative?
+The relationship between predictor and response is positive.  We know this because the B1 value is greater than zero (0.06241).  This means that on average older people are warmer towards Joe Biden than younger.
+
+#### Q: Report the R2 of the model. What percentage of the variation in biden does age alone explain? Is this a good or bad model?
+The R2 is 0.002018 which means this model explains 0.2% of the varaition.  This is very low.
+
+#### Q: What is the predicted biden associated with an age of 45? What are the associated 95% confidence intervals?
+At age 45, the predicted value is 59.19736 + 45*0.06241 = 62.00581.  The 95% confidence interval is 60.91177 - 63.09943.
+
+```{r confidence}
+newdata = data.frame(age=45)
+predict(fit, newdata, interval="confidence") 
+```
+
+#### Q: Plot the response and predictor. Draw the least squares regression line.
+```{r biden plot}
+grid <- biden %>% 
+  data_grid(age) 
+grid <- grid %>% 
+  add_predictions(fit)
+ggplot(biden, aes(x=age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "#000000", size = 1) +
+  labs(x = "Age", 
+       y = "Feeling Thermometer", 
+      title = "Age vs Feeling Thermometer towards Joe Biden") +
+      theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Multiple Linear Regression
+
+```{r biden multiple linear regression}
+mlr <- lm(biden ~ age + female + educ, data = biden)
+summary(mlr) 
+```
+
+#### Q: Is there a statistically significant relationship between the predictors and response?
+Yes there is a stasiticaly significant relationship between gender and education level with the response variable.  We know this becasue the P-value shows significance at the .001 level.
+
+#### Q: What does the parameter for female suggest?
+The female paramter which is 6.19 suggests that on average a female will rate biden 6.19 points higher than a male.  This would be when education and age are held constant.
+
+#### Q: Report the R2 of the model. What percentage of the variation in biden does age, gender, and education explain? Is this a better or worse model than the age-only model?
+The R2 of the model is .027 which suggests that this model explains 2.7% of the variation of the response variable.  This is a better model than the age-only model which had a smaller R2.
+
+#### Q: Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?
+
+```{r residual plot}
+biden %>%
+  add_predictions(mlr) %>%
+  add_residuals(mlr) -> data2
+
+grid_dem <- filter(data2, dem == 1)
+grid_rep <- filter(data2, rep == 1)
+grid_ind <- filter(data2, dem == 0 & rep == 0)
+
+ggplot(data2, aes(pred)) +
+  geom_point(aes(y = resid)) +
+  geom_smooth(method = "loess", aes(y = resid, color = "Democratic" ), data = grid_dem) +
+  geom_smooth(method = "loess", aes(y = resid, color= "Republican"), data = grid_rep) +
+  geom_smooth(method = "loess", aes(y = resid, color= "Independent"), data = grid_ind) +
+  labs(title = "Predicted Values vs Residuals",
+        x = "Predicted feeling thermometer",
+        y = "Residuals") + 
+  scale_color_manual(name = "Party identification",
+                     breaks = c("Democratic", "Republican", "Independent"),
+                     values = c("#0074D9", "#FF4136", "#FF851B")) +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5))
+```
+The residual plot shows a problem with the model because the average residual values are so different for each political party.  For example the residual for Democrats averages about 10, independent 0 and Republican -10.  This suggests that political party could be a good predictor of feelings towards Joe Biden.
+
+## Multiple linear regression model (with even more variables!) 
+
+```{r biden multiple linear regression 2}
+mlr2 <- lm(biden ~ age + female + educ + dem + rep, data = biden)
+summary(mlr2) 
+```
+#### Q: Did the relationship between gender and Biden warmth change?
+The relationship between warthm and gender changed.  Now the coeficient for gender (female) is 4.1 now instead of 6.19 before.
+
+#### Q: Report the $R^2$ of the model. What percentage of the variation in biden does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
+The $R^2$ is .2815 which is better than all the previous models.  This means that 28.15% of the variation in warmth is explained by the model.
+
+#### Q: Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?
+
+```{r residual plot 2}
+biden %>%
+  add_predictions(mlr2) %>%
+  add_residuals(mlr2) -> data2
+
+grid_dem <- filter(data2, dem == 1)
+grid_rep <- filter(data2, rep == 1)
+grid_ind <- filter(data2, dem == 0 & rep == 0)
+
+ggplot(data2, aes(pred)) +
+  geom_point(aes(y = resid)) +
+  geom_smooth(method = "loess", aes(y = resid, color = "Democratic" ), data = grid_dem) +
+  geom_smooth(method = "loess", aes(y = resid, color= "Republican"), data = grid_rep) +
+  geom_smooth(method = "loess", aes(y = resid, color= "Independent"), data = grid_ind) +
+  labs(title = "Predicted Values vs Residuals 2nd Model",
+        x = "Predicted feeling thermometer",
+        y = "Residuals") + 
+  scale_color_manual(name = "Party identification",
+                     breaks = c("Democratic", "Republican", "Independent"),
+                     values = c("#0074D9", "#FF4136", "#FF851B")) +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5))
+```
+
+We were able to improve the model.  The residuals for each party is closer to 0 which is the ideal outcome.
+
+## Interactive linear regression model (2 points)
+
+```{r interactive model}
+non_ind <- filter(biden, dem == 1 | rep == 1)
+biden_gen_par <- lm(biden ~ female * dem, data = non_ind)
+summary(biden_gen_par)
+
+```{r biden predict}
+inter_pred <- augment(biden_gen_par, newdata = data.frame(female = c(1, 0, 1, 0), dem = c(1, 1, 0, 0)))
+inter_pred <- inter_pred%>%
+  mutate(ymin = .fitted - 1.96 * .se.fit,
+         ymax = .fitted + 1.96 * .se.fit)
+inter_pred
+```
+The above table shows the predictions along with the 95% confidence interval for the four senarios.  As can be seen in the data, for republicans the difference between biden warmth increases by 6.4 points (43.7 - 39.3) between females and males whereas for democrats females rate biden 2.5 points more.  This suggests that gender influences democrats and republicans differently for this survey question.  The effect of party identification on Biden warmth does differ for male and female. For male, democrats have on 30.51 higher Biden warmth than Republicans. But for female, this number shrink: female democrats on average has 33.68 points higher Biden warmth than female republicans.
+
+
