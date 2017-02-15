@@ -1,0 +1,180 @@
+---
+title: "PS5 - Shen Han"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+```
+
+```{r}
+biden <- read_csv('data/biden.csv')
+names(biden)
+```
+
+### Describe the Data
+
+```{r}
+ggplot(biden, aes(biden)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = 'Attitudes towards Joe Biden',
+       x = 'Feeling Theromometer',
+       y = 'Frequency Count')
+```
+
+As we can see from the graph, the feeling scores are mostly greater than 50. Also, the scores are generally concentrated at multiple of 10, i.e. 30, 40, 50, 60, 70, etc.
+
+### Simple Linear Regression
+```{r}
+biden_lm <- lm(biden ~ age, data = biden)
+summary(biden_lm)
+```
+
+```{r}
+grid <- biden %>%
+  data_grid(age) %>%
+  add_predictions(biden_lm)
+grid
+```
+
+#### 1.
+It seems to have a relationship between the predictor and the response. The higher the age, the higher the response. This observation is also backed by the positive coefficient of `age` on a 0.1 \alpha level.
+
+#### 2.
+The relationship is not very strong. It is about 0.06241, with a vulnerable significant level of 0.1.
+
+#### 3.
+Positive, because the coefficient of age is 0.06241.
+
+#### 4.
+The adjusted R-squared is 0.001465, which means `age` alone explains about 1% of the variation in `biden`. Therefore, it is not a good model from the aspect of goodness of fit.
+
+#### 5.
+```{r}
+(pred_aug <- augment(biden_lm, newdata = data_frame(age = c(45))) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96, 
+         ymax = .fitted + .se.fit * 1.96))
+```
+ The predicted `biden` associated with an `age` of 45 is 62.0056. The associated 95% confidence interval is (60.91248, 63.09872)
+ 
+#### 6.
+```{r}
+ggplot(biden, aes(age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid) +
+  labs(title = 'Least Squares Regression of Age and Feeling Score',
+       y = 'Feeling Score')
+```
+
+### Multiple Linear Regression
+```{r}
+biden_lm2 <- lm(biden ~ age + female + educ, data = biden)
+summary(biden_lm2)
+```
+
+Except for `age`, the other two predictors are statistically significant at 0.001 level. `age` is not statistically significant at all.
+
+#### 2. 
+
+It suggests with age and education level hold constant, feeling scores given by female is around 6.2 higher than male.
+
+#### 3.
+
+The adjusted R-squared is 0.02561, which means age, gender, and education explain about 2.5% of the feeling score. It is a better model than the first one in consideration of R-squared, but still not good enough.
+
+#### 4.
+
+```{r}
+biden %>% 
+  select(age, educ, female, biden, dem, rep) %>%
+  add_predictions(biden_lm2, var = 'pred0') %>%
+  add_residuals(biden_lm2) %>%
+  {.} -> grid
+
+ggplot(grid, aes(pred0, resid)) +
+  labs(title = 'Comparing the Predicted Values and Residuals',
+       y = 'Residual value',
+       x = 'Predicted score') +
+  geom_point() +
+  geom_smooth(aes(color = "DEM"), data = filter(grid, dem == 1), method = lm) +
+  geom_smooth(aes(color = "REP"), data = filter(grid, rep == 1), method = lm) +
+  geom_smooth(aes(color = "IND"), data = filter(grid, (dem == 0) & (rep == 0)), method = lm)
+```
+
+Yes. From the plot above we can see that different party affiliation have different level of residual. Therefore, we should include party affiliation variables in our model.
+
+### Multiple linear regression model
+```{r}
+biden_lm3 = lm(biden ~ age + female + educ + dem + rep, data = biden)
+summary(biden_lm3)
+```
+#### 1.
+The coefficient of `female` change from 6.19607 to 4.10323, which indicates a slightly decrement of score from female. But the direction of `female` towards feeling score is still positive.
+
+#### 2. 
+The adjusted R-squared is 0.2795, which means 27.95% of the variation in `biden` is explained by age, gender, education, and party identification. Comparing to the previous 0.02561 R-squared, it is a better model in terms of fit.
+
+#### 3.
+```{r}
+biden %>%
+  select(age, educ, female, biden, dem, rep) %>%
+  add_predictions(biden_lm3, var = 'pred0') %>%
+  add_residuals(biden_lm3) %>%
+  {.} -> grid
+
+griddem = filter(grid, dem == 1)
+gridrep = filter(grid, rep == 1)
+gridind = filter(grid, dem == 0 & rep == 0)
+
+dem_resid_lm = lm(resid ~ pred0, data = griddem)
+rep_resid_lm = lm(resid ~ pred0, data = gridrep)
+ind_resid_lm = lm(resid ~ pred0, data = gridind)
+
+griddem %>%
+  add_predictions(dem_resid_lm) %>%
+  {.} -> griddem
+
+gridrep %>%
+  add_predictions(rep_resid_lm) %>%
+  {.} -> gridrep
+
+gridind %>%
+  add_predictions(ind_resid_lm) %>%
+  {.} -> gridind
+
+ggplot(grid, aes(pred0, resid)) +
+  labs(title = 'Comparing the Predicted Values and Residuals',
+       y = 'Residual value',
+       x = 'Predicted score') +
+  geom_point() +
+  geom_smooth(aes(y = pred, color = "DEM"), data = griddem) +
+  geom_smooth(aes(y = pred, color = "REP"), data = gridrep) +
+  geom_smooth(aes(y = pred, color = "IND"), data = gridind) 
+```
+
+We slightly fixed the problem. As we can tell from the graph above, the residual value of all three parties are about 0, which means party affiliation do not have significant influence on residuals.
+
+### Interactive linear regression model
+```{r}
+biden_po_mod <- biden %>% 
+  filter(dem == 1 | rep == 1)  %>%
+  lm(biden ~ female * dem, data = .)
+
+biden_po_mod$model %>%
+    data_grid(female, dem) %>%
+    augment(biden_po_mod, newdata = .) %>%
+    mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96) %>%
+    mutate(gender = ifelse(female == 0, "Male", "Female"),
+         party = ifelse(dem == 0, "Republican", "Democrat")) %>%
+    {.} -> pred_ci_gender_party
+pred_ci_gender_party
+```
+
+The relationship between party affiliation and Biden warmth do differ for males and females, since in both Democrat and Republican party, Biden warmth score from female (75.51883, 45.77720) are higher than their male counterparts (73.06954, 39.38202).
+
+The relationship between gender and Biden warmth also differ for Democrats and Republicans, since the prarameters and corresponding confident intervals of Democrats male/female (73.06954, 75.51883) are higher than their Republican counterparts (39.38202, 45.77720). 
