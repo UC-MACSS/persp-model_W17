@@ -55,9 +55,9 @@ Linear models
 
 Linear models are the simplest functional form to understand. They adopt a generic form
 
-*Y* = *β*<sub>0</sub> + *β*<sub>1</sub>*X*
+*Y*???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>*X*
 
-where *y* is the **outcome of interest**, *x* is the **explanatory** or **predictor** variable, and *β*<sub>0</sub> and *β*<sub>1</sub> are **parameters** that vary to capture different patterns. In algebraic terms, *β*<sub>0</sub> is the **intercept** and *β*<sub>1</sub> the **slope** for the linear equation. Given the empirical values you have for *x* and *y*, you generate a **fitted model** that finds the values for the parameters that best fit the data.
+where *y* is the **outcome of interest**, *x* is the **explanatory** or **predictor** variable, and *??*<sub>0</sub> and *??*<sub>1</sub> are **parameters** that vary to capture different patterns. In algebraic terms, *??*<sub>0</sub> is the **intercept** and *??*<sub>1</sub> the **slope** for the linear equation. Given the empirical values you have for *x* and *y*, you generate a **fitted model** that finds the values for the parameters that best fit the data.
 
 ``` r
 ggplot(sim1, aes(x, y)) + 
@@ -66,7 +66,7 @@ ggplot(sim1, aes(x, y)) +
 
 ![](linear_regression_files/figure-markdown_github/sim-plot-1.png)
 
-This looks like a linear relationship. We could randomly generate parameters for the formula *y* = *β*<sub>0</sub> + *β*<sub>1</sub> \* *x* to try and explain or predict the relationship between *x* and *y*:
+This looks like a linear relationship. We could randomly generate parameters for the formula *y*???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>???\*???*x* to try and explain or predict the relationship between *x* and *y*:
 
 ``` r
 models <- tibble(
@@ -104,7 +104,7 @@ ggplot(dist1, aes(x1, y)) +
 
 ![](linear_regression_files/figure-markdown_github/sim-error-1.png)
 
-To estimate a linear regression model in R, we use the `lm()` function. The `lm()` function takes two parameters. The first is a **formula** specifying the equation to be estimated (`lm()` translates `y ~ x` into *y* = *β*<sub>0</sub> + *β*<sub>1</sub> \* *x*). The second is the data frame containing the variables:
+To estimate a linear regression model in R, we use the `lm()` function. The `lm()` function takes two parameters. The first is a **formula** specifying the equation to be estimated (`lm()` translates `y ~ x` into *y*???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>???\*???*x*). The second is the data frame containing the variables:
 
 ``` r
 sim1_mod <- lm(y ~ x, data = sim1)
@@ -164,7 +164,7 @@ grid <- sim1 %>%
 grid
 ```
 
-    ## # A tibble: 10 × 1
+    ## # A tibble: 10 ?? 1
     ##        x
     ##    <int>
     ## 1      1
@@ -186,7 +186,7 @@ grid <- grid %>%
 grid
 ```
 
-    ## # A tibble: 10 × 2
+    ## # A tibble: 10 ?? 2
     ##        x      pred
     ##    <int>     <dbl>
     ## 1      1  6.272355
@@ -223,7 +223,7 @@ sim1 <- sim1 %>%
 sim1
 ```
 
-    ## # A tibble: 30 × 3
+    ## # A tibble: 30 ?? 3
     ##        x         y        resid
     ##    <int>     <dbl>        <dbl>
     ## 1      1  4.199913 -2.072442018
@@ -387,7 +387,7 @@ grid <- credit %>%
 grid
 ```
 
-    ## # A tibble: 387 × 1
+    ## # A tibble: 387 ?? 1
     ##    limit
     ##    <int>
     ## 1    855
@@ -408,7 +408,7 @@ grid <- grid %>%
 grid
 ```
 
-    ## # A tibble: 387 × 2
+    ## # A tibble: 387 ?? 2
     ##    limit       pred
     ##    <int>      <dbl>
     ## 1    855 -146.04062
@@ -545,7 +545,7 @@ augment(credit_limit) %>%
   tbl_df()
 ```
 
-    ## # A tibble: 400 × 9
+    ## # A tibble: 400 ?? 9
     ##    balance limit   .fitted  .se.fit      .resid        .hat   .sigma
     ##      <int> <int>     <dbl>    <dbl>       <dbl>       <dbl>    <dbl>
     ## 1      333  3606  326.1335 13.00598    6.866470 0.003100247 233.8787
@@ -611,7 +611,7 @@ Generating predicted values with confidence intervals
 (pred_data <- data_frame(limit = c(2000, 5000, 10000)))
 ```
 
-    ## # A tibble: 3 × 1
+    ## # A tibble: 3 ?? 1
     ##   limit
     ##   <dbl>
     ## 1  2000
@@ -667,7 +667,7 @@ tidy(credit_limit_income)
     ## 2       limit    0.2643216  0.005879729  44.95471 7.717386e-158
     ## 3      income   -7.6633230  0.385072058 -19.90101  1.260933e-61
 
-Now that we have two predictor variables in our model, remember how to accurately interpret these results. *β*<sub>*j*</sub> is interpreted as the **average** effect of *Y* of a one unit increase in *X*<sub>*j*</sub>, **holding all other predictors constant**. So the parameter for credit limit tells us the estimated effect on credit card balance of a $1 increase in the individual's credit limit, after controlling for the effects of income.
+Now that we have two predictor variables in our model, remember how to accurately interpret these results. *??*<sub>*j*</sub> is interpreted as the **average** effect of *Y* of a one unit increase in *X*<sub>*j*</sub>, **holding all other predictors constant**. So the parameter for credit limit tells us the estimated effect on credit card balance of a $1 increase in the individual's credit limit, after controlling for the effects of income.
 
 Qualitative predictors
 ----------------------
@@ -678,7 +678,7 @@ Predictor variables are frequently **quantitative**, but this is not a guarantee
 select(credit, gender, student, married, ethnicity)
 ```
 
-    ## # A tibble: 400 × 4
+    ## # A tibble: 400 ?? 4
     ##    gender student married        ethnicity
     ##     <chr>   <chr>   <chr>            <chr>
     ## 1    Male      No     Yes        Caucasian
@@ -746,7 +746,7 @@ credit %>%
          female_f = factor(female, levels = 0:1, labels = c("Male", "Female")))
 ```
 
-    ## # A tibble: 400 × 4
+    ## # A tibble: 400 ?? 4
     ##    gender gender_f female female_f
     ##     <chr>   <fctr>  <dbl>   <fctr>
     ## 1    Male     Male      0     Male
@@ -814,7 +814,7 @@ But is this really a safe assumption? After all, an individual's income is based
 
 We should therefore relax this assumption by **interacting** income and age. The new linear regression model looks like
 
-*Y* = *β*<sub>0</sub> + *β*<sub>1</sub>*X*<sub>1</sub> + *β*<sub>2</sub>*X*<sub>2</sub> + *β*<sub>3</sub>*X*<sub>1</sub>*X*<sub>2</sub>
+*Y*???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>*X*<sub>1</sub>???+???*??*<sub>2</sub>*X*<sub>2</sub>???+???*??*<sub>3</sub>*X*<sub>1</sub>*X*<sub>2</sub>
 
 where *X*<sub>1</sub> is income and *X*<sub>2</sub> is age. To specify this model in R, we write the following code:
 
@@ -925,9 +925,9 @@ ggplot(horse_pred, aes(horsepower)) +
 
 ![](linear_regression_files/figure-markdown_github/auto-1.png)
 
-Is a linear regression line of the form mpg = *β*<sub>0</sub> + *β*<sub>1</sub>horsepower really the best fit here? The relationship appears to have a curvilinear shape to it. Instead, we can estimate a model of the form
+Is a linear regression line of the form mpg???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>horsepower really the best fit here? The relationship appears to have a curvilinear shape to it. Instead, we can estimate a model of the form
 
-mpg = *β*<sub>0</sub> + *β*<sub>1</sub>horsepower + *β*<sub>2</sub>horsepower<sup>2</sup>
+mpg???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>horsepower???+???*??*<sub>2</sub>horsepower<sup>2</sup>
 
 ``` r
 # estimate polynomial squared model of horsepower and mpg
@@ -956,7 +956,7 @@ ggplot(horse2_pred, aes(horsepower)) +
 
 Or even a polynomial to the fifth power
 
-mpg = *β*<sub>0</sub> + *β*<sub>1</sub>horsepower + *β*<sub>2</sub>horsepower<sup>2</sup> + *β*<sub>3</sub>horsepower<sup>3</sup> + *β*<sub>4</sub>horsepower<sup>4</sup> + *β*<sub>5</sub>horsepower<sup>5</sup>
+mpg???=???*??*<sub>0</sub>???+???*??*<sub>1</sub>horsepower???+???*??*<sub>2</sub>horsepower<sup>2</sup>???+???*??*<sub>3</sub>horsepower<sup>3</sup>???+???*??*<sub>4</sub>horsepower<sup>4</sup>???+???*??*<sub>5</sub>horsepower<sup>5</sup>
 
 ``` r
 # estimate polynomial fifth-order model of horsepower and mpg
