@@ -13,3 +13,7 @@ Demonstration scripts for MACS 30100
 
 * [Statistical learning: logistic regression](http://cfss.uchicago.edu/persp004_logistic_regression.html)
 * [Slides for logistic regression](http://cfss.uchicago.edu/extras/persp_logistic_regression_slides.html)
+
+# Generalized linear models
+
+* [Statistical learning: generalized linear models](http://cfss.uchicago.edu/persp005_glm.html)
