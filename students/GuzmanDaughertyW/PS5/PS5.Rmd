@@ -1,0 +1,177 @@
+---
+title: 'Problem Set #5: Linear Regression'
+author: "William L. Guzman"
+date: "February 12, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Part 1. Describe the data by plotting an histogram (1 point)
+
+```{r}
+library(ggplot2)
+
+datapath <- "C:/Users/Walle/Documents/RScript/Data"
+
+dat <- read.csv(file=paste(datapath,"biden.csv",sep="/"))
+
+qplot(dat$biden, geom = "histogram", main = "Joe Biden's feeling Thermometer", xlab = "Temperature in Farenheit" , ylab = "Cases",
+      binwidth = 1, col=I("red"), fill=I("blue"),
+      xlim = c(0,100) , ylim = c(0,450))
+
+
+```
+
+###Part 2. Simple linear regression (2 points)
+
+###1. Is there a relationship between the predictor and the response?
+After applying the model, we can see that by looking at the p-value(0.0563) the alternative hypothesis is rejected by the null hypothesis, there is no statistical relationship between the predictor and the response. 
+
+###2. How strong is the relationship between the predictor and the response?
+There is no statistical relationship with the predictor and the response variable. We can say that age does not affect biden warmth, but if it could affect it in someway, it will be a positive relationship by only 0.006241. 
+
+###3. Is the relationship between the predictor and the response positive or negative?
+If there will be a relationship, it will be positive because the coeficient is positive. 
+
+###4. Report the R2 of the model. What percentage of the variation in biden does age alone explain? Is this a good or bad model?
+The R-Squared of the model is 0.001465 and the adjusted R-squared is 0.002018. This means that the model explain around 0.145% of the model. This is a bad model. The model does not explain at least 1% of the variation. We can clearly see that age does not affects bidens feeling thermometer. 
+
+###5. What is the predicted biden associated with an age of 45? What are the associated 95% confidence intervals?
+With a 95% prediction interval, we have that at the age of 45, biden thermometer wit a 61.50680 fit will be between 15.50680 and 107.5059 farenheit. 
+
+###6. Plot the response and predictor. Draw the least squares regression line.
+
+```{r}
+#Simple linear regresion with just one variable.
+linearModel1 <- lm(dat$biden ~ dat$age)
+
+summary(linearModel1)
+
+#Q5:
+newdata = data.frame(age=45)
+
+predict1 <- predict(linearModel1, newdata, interval="predict") 
+
+predict1[45, ]
+
+#Part 6
+plot(dat$age, dat$biden, xlab = "Age", ylab="Biden's Thermometer", main = "Biden vs Age")
+abline(linearModel1, col="red")
+
+```
+
+
+###Part 3. Multiple linear regression (2 points)
+
+###1. Is there a statistically significant relationship between the predictors and response?
+Between gender and education, there is a significant relationship with biden temperature. 
+
+###2. What does the parameter for female suggest?
+The parameter suggest that if a person gender is female (1), bidden thermometer will increase by 6.19607 and if its male(0), it will not be affected since is a categorical value. 
+
+###3. Report the R2 of the model. What percentage of the variation in biden does age, gender, and education explain? Is this a better or worse model than the age-only model?
+The R-Squared of the model is 0.02561 and the adjusted R-squared is 0.02723. This means that the model explain around 2.723% of biden thermometer. This is a bad model, still, we can see that it explain more than the last model. 
+
+###4. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?
+Yes, the model does not have a clear linear relationship. Still, we can see that there could be a negative relationship. 
+
+
+```{r}
+#linear model 2
+linearModel2 <- lm(biden~age+female+educ, data = dat)
+
+summary(linearModel2)
+
+#Plot the model 
+plot(linearModel2$fitted.values,linearModel2$residuals, main = "Residuals vs Fitted Values", xlab = "Fitted Values", 
+     ylab ="Residuals" )
+
+#smooth line plot
+scatter.smooth(x=1: length(linearModel2$fitted.values), y=linearModel2$residuals, col="grey", 
+               main = "Residuals vs Fitted Values", xlab = "Fitted Values", 
+               ylab ="Residuals" )
+
+
+```
+
+###Part 4. Multiple linear regression model (with even more variables!) (3 points)
+
+###1. Did the relationship between gender and Biden warmth change?
+Yes, the gender decrease from 6.19607 to 4.10323. Still, the gender does come in factor for changing biden warmth
+
+###2. Report the R2 of the model. What percentage of the variation in biden does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
+The R-Squared of the model is 0.2795 and the adjusted R-squared is 0.2815 This means that the model explain around 28.15% of biden thermometer. This still is a bad model, but so far, is better than the last two model. 
+
+###3. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?
+After seeing the two plots, we can see that adding more variables, we still don have a model that shows a linear relationship in. This did not fix our problem. 
+
+
+```{r}
+#Multiuple linear regression with more variables.
+linearModel3 <- lm(biden~., data = dat)
+
+summary(linearModel3)
+
+#plot the model 
+plot(linearModel3$fitted.values,linearModel3$residuals, main = "Residuals vs Fitted Values", xlab = "Fitted Values", 
+     ylab ="Residuals" )
+
+#smooth line plot
+scatter.smooth(x=1: length(linearModel3$fitted.values), y=linearModel2$residuals, col="grey", 
+               main = "Residuals vs Fitted Values", xlab = "Fitted Values", 
+               ylab ="Residuals" )
+
+
+```
+
+###Part 5. Interactive linear regression model (2 points)
+
+###1. Report the values of the standard errors and the parameter. 
+```{r}
+
+#Subsetting data 
+filterData <- subset(dat, dem == 1 | rep == 1, select=c(biden,female, age,dem, rep,educ))
+
+linearModel4 <- lm(biden~female+dem, data=filterData)
+
+summary(linearModel4)
+
+```
+
+###2. Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?
+After analyzing and comparing the different cases, we can clearly see that Biden warmth will differ more by the party ID than the gender of the person. For example, the fitted value for a Female democrat and a male democrat is 76.02831 vs 72.26313 with a 95% interval of  (37.87119, 114.1854) vs (34.09054, 110.4357). If we compare these results with female/male republican, we can see that is the same case with a fitted value of 44.51537 vs 40.75019 with a 95% interval of (6.325838, 82.7049) vs (2.557887, 78.94249). We also can see that there is not much difference between the gender of a particular party, but there is between different party, between democrats vs republican.  
+
+```{r}
+#When female democrats 
+predictBiden1 <- data.frame(female=1, dem=1)
+
+#When female republican 
+predictBiden2 <- data.frame(female=1, dem=0)
+
+#When male Democrats 
+predictBiden3 <- data.frame(female=0, dem=1)
+
+#When male republican
+predictBiden4 <- data.frame(female=0, dem=0)
+
+#predict
+#Female democrats 
+predict(linearModel4, predictBiden1, interval = "predict")
+
+#Female republican 
+predict(linearModel4, predictBiden2, interval = "predict")
+
+#Male Democrats 
+predict(linearModel4, predictBiden3, interval = "predict")
+
+#Male Republican 
+predict(linearModel4, predictBiden4, interval = "predict")
+
+
+```
+
+
+
