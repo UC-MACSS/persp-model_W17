@@ -1,0 +1,30 @@
+---
+title: "Problem Set 5 | MACS 301"
+author: "Julian McClellan"
+date: "Due 2/20/17"
+output: pdf_document
+---
+```{r setup}
+library(ggplot2)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      include = FALSE)
+df.gss = read.csv('data/gss2006.csv')
+df.mhealth = read.csv('data/mental_health.csv')
+```
+
+
+
+# Part 1
+
+## Describe the Data
+
+```{r describe_p1}
+ggplot(df.gss, aes(voted04, fill = ifelse(voted04 == 1, 'Voted', 'Did not Vote'))) +
+  geom_bar() + 
+  labs(title = 'Histogram of Voter Turnout in 2004', x = '', y = 'Number of people') +
+  scale_x_continuous(breaks = NULL) +
+  guides(fill = guide_legend(title = "Voted in 2004"))
+  
+```
