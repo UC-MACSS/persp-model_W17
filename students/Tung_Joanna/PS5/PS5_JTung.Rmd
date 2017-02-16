@@ -1,0 +1,268 @@
+---
+title: "PS5_JTung"
+output: html_notebook
+---
+
+Import packages
+```{r}
+library (dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+library(tidyr)
+```
+
+Read in biden.csv datafile
+```{r}
+dat <- read_csv("data/biden.csv")
+```
+
+Problem 1: Describe the data
+
+The histogram below has been plotted with binwidth of 1. The graph illustrates that while most respondents had perfectly ambivalent feelings for Joe Biden, reporting a Temperature Rating of 50, a larger proportion of respondents had overall warm feelings for Joe Biden, reporting Temperature Ratings greater than 50.
+
+```{r}
+ggplot(dat, mapping = aes(x = biden)) +
+  geom_histogram(binwidth=1) +
+  labs(title = "Reported Warmth for Joe Biden",
+     x = "Thermometer Rating (0 = extreme coldness, 100 = extreme warmth)",
+     y = "Frequency of Response")
+```
+
+Problem 2: Simple Linear Regression
+
+The code below conducts the linear regression estimate for dependent variable Thermometer Rating for Joe Biden and independent variable Age of Respondent. The output summary from this linear regression estimation is provided below.
+```{r}
+age_biden <- lm(biden ~ age, data = dat)
+summary(age_biden)
+```
+
+Evaluate the model:
+
+Parameter Estimates: \
+$\beta_{0}$ = 59.19736 \
+$\beta_{1}$ = 0.06241 \
+Standard Errors of Parameter Estimates: \
+SE($\beta_{0}$) = 1.64792 \
+SE($\beta_{1}$) = 0.03267
+
+Questions:
+
+1) If we use a p-value cutoff of 0.01 (the "typical" cutoff, according to "An Introduction to Statistical Learning", p68) to evaluate the likelihood that the relationship between predictor and response is due to chance, then since the P-value reported for the age coefficient exceeds the 0.01 cut-off, with p-value for $\beta_{1}$ = 0.0563, we must conclude that there is no relationship between predictor and repsonse: any observed relationship is due to chance.
+
+2) As discussed in Question 1, the strength of the relationship bewteen the predictor and response is extremely weak: the p-value of the age coefficient is 0.0563 and suggests that any correlation between these variables is due to chance and not some other underlying relationship. The strength of the relationship between the predictor and response can also be measured by the strength of the correlation between these two variables. For a simple linear regression, the R-squared statistic is the same as the squared correlation of the predictor and response ("An Introduction to Statistical Learning", p70-71). For this linear regression estimation, R-squared = 0.002018, again indicating that the strength of the relationship between the predictor and response is very weak. 
+
+3) The sign of the relationship between the predictor and the response is denoted by the sign of the coefficient $\beta_{1}$ and is positive. The positive value for the age coefficient, $\beta_{1}$=0.06241, tells us that for a given 1 unit increase in the predictor ("age"), we can expect, on average, the response ("biden") to INCREASE by 0.06241 units.
+
+4) The R-squared value of the model is 0.002018. This tells us that the predictor ("age") can explain 0.2% of the total variability in the response ("biden"). Since the R-squared value is evaluated on a scale from 0 to 1, where 1 denotes a perfect ability for the model to explain all variation in the response ("biden"), this R-squared value tells us that the model is not a good fit to the data.
+
+5) The code below was used to solve for the predicted Thermometer Rating for Joe Biden for respondent age of 45 at the associated 95% confidence interval: for respondent age 45, the predicted "biden" value is 62.0056, with 95% confidence intervals of (60.91177, 63.09943).
+```{r}
+CI_age45 <- predict(age_biden, data.frame(age = c(45)), interval = "confidence")
+
+CI_age45
+```
+
+6) The plot with the linear regression model and data scatterplot is coded below. The plot confirms, visually, that the fit of the model is very poor.
+
+```{r}
+grid <- dat %>%
+  data_grid(age)
+
+grid <- grid %>%
+  add_predictions(age_biden)
+
+```
+
+
+```{r}
+ggplot(dat, aes(x = age)) +
+    geom_point(aes(y = biden)) + 
+      labs(title = "Age of Respondent vs. Reported Thermometer Rating for Joe Biden",
+     y = "Temperature Rating (0 = extreme coldness, 100 = extreme warmth)",
+     x = "Age of Respondent") +
+    geom_line(aes(y = pred), data = grid, color = "red", size = 1)
+```
+
+Problem 3: Multiple Linear Regression
+
+The code below conducts the linear regression estimate for dependent variable "biden" and independent variables age, gender and education. The output summary from this multiple linear regression estimation is provided below.
+```{r}
+lm_3var <- lm(biden ~ age + female + educ, data = dat)
+summary(lm_3var)
+```
+
+Evaluate the model:
+
+Parameter Estimates: \
+$\beta_{0}$ = 68.62101\
+$\beta_{1}$ = 0.04188\
+$\beta_{2}$ = 6.19607\
+$\beta_{3}$ = -0.88871\
+Standard Errors of Parameter Estimates:\
+SE($\beta_{0}$) = 3.59600\
+SE($\beta_{1}$) = 0.03249\
+SE($\beta_{2}$) = 1.09670\
+SE($\beta_{3}$) = 0.22469\
+
+Questions:
+
+1) Using the "typical" p-value cutoff provided in "An Introduction to Statistical Learning" of 0.01 for evaluating statistical significance, we find that only the gender and education predictors have a statistically significant relationship to the response, with p-values significantly below the 0.01 threshhold:
+
+P-value for gender coefficient: 1.86e-08
+P-value for education coefficient: 7.94e-05
+
+This indicates that the relationship between the gender and education predictors and the response ("biden") is not due to chance. The p-value for the age predictor (0.198) exceeds our p-value cutoff of 0.01 and thus has no statistically significant relationship to the response.
+
+2) The paramter for "female" suggests that, compared to a male respondent, a female respondent will, on average, report 6.19607 warmer thermometer rating for Joe Biden, all other variables held constant.
+
+3) The R-squared statistic for the model is 0.02723. This tells us that the regression model explains only 2.723% of the variation in the response ("biden"). Since the R-squared statistic for this age-gender-education model is closer to 1 than the R-squared statistic for the age-only model, we can conclude that this 3-variable linear regression model has a better fit to the data (and is thus a better model) than the age-only linear regression model.
+
+4) The predicted values from the linear regression model were plotted against the residuals, drawing smooth lines for each party ID (Democrat, Republican, Other). The plot clearly shows an obvious effect on Biden Thermometer Rating based on Party ID that is not accounted for in the current model: each of the three smooth-fit party lines are vertically distinct from one another (including error bands) except for high-end predictions. In addition, the residuals are not randomly scattered around zero, and in fact, show a distinct pattern, indicating some systematic bias un-accounted for in the model. The model as stands does not appear to be a good fit for the data.
+
+```{r}
+dat %>%  add_predictions(lm_3var) %>%  add_residuals(lm_3var) %>% {.} -> grid_lm3var
+
+dems <- grid_lm3var %>%
+  subset(dem ==1)
+
+reps <- grid_lm3var %>%
+  subset(rep ==1)
+
+other <- grid_lm3var %>%
+  subset(dem ==0 & rep ==0)
+
+ggplot(grid_lm3var, aes(pred)) +
+  geom_point(aes(y = resid), data = grid_lm3var) +
+  geom_smooth(aes(y = resid, color = 'Democrat'), data = dems)  + 
+  geom_smooth(aes(y = resid, color = 'Republican'), data = reps)  +
+  geom_smooth(aes(y = resid, color = 'Other'), data = other) +
+  labs(title = "Comparison of Prediction with Residuals - 3 input", 
+       x = "Predicted Values of Biden Thermometer Rating",
+       y = "Residuals of Biden Thermometer Rating")
+  
+```
+
+
+Problem 4: Multiple linear regression model (with even more variables!)
+
+The code below conducts the linear regression estimate for dependent variable "biden" and independent variables age, gender, education, Democrat, and Republican. The output summary from this multiple linear regression estimation is provided below.
+```{r}
+lm_5var <- lm(biden ~ age + female + educ + dem + rep, data = dat)
+summary(lm_5var)
+```
+
+Evaluate the model:
+
+Parameter Estimates: \
+$\beta_{0}$ = 58.81126\
+$\beta_{1}$ = 0.04826\
+$\beta_{2}$ = 4.10323\
+$\beta_{3}$ = -0.34533\
+$\beta_{4}$ = 15.42426\
+$\beta_{5}$ = -15.84951\
+Standard Errors of Parameter Estimates:\
+SE($\beta_{0}$) = 3.12444\
+SE($\beta_{1}$) = 0.02825\
+SE($\beta_{2}$) = 0.94823\
+SE($\beta_{3}$) = 0.19478\
+SE($\beta_{4}$) = 1.06803\
+SE($\beta_{5}$) = 1.31136\
+
+Questions:
+
+1) The gender coefficient remains statistically significant (p-value is 1.59 e-05 and is less than 0.01), however, the magnitude of gender's effect on the response ("biden") has diminished. This is illustrated by the fact that the gender coefficient for this 5-variable linear regression model is smaller (but still positive) than the gender coefficient for the 3-variable linear regression model (4.10323 < 6.19607).
+
+2) The R-squared statistic of this model is 0.2815. This 5-variable linear regression model explains 28.15% of the variation in response ("biden"). This 5-variable linear regression model isi a better model: it has a substantially (10-fold increase in R-squared value) better fit to the data than the 3-variable (age+gender+education) model.
+
+3) The predicted values from the linear regression model with 5 inputs were plotted against the residuals, drawing smooth lines for each party ID (Democrat, Republican, Other). The plot does show that this model captures the relationship of Party ID with Temperature rating: Party ID now describes a distinct trend in responses, with Republicans tending to rate Biden lower, and Democrats tending to rate Biden higher on the Thermometer scae. However, this model does not resolve the same issue observed for the 3-input model, in which residuals still show a systematic downward trend as we predict higher-value Biden Thermometer ratings. While this is an improvement to the plot for the 3-input linear regression model, it is still not a good model to describe the data.
+
+```{r}
+dat %>%  add_predictions(lm_5var) %>%  add_residuals(lm_5var) %>% {.} -> grid_lm5var
+
+dems_5var <- grid_lm5var %>%
+  subset(dem ==1)
+
+grid_lm5var
+
+reps_5var <- grid_lm5var %>%
+  subset(rep ==1)
+
+other_5var <- grid_lm5var %>%
+  subset(dem ==0 & rep ==0)
+
+ggplot(grid_lm5var, aes(pred)) +
+  geom_point(aes(y = resid), data = grid_lm5var) +
+  geom_smooth(aes(y = resid, color = 'Democrat'), data = dems_5var)  + 
+  geom_smooth(aes(y = resid, color = 'Republican'), data = reps_5var)  +
+  geom_smooth(aes(y = resid, color = 'Other'), data = other_5var) +
+  labs(title = "Comparison of Prediction with Residuals - 5 inputs", 
+       x = "Predicted Values of Biden Thermometer Rating",
+       y = "Residuals of Biden Thermometer Rating")
+```
+
+
+Problem 5: Interactive linear regression model
+
+First, we'll create the subset of data (dat_p5) with respondents reporting only either Democrat or Republican for Party ID.
+```{r}
+dat_p5 <- subset(dat, rep == 1 | dem == 1)
+dat_p5
+```
+
+The code below conducts the linear regression estimate for dependent variable "biden" and independent variables gender and Democrat, assuming interaaction between gender and Democratic affilication, using the data subset generated above. The output summary from this interactive linear regression model is provided below.
+```{r}
+lm_int <- lm(biden ~ female * dem, data = dat_p5)
+summary(lm_int)
+```
+
+Evaluate the model:
+
+Parameter Estimates: \
+$\beta_{0}$ = 39.382\
+$\beta_{1}$ = 6.395\
+$\beta_{2}$ = 33.688\
+$\beta_{3}$ = -3.946\
+Standard Errors of Parameter Estimates:\
+SE($\beta_{0}$) = 1.455\
+SE($\beta_{1}$) = 2.018\
+SE($\beta_{2}$) = 1.835\
+SE($\beta_{3}$) = 2.472\
+
+Questions:
+
+1) The predicated Biden warmth feeling thermometer ratings and 95% confidence intervals for the four conditions are calculated below. The values are listed below. Gender is only a statistically significant relationship for Republicans: the 95% confidence interval predictions are distinct. The opposite is the case for the Democrats, however: since the confidence intervals for female and male Democrats overlap, we cannot distinguish with 95% confidence that the different predicted results of male and female Democrats is not just due to chance. Party ID, however, is a statistically significant relationship for both males and females. Predictions for Male Democrats and Male Republicans were distinct with 95% confidence (confidence intervals do not overlap); the same was observed between predictions for female Democrats and female Republicans. 
+
+Female Democrat:\
+Predicted value: 75.51883\
+95% CI: (73.77632, 77.26133)\
+
+Male Democrat:\
+Predicted value: 73.06954\
+95% CI: (70.87731, 75.26176)\
+
+Female Republican:\
+Predicted value: 45.7772\
+95% CI: (43.03494, 48.51947)\
+
+Male Republican:\
+Predicted value: 39.38202\
+95% CI: (36.52655, 42.2375)\
+
+```{r}
+CI_femDem <- predict(lm_int, data.frame(female = c(1), dem = c(1)), interval = "confidence")
+
+CI_maleDem <- predict(lm_int, data.frame(female = c(0), dem = c(1)), interval = "confidence")
+
+CI_femRep <- predict(lm_int, data.frame(female = c(1), dem = c(0)), interval = "confidence")
+
+CI_maleRep <- predict(lm_int, data.frame(female = c(0), dem = c(0)), interval = "confidence")
+
+CI_femDem
+CI_maleDem
+CI_femRep
+CI_maleRep
+```
+
+

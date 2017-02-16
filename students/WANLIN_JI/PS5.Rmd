@@ -1,0 +1,197 @@
+---
+title: "PS5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Describe the data
+
+According to the histogram, the data basically shows a skewed distribution with a long left tail. Based on the distribution, we can tell people giving a positive response is more than people who give a negative response. That acknowledges Joe’s popularity among the people in the survey. And as the highest frequency count bin comes around 50, which means that a neutral response towards Joe Biden is the most popular response in the our sample. 
+
+## Simple linear regression
+
+Report: 
+
+The estimated intercept is 59.19736 with standard error of 1.64792, and estimated coefficient of age is 0.06241 with standard error of 0.03267.
+
+
+1. Is there a relationship between the predictor and the response?
+Yes. We can tell that from the t-value of 1.91 associated with age variable.
+2. How strong is the relationship between the predictor and the response?
+It is a weak relationship given the 0.05 significance level.
+3. Is the relationship between the predictor and the response positive or negative?
+It is positive, because the estimate of the coefficient is positive.
+4. Report the $R^2$ of the model. What percentage of the variation in biden does age alone explain? Is this a good or bad model?
+The $R^2$ in this model is  0.002018, which means age alone explains 0.2018% variation in biden.
+5. What is the predicted biden associated with an age of 45? What are the associated 95% confidence intervals?
+The model predicted the value to be 62.00560 associated with an age of 45. The associated 95% confidence interval is between 60.91248 and 63.09872.
+
+## Multiple linear regression
+
+Report: 
+
+The estimated intercept is 68.62101 with standard error of 3.59600; the estimated coefficient of age is 0.04188 with standard error of 0.03249; the estimated coefficient of gender is 6.19607 with standard error of 1.09670; the estimated coefficient of education is -0.88871 with standard error of 0.22469.
+
+
+1. Is there a statistically significant relationship between the predictors and response?
+Yes, there is a statistically significant relationship given p-value 8.876e-11, much less than 0.001.
+2. What does the parameter for female suggest?
+The estimated coefficient of female is 6.19607, suggesting that being female will increase predicted Joe Biden feeling thermometer by 6.19607 when controlling other variables.
+3. Report the $R^2$ of the model. What percentage of the variation in biden does age, gender, and education explain? Is this a better or worse model than the age-only model?
+The $R^2$ in the model is 0.02723. Age, gender, and education explain 2.273% of the variation in biden. This is a better model because $R^2$ is larger.
+4. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?
+Yes, we can find that the residuals for three different political categories show different levels. Thus we should consider the party variable into our model.
+
+## Multiple linear regression model (with even more variables!) 
+
+
+Report:
+
+The estimated intercept is 58.81126 with standard error of 3.12444; the estimated coefficient of age is 0.04826 with standard error of 0.02825; the estimated coefficient of gender is 4.10323 with standard error of 0.94823; the estimated coefficient of education is -0.34533 with standard error of 0.19478; the estimated coefficient of dem is 15.42426 with standard error of 1.06803; the estimated coefficient of rep is -15.84951 with standard error of 1.31136.
+
+1. Did the relationship between gender and Biden warmth change?
+Yes. Although there is still a positive relationship between these two variables, the estimated coefficient of gender has decreased from 6.19607 to 4.10323.
+2. Report the $R^2$ of the model. What percentage of the variation in biden does age, gender, education, and party identification explain? Is this a better or worse model than the age + gender + education model?
+The $R^2$ in the model is 0.2815; Age, gender, education, and party identification could explain 28.15% of the variation in biden; Yes, this is a better model because we have $R^2$ 0.2815 larger than 0.02723.
+3. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?
+Yes. The three lines were separated very largely into different intercept levels in the previous model. By adding variables for party ID to the regression model, we found our three smooth fit lines have been brought back around the residual level of zero, which means party ID has no effect on our estimated residual in our new model.
+
+## Interactive linear regression model
+
+Report:
+
+The estimated intercept is 39.382 with standard error of 1.455; the estimated coefficient of gender is 6.395 with standard error of 2.018; the estimated coefficient of dem is 33.688 with standard error of 1.835; the estimated coefficient of female:dem is -3.946 with standard error of 2.472.
+
+
+1. Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?
+Yes. 
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+
+# Q: How to see my results in github webpage?
+
+# Read the data into R objects
+bid <- read_csv("data/biden.csv") #%>%???? What is this
+
+# select(-X1) # remove first ID column
+# names(credit) <- stringr::str_to_lower(names(credit))   # convert column names to lowercase
+# str(bid) # Get a summary of an object's structure
+
+# 1. Plot the histogram using first colomn
+ggplot(bid, mapping = aes(x = biden)) +
+  geom_histogram(binwidth = 1)  +
+  labs(title = "Distribution of feeling thermometer towards Joe Biden in 2008 ANES",
+       x = "Feeling thermometer in range of 0-100",
+       y = "Frequency counts of feeling thermometer")
+
+# 2. Simple linear regression
+bid_reg <- lm(biden ~ age, data = bid)
+summary(bid_reg)
+
+grid <- bid  %>% 
+  data_grid(age) 
+grid
+
+# Calculate predicted values
+grid <- grid  %>% 
+  add_predictions(bid_reg) 
+grid
+
+# create data frame with new values
+(pred_data <- data_frame(age = 45))
+# use augment to generate predictions
+(pred_aug <- augment(bid_reg, newdata = pred_data))
+# Calculate 95% confidence intervals
+(pred_ci <- mutate(pred_aug,
+                   ymin = .fitted - .se.fit * 1.96,
+                   ymax = .fitted + .se.fit * 1.96))
+
+# Plot the regression and data
+ggplot(bid, aes(x = age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1) +
+  labs(title = 'Regression of Biden and Age with data',
+       y = "Feeling thermometer in range of 0-100",
+       x = "Age") 
+
+# 3. Multiple linear regression
+bid_reg2 <- lm(biden ~ age + female + educ, data = bid)
+summary(bid_reg2)
+# R2 too low!
+
+bid %>% 
+  select(age, educ, female, biden, dem, rep) %>%
+  add_predictions(bid_reg2, var = 'pred0') %>%
+  add_residuals(bid_reg2) %>%
+  {.} -> grid
+
+ggplot(grid, aes(pred0, resid)) +
+  labs(title = 'Comparing the predicted values and residuals',
+       y = 'Residuals',
+       x = 'Predicted values') +
+  geom_point() +
+  geom_smooth(aes(color = "dem"), data = filter(grid, dem == 1), method = lm) +
+  geom_smooth(aes(color = "rep"), data = filter(grid, rep == 1), method = lm) +
+  geom_smooth(aes(color = "ind"), data = filter(grid, (dem == 0) & (rep == 0)), method = lm) +
+  scale_color_manual('', values = c("dem" = "yellow", "rep" = "red", "ind" = "green"))
+
+# 4. Multiple linear regression model(with even more variables!) 
+bid_reg3 = lm(biden ~ age + female + educ + dem + rep, data = bid)
+summary(bid_reg3)
+
+bid %>%
+  select(age, educ, female, biden, dem, rep) %>%
+  add_predictions(bid_reg3, var = 'pred0') %>%
+  add_residuals(bid_reg3) %>%
+  {.} -> grid
+
+ggplot(grid, aes(pred0, resid)) +
+  labs(title = 'Comparing the predicted values and residuals',
+       y = 'Residuals',
+       x = 'Predicted values') +
+  geom_point() +
+  geom_smooth(aes(color = "dem"), data = filter(grid, dem == 1), method = lm) +
+  geom_smooth(aes(color = "rep"), data = filter(grid, rep == 1), method = lm) +
+  geom_smooth(aes(color = "ind"), data = filter(grid, (dem == 0) & (rep == 0)), method = lm) +
+  scale_color_manual('', values = c("dem" = "yellow", "rep" = "red", "ind" = "green"))
+
+
+# 5. Interactive linear regression model
+bid_reg3 <- bid %>% 
+  filter(dem == 1 | rep == 1)  %>%
+  lm(biden ~ female + dem + female*dem, data = .)
+summary(bid_reg3)
+
+bid_reg3$model %>%
+  data_grid(female, dem) %>%
+  augment(bid_reg3, newdata = .) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96) %>%
+  mutate(female = ifelse(female == 0, "Male", "Female"),
+         dem = ifelse(dem == 0, "Republican", "Democrat")) %>%
+         {.} -> pred_new
+summary(pred_new)
+
+#relationship between gender and Biden warmth more closely
+model1<-lm(biden~., data = bid)
+summary(model1)
+##Since the pvalue of female is significant, we can prove the gende
+#is important.
+confint(model1)
+
+
+
+
+
+```
+

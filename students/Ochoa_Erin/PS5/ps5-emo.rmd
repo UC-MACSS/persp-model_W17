@@ -1,0 +1,210 @@
+---
+title: "MACS 30100 PS5"
+author: "Erin M. Ochoa"
+date: "2017 February 13"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+```
+
+
+```{r, read_data}
+df = read.csv('data/biden.csv')
+```
+```{r, attaching df, include=FALSE}
+attach(df)
+```
+
+# Describing the data
+```{r, histogram, echo=FALSE}
+ggplot(df, mapping = aes(x = biden)) +
+       geom_histogram(binwidth = 1, fill = "darkturquoise") +
+       labs(title = "Warmth Toward Joe Biden, 2008",
+            x = "Warmth",
+            y = "Frequency count of respondents") +
+       theme(plot.title = element_text(hjust = 0.5))
+```
+
+Feelings of warmth (as surveyed in 2008) toward Mr. Biden range from 0 to 100 and appear to be approximately normally distributed with left skew.  The histogram indicates that most respondents felt warmly toward Mr. Biden.  Despite the wide range of data, responses seem to have been given only in 5-point increments; it seems unlikely (though not impossible) that all 1,807 respondents would have naturally responded in such a fashion, so we assume that the feeling thermometer was presented or described to respondents in 5-point increments.
+
+# Simple linear regression
+```{r, lm_warmth_age}
+lm_warmth_age = lm(biden ~ age, data = df)
+
+pred_ci = augment(lm_warmth_age, newdata = data_frame(age = c(45))) %>%
+          mutate(ymin = .fitted - .se.fit * 1.96,
+          ymax = .fitted + .se.fit * 1.96)
+```
+
+We construct a linear model to estimate the relationship of age with feelings of warmth toward Mr. Biden:
+
+$$Y = \beta_0 + \beta_{1}X_1$$
+
+
+where $Y$ is the Biden feeling thermometer and $X_1$ is age.
+
+The linear model returns a $\beta_0$ coefficient of `r summary(lm_warmth_age)$coefficients[1,1]` (with a standard error of `r summary(lm_warmth_age)$coefficients[1,2]`) and a $\beta_1$ coefficient of `r summary(lm_warmth_age)$coefficients[2,1]` (with a standard error of `r summary(lm_warmth_age)$coefficients[2,2]`).
+
+1. The model shows that there is a linear relationship between the predictor, age, and the response, warmth toward Mr. Biden, although the relationship is not statistically significant.
+1. The relationship between age and feelings of warmth is weak; this is evident because the coefficient $\beta_1$ has a small absolute value (`r summary(lm_warmth_age)$coefficients[2,1]`).  A one-point average increase in warmth requires a 16-point increase in age using this relationship.
+1. The relationship between the predictor, age, and the response, warmth toward Mr. Biden, is positive (because `r summary(lm_warmth_age)$coefficients[2,1]` > 0).  This means that a one-year increase in age is estimated to be associated with an average increase in warmth of `r summary(lm_warmth_age)$coefficients[2,1]`.
+1. The model has an $R^2$ value of `r summary(lm_warmth_age)$r.squared`.  Age alone explains `r summary(lm_warmth_age)$r.squared * 100`% of the variation in feelings of warmth toward Mr. Biden.  With such a low percentage of variance explained, this is a poor model.
+1. The predicted warmth associated with an age of 45 is `r pred_ci[1,2]`.  The 95% confidence interval ranges from a lower bound of `r pred_ci[1,3]` to an upper bound of `r pred_ci[1,4]`.
+1. We plot the response, warmth of feelings toward Mr. Biden, and the predictor, age, including the least-squares regression line:
+
+```{r, scatter_plot_w_OLS_line, echo=FALSE}
+ggplot(lm_warmth_age, mapping = aes(x = age, y = biden)) +
+       geom_point(color = "deeppink", alpha = .2) +
+       geom_smooth(method = "lm", color = "grey30") +
+       labs(title = "Warmth Toward Joe Biden (2008)\n with Least-Squares Regression Line",
+            x = "Respondent Age",
+            y = "Warmth") +
+       theme(plot.title = element_text(hjust = 0.5))
+```
+
+# Multiple linear regression
+```{r, multiple_reg_part_1}
+lm_warmth_age_gndr_edu = lm(biden ~ age + female + educ, data = df)
+```
+We construct a more complex model to estimate the effects of age, gender, and years of education on feelings of warmth toward Mr. Biden:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3$$
+
+where $Y$ is the Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, and $X_3$ is education.
+
+The linear model returns a $\beta_0$ (y-intercept) coefficient of `r summary(lm_warmth_age_gndr_edu)$coefficients[1,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu)$coefficients[1,2]`), a $\beta_1$ (age) coefficient of `r summary(lm_warmth_age_gndr_edu)$coefficients[2,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu)$coefficients[2,2]`), a $\beta_2$ (gender=female) coefficient of `r summary(lm_warmth_age_gndr_edu)$coefficients[3,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu)$coefficients[3,2]`), and a $\beta_3$ (years of education) coefficient of `r summary(lm_warmth_age_gndr_edu)$coefficients[4,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu)$coefficients[4,2]`).
+
+1. Considering age, gender, and education jointly, we find that there are statistically significant relationships between the response and two of the predictors, gender and education: both are significant at the p<.001 level while age is not significant at the \alpha = .05 level.
+1. The value of the coefficient for female (`r summary(lm_warmth_age_gndr_edu)$coefficients[3,1]`) suggests that female respondents' feelings of warmth toward Mr. Biden are approximately 6.2 points, on average, higher than male respondents' feelings.
+1. The model has an $R^2$ value of `r summary(lm_warmth_age_gndr_edu)$r.squared`.  Together, age, gender, and education explain `r summary(lm_warmth_age_gndr_edu)$r.squared * 100`% of the variation in feelings of warmth toward Mr. Biden.  This is a better model than the age-only model because its $R^2$ value is larger.
+1. We generate a plot comparing predicted values and residuals by respondent political party:
+
+```{r, partisan_plot, echo=FALSE}
+
+df$Party[dem == 1] = 'Democrat'
+df$Party[dem == 0 & rep == 0] = 'No Affiliation'
+df$Party[rep == 1] = 'Republican'
+
+predictions = add_predictions(df, lm_warmth_age_gndr_edu, var = "pred")
+df$pred = predictions$pred
+df$resid = df$biden - df$pred
+
+ggplot(df, mapping = aes(pred, resid)) +
+       geom_point(alpha = .15, color = 'purple', size = 1.5) +
+       geom_smooth(method = "lm", aes(color = Party)) +
+       labs(title = "Warmth Toward Joe Biden (2008) as Explained by Age, Gender,\n& Education: Residuals vs. Predicted Values",
+            subtitle = "with Smooth-fit Lines by Respondent Party Affiliation",
+            x = "Predicted Warmth",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+```
+
+With the partywise smooth-fit lines, we can see that respondents who are Democrats have actual values higher, on average, than their predicted values.  For unaffiliated respondents, residuals are slightly negative but actualy values are generally close to the predicted values.  For respondents who are Republicans, however, actual values are lower, on average, than predicted values.  Together, these differences suggest that political affiliation has an effect on feelings of warmth toward Mr. Biden.  This implies that there is a problem with the model in that it fails to take into account a respondent's political affiliation.
+
+# Multiple linear regression model (with even more variables!)
+```{r, multiple_reg_part_2}
+lm_warmth_age_gndr_edu_prt = lm(biden ~ age + female + educ + dem + rep, data = df)
+```
+
+We construct an even more detailed model to estimate the effects of age, gender, years of education, and political affiliation on feelings of warmth toward Mr. Biden:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.
+
+The linear model returns a $\beta_0$ (y-intercept) coefficient of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[1,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[1,2]`), a $\beta_1$ (age) coefficient of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[2,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[2,2]`), a $\beta_2$ (gender=female) coefficient of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[3,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[3,2]`), a $\beta_3$ (years of education) coefficient of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[4,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[4,2]`), a $\beta_4$ (Democrat) coefficient of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[5,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[5,2]`), and a $\beta_5$ (Republican) coefficient of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[6,1]` (with a standard error of `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[6,2]`).
+
+1. With the new linear model, the relationship between gender and warmth toward Mr. Biden remains statistically significant (p<.001) but decreases to `r summary(lm_warmth_age_gndr_edu_prt)$coefficients[3,1]`, meaning that women have, on average, warmer feelings toward Mr. Biden than men do.
+1.  The model has an $R^2$ value of `r summary(lm_warmth_age_gndr_edu_prt)$r.squared`.  Together, age, gender, education, and party affiliation explain ``r summary(lm_warmth_age_gndr_edu_prt)$r.squared * 100`% of the variation in feelings of warmth toward Mr. Biden.  This is a better model than the previous one, which did not consider political affiliation.
+1.  We plot the residuals versus the predicted values and add separate smooth-fit lines by party:
+
+```{r, plot_multivariate_part_2, echo=FALSE}
+
+predictions2 = add_predictions(df, lm_warmth_age_gndr_edu_prt, var = "pred")
+df$pred2 = predictions2$pred
+df$resid2 = df$biden - df$pred2
+
+ggplot(df, mapping = aes(pred2, resid2)) +
+       geom_point(alpha = .15, color = 'darkorange1', size = 1.5) +
+       geom_smooth(method = "lm", aes(color = Party)) +
+       labs(title = "Warmth Toward Joe Biden (2008), as Explained by Age, Gender,\nEducation, & Party Affiliation: Residuals vs. Predicted Values",
+            subtitle = "with Smooth-fit Lines by Respondent Party Affiliation",
+            x = "Predicted Warmth",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+```
+
+By taking into account political affiliation, we have solved the main problem in the earlier model, in which residuals were stratified by party.  Because of the inclusion of political affiliation in this model, the residuals for each party are now close to zero, on average, and we can clearly see the model's predictions that Democratic affiliation results in an average of 15 points of warmth more than no affiliation, which in turn results in an average of approximately 16 points of warmth more than Republican affiliation.
+
+# Interactive linear regression model
+```{r, multivariate_w_interaction}
+df2 = df[(df$Party != 'No Affiliation'), ]
+
+lm_warmth_gndr_prt_gndr.prt = lm(biden ~ female + dem + female * dem, data = df2)
+```
+
+Discarding respondents who are neither Democrats nor Republicans, we construct a model to estimate the effect of gender, political affiliation, and their interaction on warmth toward Mr. Biden:
+
+$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_{1}X_{2}$
+
+where $Y$ is the Biden feeling thermometer, $X_1$ is female, and $X_2$ is Democrat.
+
+The linear model returns a $\beta_0$ (y-intercept) coefficient of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[1,1]` (with a standard error of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[1,2]`), a $\beta_1$ (gender=female) coefficient of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[2,1]` (with a standard error of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[2,2]`), a $\beta_2$ (party=Democrat) coefficient of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[3,1]` (with a standard error of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[3,2]`), and a $\beta_3$ (female * Democrat) coefficient of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[4,1]` (with a standard error of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[4,2]`).
+
+```{r, CIs_for_interaction_model}
+
+punnett = data_frame(female = c(1,1,0,0), dem = c(1,0,1,0))
+
+pred_ci_int = augment(lm_warmth_gndr_prt_gndr.prt, newdata = punnett) %>%
+              mutate(ymin = .fitted - .se.fit * 1.96,
+              ymax = .fitted + .se.fit * 1.96)
+```
+
+Women Democrats have the highest average warmth rating, `r pred_ci_int[1,3]`; the 95% confidence interval for this group has a lower bound of `r pred_ci_int[1,5]` and an upper bound of `r pred_ci_int[1,6]`.
+
+Republican women have an average warmth rating of `r pred_ci_int[2,3]`; the 95% confidence interval for this group has a lower bound of `r pred_ci_int[2,5]` and an upper bound of `r pred_ci_int[2,6]`.
+
+Men who are Democrats have an average warmth rating of `r pred_ci_int[3,3]`; the 95% confidence interval for this group has a lower bound of `r pred_ci_int[3,5]` and an upper bound of `r pred_ci_int[3,6]`.
+
+Republican men have the lowest average warmth rating, `r pred_ci_int[4,3]`; the 95% confidence interval for this group has a lower bound of `r pred_ci_int[4,5]` and an upper bound of `r pred_ci_int[4,6]`.
+
+To assess these differences visually, we plot the model's residuals versus its predicted values, colored by party and shaped by gender:
+
+```{r, int_plot, echo=FALSE}
+df2$Gender[df2$female == 1] = 'Women'
+df2$Gender[df2$female == 0] = 'Men'
+
+predictions_int = add_predictions(df2, lm_warmth_gndr_prt_gndr.prt, var = "pred")
+df2$pred = predictions_int$pred
+df2$resid = df2$biden - df2$pred
+
+ggplot(df2, mapping = aes(pred, resid)) +
+       geom_point(alpha = .25, size = 3.5, aes(color = Party, shape = Gender)) +
+       labs(title = "Warmth Toward Joe Biden (2008), as Explained by Gender,\nParty Affiliation, & their Interaction: Residuals vs. Predicted Values",
+            x = "Predicted Warmth",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5))
+```
+
+The effect of political affiliation on warmth toward Mr. Biden is similar for men and women:  the party effect is strong (with a coefficient of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[3,1]`) and highly statistically significant (p<.001).  This means that for both men and women, being a Democrat has a significant positive effect on warmth, as shown by the wide gap between party groups in the plot above.
+
+Note that while the gender effect is much weaker (with a coefficient of `r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[2,1]`) it is also statistically significant, but to a lesser degree (p<.01).
+
+The effect of being a woman on warmth toward Mr. Biden for Democrats is not as strong as it is for Republicans:  we can see this in the above plot by noting how close together the Democrat gender groups are compared to the greater distance between the points for the Republican gender groups.  We can verify this by confirming that the coefficient of the female * party (`r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[4,1]`) is negative:  once we have added the female (`r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[2,1]`) and Democrat (`r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[3,1]`) points to the y-intercept (`r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[1,1]`which is the estimated average of the base case, male Republicans), we must add the value of the interaction term (`r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[4,1]`, which is negative: we are subtracting warmth points) to attain the average warmth score for women Democrats (`r pred_ci_int[1,3]`).
+
+Note that the interaction term is not statistically significant (p=`r summary(lm_warmth_gndr_prt_gndr.prt)$coefficients[4,4]`:  this is because the means for Democrat men and women (`r pred_ci_int[3,3]` and `r pred_ci_int[1,3]`, respectively) are not statistically significantly different from one another.  We can verify this by noting that their 95% confidence intervals overlap:  `r pred_ci_int[1,5]`–`r pred_ci_int[1,6]` for women Democrats compared to `r pred_ci_int[3,5]`–`r pred_ci_int[3,6]` for men who are Democrats.

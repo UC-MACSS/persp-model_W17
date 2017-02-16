@@ -1,0 +1,110 @@
+---
+title: "ps5"
+author: "YangHou"
+output: 
+---
+
+```{r setup, include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(modelr)
+library(broom)
+library(dplyr)
+library(ggplot2)
+bdata=read.csv('biden.csv')
+```
+
+## problem 1
+
+A discription of the data.
+
+```{r, echo=FALSE}
+hist(bdata$biden,main="Histogram for Biden Feeling",xlab="Biden Feeling",breaks=100)
+```
+
+The histogram shows that in general people like Biden. The reason behind this conclusion is that we could find most "longer bars" in the graph fall into either equal or larger than 50. 
+
+##problem 2
+```{r}
+p2=lm(biden~age,data=bdata)
+summary(p2)
+```
+1.I would say there is a relationship between age and biden feeling, since from above summary we find the p value is 0.05626, which indicates the assumption of no relationship between age and feeling should be rejected. 
+
+2.The relation is not so strong, since usually we would like the p value to be less than 0.01 in order to consider the relationship to be strong. 
+
+3.It is positive.
+
+4.The r squared is 0.002018, which means 0.2% of the variation is explaained by this model. It is not good enough.
+
+5.
+```{r}
+grid=bdata %>%data_grid(age) %>% add_predictions(p2)
+p25=augment(p2,newdata = data.frame(age=c(45)))%>%mutate(ymin=.fitted-.se.fit*1.96,ymax=.fitted+.se.fit*1.96)
+p25
+```
+
+As we can see in the form above, the predicted biden is 62.0056. The 95% condidence interval is [60.91248,63.09872].
+
+6.
+```{r}
+ggplot(bdata,aes(age))+geom_point(aes(y=biden))+geom_line(aes(y=pred),data=grid,color="red",size=1.5)+labs(title="Least Squares Regression Line",y="Biden")
+```
+
+##problem3
+```{r}
+p3=lm(biden~age+female+educ,data=bdata)
+summary(p3)
+```
+
+1. From the form above we could say female and education have statistically significant relationship with response becuase those two have small p value. On the other hand, age does not have a significant relationship with response.
+
+2.It means when holding age and education the same, females tend to have 6.19607 highter point for biden.
+
+3.R-suqared is 0.02723. About 2.73% of the variation in biden is explained by age, gender and education.It is better than the age-only model.
+
+4.
+```{r}
+p34=augment(p3,bdata)
+p34_dem=p34[p34$dem==1,]
+p34_rep=p34[p34$rep==1,]
+p34_no=p34[(p34$dem!=1)&(p34$rep!=1),]
+ggplot(p34,aes(.fitted,.resid))+geom_smooth(aes(color="Dem"),method='lm',data=p34_dem)+geom_smooth(aes(color="Rep"),method='lm',data=p34_rep)+geom_smooth(aes(color="Other"),method='lm',data=p34_no)+scale_colour_manual("",values=c("Dem"="blue","Rep"="red","Other"="green"))+labs(x="Biden Warmth",y="Residual Value",title="Mutiple Linear Regression")+geom_point()
+```
+
+There may be a problem with the plot because the predicted Biden warmth tends to be higher for Democrats, the predicted Biden warmth tends to be lower for republicans.
+
+##problem4
+```{r}
+p4=lm(biden~age+female+educ+dem+rep,data=bdata)
+summary(p4)
+```
+
+1.The relationship does change. The value decreases, but the sigh didn't change. 
+
+2.The R-squared value is 0.2815, which explains 28.15% percent of the variation of Biden warmth. It is better than the two previous models.
+
+3.
+```{r}
+p43=augment(p4,bdata)
+p43_dem=p43[p43$dem==1,]
+p43_rep=p43[p43$rep==1,]
+p43_no=p43[(p43$dem!=1)&(p43$rep!=1),]
+ggplot(p43,aes(.fitted,.resid))+geom_smooth(aes(color="Dem"),method='lm',data=p43_dem)+geom_smooth(aes(color="Rep"),method='lm',data=p43_rep)+geom_smooth(aes(color="Other"),method='lm',data=p43_no)+scale_colour_manual("",values=c("Dem"="blue","Rep"="red","Other"="green"))+labs(x="Biden Warmth",y="Residual Value",title="Mutiple Linear Regression")+geom_point()
+```
+
+Yes, it fixed the previous problem.
+
+##problem 5
+```{r}
+bfdata=bdata[(bdata$dem==1)|(bdata$rep==1),]
+p5=lm(biden~female*dem,bfdata)
+summary(p5)
+```
+
+```{r}
+grid5=bfdata%>%data_grid(female,dem)%>%add_predictions(p5)
+last=bfdata%>%data_grid(female,dem)%>%augment(p5,newdata=.)%>%mutate(ymin=.fitted-.se.fit*1.96,ymax=.fitted+.se.fit*1.96)
+last
+```
+
+Yes, both relationships differs. For party ID on gender, male democrats have more than 30 points higher biden warmth than male republicans. Female democrats only have more than 20 points higher than femalie republicans. As for gender on party ID, female democarts have around 2.4 point higher point than male democarts. Female repulicans have around 6.3 point higher than male repulicans. 
