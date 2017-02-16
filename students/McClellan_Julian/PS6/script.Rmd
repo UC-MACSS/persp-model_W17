@@ -32,8 +32,19 @@ ggplot(df.mhealth, aes(vote96, fill = ifelse(vote96 == 1, 'Voted', 'Did not Vote
   labs(title = 'Voter Turnout in 1996', x = 'Vote Status', y = 'Number of people') +
   scale_x_continuous(breaks = NULL) +
   guides(fill = guide_legend(title = ''))
-  
+
+ggplot(df.mhealth, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = lm) + 
+  scale_y_continuous(breaks = c(0, 1)) + 
+  labs(title = "Voting in 1996 versus Mental Health Index",
+       y = "Voted (1) | Did not Vote (0)",
+       x = "Mental Health Index (higher = worse mental health)")
 ```
+
+The unconditional probability of a given individual turning out to vote is: `r round(100 * sum(df.mhealth$vote96, na.rm = TRUE) / length(df.mhealth$vote96), 2)`%.  
+
+The scatterplot with the linear smoothing line tells us that in general, higher values of the mental health index, `mhealth_sum` (worse mental health) are associated with not voting in 1996. However, the problem with this graph is that a smooth fit line assumes the response variable can cover all real numbers. In our case, the response variable is either 1 (voted) or 0, not voted. Thus, interpretation of the line does make sense in the context of 'voting' or 'not voting'.
 
 ## Basic model
 
@@ -76,7 +87,7 @@ ggplot(aes(mhealth_sum), data = pred.mh_vt) +
        y = "Log odds of Voting")
 ```
 
-Looks linear, that's good. The estimated parameter, is given by default in terms of log odds, and was previously stated as: `r param`.
+Looks linear, that's good. The estimated parameter, is given by default in terms of log odds, and was previously stated as: `r param`.  
 
 ### 3.
 ```{r odds_graph}
@@ -118,16 +129,17 @@ pre <- (e1 - e2) / e1
 auc_score = auc(pred.mh_vt$vote96, pred.mh_vt$pred_vote)
 ```
 
-Given a threshhold of .5, the accuracy rate is: `r round(100 * acc_rate,2)`% and the proportional reduction in error is: `r round(100 * pre, 2)` The AUC is `r auc_score`, and the AUC score takes into account all possible threshhold values. 
+Given a threshhold of .5, the accuracy rate is: `r round(100 * acc_rate,2)`% and the proportional reduction in error is: `r round(100 * pre, 2)`%. The AUC is `r auc_score`, and the AUC score takes into account all possible threshhold values. 
 
 I don't think this is a very good model. The proportional reduction in error is a good indicator of this. A proportional reduction in error of `1.62%` is a pretty negligible increase over the useless classifier. Additionally, we see that the AUC score only provides a `r auc_score - .5` increase in AUC score over the useless classifier.
 
 ## Multiple Variable Model
 
 ### 1.
-  * The random component of the probability distribution, `vote96` is distributed as a binomial random          variable. Each individual $vote96_i$ (each row of our dataframe) is a Bernoulli Trial and thus the sum      of all individual $vote96_{i}\ 's$ (i.e. the entire column `vote96`) is distributed as a binomial random     variable.$$\sum_{i=1}^{n}vote96_i \sim \binom{n}{k}p^k(1-p)^{n-k}$$
+  * The random component of the probability distribution, `vote96` is distributed as a binomial random          variable. Each individual $vote96_i$ (each row of our dataframe) is a Bernoulli Trial and thus the sum      of all individual $vote96_{i}\ 's$ (i.e. the entire column `vote96`) is distributed as a binomial random     variable. $$Pr(\sum_{i=1}^{n}vote96_i = k|p) = \binom{n}{k}p^k(1-p)^{n-k}$$
   
   * In our case, the linear predictor is: $$vote96_{i} = \beta_{0} + \beta_{1}mhealth\_sum + \beta_{2}age + \beta_{3}educ + \beta_{4}black + \beta_{5}female + \beta_{6}married + \beta_{7}inc10$$ $$
+    * Note that this is the linear predictor for a model utilizing *all* possible explanatory variables. The       model I utilize may or may not use all of the explanatory variables. 
   
   * Our link function is: $$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
 
@@ -153,7 +165,9 @@ acc_pre_auc = function(df, logit_model, thold = .5){
   df %>%
     na.omit() %>%
     add_predictions(logit_model, var = 'logit') %>%
-    mutate(prob = logit2prob(logit), odds = prob2odds(prob), pred_vote = ifelse(prob > thold, 1, 0)) %>%
+    mutate(prob = logit2prob(logit)) %>%
+    mutate(odds = prob2odds(prob)) %>%
+    mutate(pred_vote = ifelse(prob > thold, 1, 0)) %>%
     {.} -> pred
   
   acc_rate <- mean(pred$vote96 == pred$pred_vote)
@@ -166,5 +180,30 @@ acc_pre_auc = function(df, logit_model, thold = .5){
 
 full_crit <- acc_pre_auc(df.mhealth, logit.mh_all)
 bsel_crit <- acc_pre_auc(df.mhealth, logit.mh_bselect)
+```
+
+# Part 2: Modeling TV Consumption
+
+## Estimate a Regression Model
+
+### 1.
+  * The random component of the probability distribution, `tvhours` is distributed as a poisson random        variable. $$Pr(tvhours = k|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+  
+  * The linear predictor of a model utilizing all of the possible explanatory variables in the GSS survey is: $$tvhours_{i} = \beta_{0} + \beta_{1}age + \beta_{2}childs +     \beta_{3}educ + \beta_{4}female + \beta_{5}grass + \beta_{6}hrsrelax + \beta_{7}black$$ $$+ \beta_{8}social_connect + \beta_{9}voted04 + \beta_{10}xmovie + \beta_{11}zodiac + \beta_{12}dem + \beta_{13}rep + \beta_{14}ind$$
+  * Our link function is: $$g(vote96_i) = \log(tvhours_{i})$$
+  
+### 2.
+```{r est_pois_model, echo = TRUE, results = 'asis', hold = TRUE}
+# Define a full and a null model. 
+df.gss <- na.omit(df.gss)
+
+pois.gss_all <- glm(tvhours ~ ., data = df.gss,
+                    family = poisson)
+pois.gss_none <- glm(tvhours ~ 1, data = df.gss, family = poisson)
+
+# We will use backward stepwise AIC selection to select a model
+# In simple terms, AIC offers a tradeoff between model parsimony and log likelihood.
+pois.gss_bselect <- stepAIC(pois.gss_all, trace = 0)
+stargazer(pois.gss_bselect, type = 'html', title = 'Results of Backwards AIC selected Model')
 ```
   
