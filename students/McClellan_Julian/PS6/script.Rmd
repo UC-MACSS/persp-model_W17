@@ -71,11 +71,11 @@ df.mhealth %>%
   add_predictions(logit.mh_vt, var = 'logit') %>%
   mutate(prob = logit2prob(logit)) %>%
   mutate(odds = prob2odds(prob)) %>%
-  # na.omit() %>%
+  na.omit() %>%
   {.} -> pred.mh_vt
 ```
 ### 1. 
-The relationship between mental health (`mhealth_sum`) and voter turnout is stastistically significant, with a p-value approaching 0 (`r coef(summary(logit.mh_vt))[2,4]`). Additionally, we see that the difference in the log-odds ratio associated with a one unit increase in `mhealth_sum` (worse mental health) is `r param`. In other words, the odds ratio associated with a one unit increase in `mhealth_sum` is `r exp(param)`. This appears to be substantively significant as well in the negative direction. However, we will confirm this with the following graphs.
+The relationship between mental health (`mhealth_sum`) and voter turnout is stastistically significant, with a p-value approaching 0 (`r coef(summary(logit.mh_vt))[2,4]`). Additionally, we see that the change in the log-odds associated with a one unit increase in `mhealth_sum` (worse mental health) is `r param`. In other words, the odds ratio associated with a one unit increase in `mhealth_sum` is `r exp(param)`. This appears to be substantively significant as well in the negative direction. However, we will confirm this with the following graphs.
 
 ### 2.
 
@@ -106,8 +106,13 @@ ggplot(aes(mhealth_sum), data = pred.mh_vt) +
        x = "Mental Health Status (higher = worse mental health)",
        y = "Probability of Voting")
 
-dif.21 = pred.mh_vt[2,]$prob - pred.mh_vt[1,]$prob
-dif.65 = pred.mh_vt[6,]$prob - pred.mh_vt[5,]$prob
+tibble(mhealth_sum = 0:16) %>%
+  add_predictions(logit.mh_vt, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  {.} -> diff_grid
+
+dif.21 = diff_grid[3,]$prob - diff_grid[2,]$prob
+dif.65 = diff_grid[7,]$prob - diff_grid[6,]$prob
 ```
 
 The first difference for an increase in the mental health index from 1 to 2 is: `r dif.21`.  
@@ -129,7 +134,7 @@ pre <- (e1 - e2) / e1
 auc_score = auc(pred.mh_vt$vote96, pred.mh_vt$pred_vote)
 ```
 
-Given a threshhold of .5, the accuracy rate is: `r round(100 * acc_rate,2)`% and the proportional reduction in error is: `r round(100 * pre, 2)`%. The AUC is `r auc_score`, and the AUC score takes into account all possible threshhold values. 
+Given a threshhold of .5, the accuracy rate is: `r round(100 * acc_rate, 2)`% and the proportional reduction in error is: `r round(100 * pre, 2)`%. The AUC is `r auc_score`, and the AUC score takes into account all possible threshhold values. 
 
 I don't think this is a very good model. The proportional reduction in error is a good indicator of this. A proportional reduction in error of `1.62%` is a pretty negligible increase over the useless classifier. Additionally, we see that the AUC score only provides a `r auc_score - .5` increase in AUC score over the useless classifier.
 
@@ -154,33 +159,50 @@ logit.mh_none <- glm(vote96 ~ 1, data = df.mhealth, family = binomial)
 # In simple terms, AIC offers a tradeoff between model parsimony and log likelihood.
 logit.mh_bselect <- stepAIC(logit.mh_all, trace = 0)
 stargazer(logit.mh_bselect, type = 'html', title = 'Results of Backwards AIC selected Model')
-
-# Let's also report the full model
-stargazer(logit.mh_all, type = 'html', title = 'Results of Full Model')
 ```
 
 ### 3.
-```{r interp_results, results = 'asis'}
-acc_pre_auc = function(df, logit_model, thold = .5){
+```{r interp_results}
+acc_pre_auc = function(df, logit_model, dep_var = 'vote96', thold = .5){
   df %>%
     na.omit() %>%
     add_predictions(logit_model, var = 'logit') %>%
     mutate(prob = logit2prob(logit)) %>%
     mutate(odds = prob2odds(prob)) %>%
-    mutate(pred_vote = ifelse(prob > thold, 1, 0)) %>%
+    mutate(pred = ifelse(prob > thold, 1, 0)) %>%
     {.} -> pred
   
-  acc_rate <- mean(pred$vote96 == pred$pred_vote)
+  acc_rate <- mean(pred[[dep_var]] == pred$pred)
   e2 <- 1 - acc_rate
-  e1 <- 1 - mean(pred$vote96 == 1)
+  e1 <- 1 - mean(pred[[dep_var]] == 1)
   pre <- (e1 - e2) / e1
-  auc_score = auc(pred$vote96, pred$prob)
+  auc_score = auc(pred[[dep_var]], pred$prob)
   return(list('acc_rate' = acc_rate, 'pre' = pre, 'auc' = auc_score))
 }
 
-full_crit <- acc_pre_auc(df.mhealth, logit.mh_all)
 bsel_crit <- acc_pre_auc(df.mhealth, logit.mh_bselect)
 ```
+From the above table, we see the backwards AIC selection has resulted in a model with 5 predictor variables, not including the intercept. All of these predictors are significant at the `.05` level, except `married`, which is only significant at the `.1` level. With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
+
+All of the predictors, with the exception of `mhealth_sum`, have positive coefficients. These coefficients represent the effect a one unit increase of the predictor, with all other predictors held constant, has on the log-odds of vote participation. However, it is beneficial to visualize the effect of our predictors on actual predicted probabilities.
+
+Let's focus on one of the more statistically and substantively significant predictors, `educ` (years of education) and look at its affect on predicted probability. Note, that we cannot simply graph predicted probability against `educ`, as there are other predictors to take into account. Thus, for the non-binary variables of `age`, `mhealth_sum`, and `inc10` we simply hold those values constant at their median values within the dataset. We will graph two predicted probability curves, one for married people, and the other for unmarried people.
+```{r graph_pred_prob}
+df.mhealth %>%
+  data_grid(educ, married, .model = logit.mh_bselect) %>%
+  add_predictions(logit.mh_bselect, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  {.} -> grid.bsel.educ 
+
+ggplot(grid.bsel.educ, aes(x = educ, y = prob, color = ifelse(married == 1, 'Married', 'Unmarried'))) +
+  geom_line() +
+  labs(title = 'Effect of Education on Voting (married and unmarried)',
+       subtitle = 'Note that income, age, and mental health are fixed at their median values.',
+    x = 'Years of Education', y = 'Predicted Probability of Voting in 1996') +
+  guides(color = guide_legend('')) + 
+  scale_y_continuous(breaks = c(0, .25, .5, .75, 1))
+```
+Thus, we see that `educ`, i.e. years of education, is the most impactful non-binary predictor on predicted voting probability, and `married` also results in a shift upward in predicted probability.
 
 # Part 2: Modeling TV Consumption
 
@@ -205,5 +227,36 @@ pois.gss_none <- glm(tvhours ~ 1, data = df.gss, family = poisson)
 # In simple terms, AIC offers a tradeoff between model parsimony and log likelihood.
 pois.gss_bselect <- stepAIC(pois.gss_all, trace = 0)
 stargazer(pois.gss_bselect, type = 'html', title = 'Results of Backwards AIC selected Model')
+```
+
+### 3.
+```{r interp_results_fightme}
+bsel_crit <- acc_pre_auc(df.gss, pois.gss_bselect, 'tvhours')
+```
+From the above table, we see the backwards AIC selection has resulted in a model with 4 predictor variables, not including the intercept. All of the predictors are significant at the `.05` level, except `grass`, which is only significant at the `.1` level.  With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
+
+Two of the predictors, `educ` (years of education), and `grass` (believes marijuana should be legalized), have negative coefficients, and the other two, `hrsrelax` and `black` have positive coefficients. These coefficients represent the effect a one unit increase of the predictor, with all other predictors held constant, has on the log count of `tvhours`. However, as before it is beneficial to visualize the effect of our predictors on actual predicted probabilities.
+
+Let's focus on one of the more substantively significant non-binary predictors: `hrsrelax` (the hours in a day one has to relax), and look at its affect on predicted count. Note, that we cannot simply graph predicted count against `hrsrelax`, as there are other predicted variables to take into account. Thus, for the non-binary variable `educ` we simply hold this value constant at the median values within the dataset. We will plot 4 different lines for the interactions of the two-binary variables `grass` and `black`.
+
+```{r graph_pred_prob_pois}
+
+
+df.gss %>%
+  data_grid(hrsrelax, black, grass, .model = pois.gss_bselect) %>%
+  add_predictions(pois.gss_bselect, var = 'log_count') %>%
+  mutate(count = exp(log_count), race_weed = paste(ifelse(grass, 'Legalize Weed', "Don't Legalize Weed"), 
+                                                   '+', 
+                                                   ifelse(black, "Black", "Non_Black"))) %>%
+  {.} -> grid.bsel.hrsrelax
+
+ggplot(grid.bsel.hrsrelax, aes(x = hrsrelax, y = count, 
+                               color = race_weed)) +
+  geom_line() +
+  labs(title = 'Effect of Hours of Lesiure on Predicted Hours of TV Watched per day',
+       subtitle = 'Note that years of education is fixed at its median value.',
+    x = 'Hours of Leisure per day', y = 'Predicted Hours of TV watched per day') +
+  guides(color = guide_legend('')) + 
+  scale_y_continuous(breaks = c(0, .25, .5, .75, 1))
 ```
   
