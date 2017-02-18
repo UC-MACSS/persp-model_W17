@@ -1,5 +1,5 @@
 ---
-title: "Problem Set 5 | MACS 301"
+title: "Problem Set 6 | MACS 301"
 author: "Julian McClellan"
 date: "Due 2/20/17"
 output: html_document
@@ -19,8 +19,6 @@ knitr::opts_chunk$set(cache = TRUE,
 df.gss = read.csv('data/gss2006.csv')
 df.mhealth = read.csv('data/mental_health.csv')
 ```
-
-
 
 # Part 1: Modelling Voter Turnout
 
@@ -143,7 +141,7 @@ I don't think this is a very good model. The proportional reduction in error is 
 ### 1.
   * The random component of the probability distribution, `vote96` is distributed as a binomial random          variable. Each individual $vote96_i$ (each row of our dataframe) is a Bernoulli Trial and thus the sum      of all individual $vote96_{i}\ 's$ (i.e. the entire column `vote96`) is distributed as a binomial random     variable. $$Pr(\sum_{i=1}^{n}vote96_i = k|p) = \binom{n}{k}p^k(1-p)^{n-k}$$
   
-  * In our case, the linear predictor is: $$vote96_{i} = \beta_{0} + \beta_{1}mhealth\_sum + \beta_{2}age + \beta_{3}educ + \beta_{4}black + \beta_{5}female + \beta_{6}married + \beta_{7}inc10$$ $$
+  * In our case, the linear predictor is: $$vote96_{i} = \beta_{0} + \beta_{1}mhealth\_sum + \beta_{2}age + \beta_{3}educ + \beta_{4}black + \beta_{5}female + \beta_{6}married + \beta_{7}inc10$$ 
     * Note that this is the linear predictor for a model utilizing *all* possible explanatory variables. The       model I utilize may or may not use all of the explanatory variables. 
   
   * Our link function is: $$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
@@ -182,7 +180,7 @@ acc_pre_auc = function(df, logit_model, dep_var = 'vote96', thold = .5){
 
 bsel_crit <- acc_pre_auc(df.mhealth, logit.mh_bselect)
 ```
-From the above table, we see the backwards AIC selection has resulted in a model with 5 predictor variables, not including the intercept. All of these predictors are significant at the `.05` level, except `married`, which is only significant at the `.1` level. With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
+From the above table, we see the backwards AIC selection has resulted in a model with 5 predictor variables, not including the intercept. The binary predictors `black` and `female` were left out. AIC selection involves the calculation of maximum likelihood, and thus other predictors likely provided greater maximum likelihood than `black` and `female`. All of these predictors are significant at the `.05` level, except `married`, which is only significant at the `.1` level. With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
 
 All of the predictors, with the exception of `mhealth_sum`, have positive coefficients. These coefficients represent the effect a one unit increase of the predictor, with all other predictors held constant, has on the log-odds of vote participation. However, it is beneficial to visualize the effect of our predictors on actual predicted probabilities.
 
@@ -202,7 +200,8 @@ ggplot(grid.bsel.educ, aes(x = educ, y = prob, color = ifelse(married == 1, 'Mar
   guides(color = guide_legend('')) + 
   scale_y_continuous(breaks = c(0, .25, .5, .75, 1))
 ```
-Thus, we see that `educ`, i.e. years of education, is the most impactful non-binary predictor on predicted voting probability, and `married` also results in a shift upward in predicted probability.
+
+Thus, we see the effect of `educ` the most impactful non-binary predictor on predicted voting probability, and `married` also results in a shift upward in predicted probability.
 
 # Part 2: Modeling TV Consumption
 
@@ -233,15 +232,13 @@ stargazer(pois.gss_bselect, type = 'html', title = 'Results of Backwards AIC sel
 ```{r interp_results_fightme}
 bsel_crit <- acc_pre_auc(df.gss, pois.gss_bselect, 'tvhours')
 ```
-From the above table, we see the backwards AIC selection has resulted in a model with 4 predictor variables, not including the intercept. All of the predictors are significant at the `.05` level, except `grass`, which is only significant at the `.1` level.  With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
+From the above table, we see the backwards AIC selection has resulted in a model with 4 predictor variables, not including the intercept. Thankfully, backwards AIC selection left out variables that wouldn't make much sense to affect TV hours watched, including the Zodiac symbols and whether or not someone saw an X-rated movie or voted in 2004. All of the predictors are significant at the `.05` level, except `grass`, which is only significant at the `.1` level.  With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
 
 Two of the predictors, `educ` (years of education), and `grass` (believes marijuana should be legalized), have negative coefficients, and the other two, `hrsrelax` and `black` have positive coefficients. These coefficients represent the effect a one unit increase of the predictor, with all other predictors held constant, has on the log count of `tvhours`. However, as before it is beneficial to visualize the effect of our predictors on actual predicted probabilities.
 
 Let's focus on one of the more substantively significant non-binary predictors: `hrsrelax` (the hours in a day one has to relax), and look at its affect on predicted count. Note, that we cannot simply graph predicted count against `hrsrelax`, as there are other predicted variables to take into account. Thus, for the non-binary variable `educ` we simply hold this value constant at the median values within the dataset. We will plot 4 different lines for the interactions of the two-binary variables `grass` and `black`.
 
 ```{r graph_pred_prob_pois}
-
-
 df.gss %>%
   data_grid(hrsrelax, black, grass, .model = pois.gss_bselect) %>%
   add_predictions(pois.gss_bselect, var = 'log_count') %>%
@@ -260,3 +257,4 @@ ggplot(grid.bsel.hrsrelax, aes(x = hrsrelax, y = count,
   scale_y_continuous(breaks = c(0, .25, .5, .75, 1))
 ```
   
+  As one could have seen from the table, but what is now evident from this table, is that if one is Black, and with all other predictors held constant, that there is a larger jump in predicted hours of TV watched per day than there is if one believes in legalizing marijuana. To be honest this seems to go against the stoner stereotype.
