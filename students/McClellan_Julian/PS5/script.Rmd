@@ -1,0 +1,183 @@
+---
+title: "Problem Set 5 | MACS 301"
+author: "Julian McClellan"
+output:
+  github_document:
+    toc: true
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+biden = read.csv('../../../assignments/PS5/data/biden.csv')
+```
+
+```{r packages, message = FALSE, warning = FALSE, cache = FALSE, echo = FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(plyr)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+```
+# Describe the data
+
+```{r describe}
+ggplot(biden, aes(biden)) + 
+  geom_histogram(binwidth = 1) + 
+  labs(title = 'Histogram of Joe Biden Feeling (0-100)',
+       x = 'Joe Biden Warmth Feeling score',
+       y = 'Frequency Count for given score'
+       )
+```
+
+As one can see from the histogram above, although there are 101 possible scores, the Joe Biden Warmth Feeling scores fall into only `r length(unique(biden$biden))` unique values, which are for the most part multiples of 5 or 10. This makese sense. It is not unreasonble to think that most people, when asked to rate their warmness to Joe Biden, would have a nuanced enough attitude to warrant scores that fall between multiples of 5 or 10.
+
+
+# Simple Linear Regression
+
+```{r simple_lr}
+# Make model
+biden_mod <- lm(biden ~ age, data = biden)
+
+# Make grid of data
+grid <- biden %>%
+  data_grid(age) %>%
+  add_predictions(biden_mod)
+
+tidy(biden_mod)
+```
+
+## 1.
+There does appear to be a relationship between the predictor (age) and the response (warmth score). Indeed, we see that the estimate for the age coefficient is `r biden_mod$coefficients[2]`. Additionally, the p-value for the age coefficient is .0563, so it appears to be significant (at least at a 90% confidence level).
+
+## 2.
+The relationship between the predictor (age) and the response (warmth score) does not appear to be that strong. Indeed, the coefficient is only .06421, so the difference in score between a 30 and 60 year old would only be ~2 points.
+
+## 3. 
+The relationship between the predictor (age) and the response (warmth score) is positive, since the coefficient for age is positive `r biden_mod$coefficients[2]`
+
+## 4.
+The $R^2$ of the model is `r summary(biden_mod)$r.squared`. Thus, age only explains $.2\%$ of the variation in warmth score This is a pretty bad model, it is hardly able to explain any of the variation in warmth score. It would not be useful for prediciton.
+
+## 5.
+```{r ci95}
+(pred_ci <- augment(biden_mod, newdata = data_frame(age = c(45))) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96))
+```
+The predicted `biden` associated with an `age` of 45 is: `r pred_ci$.fitted`. The lower bound of the 95% confidence interval is `r pred_ci$ymin` and the upper bound of the 95% confidence interval is `r pred_ci$ymax`.
+
+## 6.
+See the plot of the response and predictor with the least squares regression line below.
+```{r plot}
+# Plot Data
+ggplot(biden, aes(age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1) +
+  labs(title = 'Plot of Joe Biden Wamrth Feeling with Least Squares Regression Line',
+       y = 'Joe Biden Warmth Score')
+```
+
+# Multiple Linear Regression
+
+```{r mlr}
+biden_mmod <- lm(biden ~ age + female + educ, data = biden)
+tidy(biden_mmod)
+```
+
+## 1.
+There do indeed seem to be statistically significant relationships between the predictors and the response `biden`. The predictirs `female` and `educ` are both statistically significant (even at the .001 level!) with very low p-values. The predictor `age`, while it was statistically significant when it was the sole predictor, is now no longer statistically significant even at the .1 level, with a p-value of `.198`.
+
+## 2.
+The coefficient for `female` suggests that, with the age and years of education of the respondent held constant, the predicted warmth score for Joe Biden (`biden`) is ~`6.20` points higher if the respondent is female.
+
+## 3.
+The $R^2$ of the model is `r summary(biden_mmod)$r.squared`. Thus, the percentage of variation in `biden` explained by `age`, gender (`female`), and education (`educ`) is only ~$2.7\%$. While this is not much, it explains an order of magnitude more of the variation in `biden` than `age` did on its own.
+
+## 4.
+```{r residpredplot, echo = FALSE}
+biden %>% 
+  select(age, educ, female, biden, dem, rep) %>%
+  add_predictions(biden_mmod, var = 'pred0') %>%
+  add_residuals(biden_mmod) %>%
+  {.} -> grid
+
+ggplot(grid, aes(pred0, resid)) +
+  labs(title = 'Residuals vs. Predicted values of Warmth Score',
+       y = 'Residual value',
+       x = 'Predicted warmth score') +
+  geom_point() +
+  geom_smooth(aes(color = "DEM"), data = filter(grid, dem == 1), method = lm) +
+  geom_smooth(aes(color = "REP"), data = filter(grid, rep == 1), method = lm) +
+  geom_smooth(aes(color = "IND"), data = filter(grid, (dem == 0) & (rep == 0)), method = lm) +
+  scale_color_manual('', values = c("DEM" = "blue", "REP" = "red", "IND" = "green"))
+```
+
+There is indeed a problem in the model. By plotting 3 smooth fit regression lines and corresponding 95% confidence intervals for the residuals on the predicted values of warmth score for each of the three possible affiliations (Democrat, Republican, and Independent), we see that being a Democrat, Independent, or Republican have distinct effects on the residual values! This suggests that we should include party affiliation within our model, as we want to integrate these separate party effects into our model.
+
+# Multiple Linear Regression Model (More Variable)
+```{r mmlr}
+biden_mmmod = lm(biden ~ age + female + educ + dem + rep, data = biden)
+tidy(biden_mmmod)
+```
+## 1.
+The relationship between gender (`female`) and Biden warmth did indeed seem to change. Whereas before the coefficient for `female` was: `r biden_mmod$coefficients[3]`, now the coefficient for `female`, when including the `dem` and `reb` factors is: `r biden_mmmod$coefficients[3]`. In words, when we hold constant Democratic and Republican party membership, in addition to age, years of education and gender, the increase in predicted Biden warmth is lower than when we do not hold party membership constant.
+
+## 2.
+The $R^2$ of the model is `r summary(biden_mmmod)$r.squared`. Thus, the percentage of variation in `biden` explained by `age`, gender (`female`), and education (`educ`) is ~$28.15\%$. While this is not a majority, it explains an order of magnitude more of the variation in `biden` than `age`, `female`, and `educ` did, and it explains two orders of magnitude more variation in `biden` than `age` did on its own.
+
+## 3.
+```{r residpredplot2, echo = FALSE}
+biden %>% 
+  select(age, educ, female, biden, dem, rep) %>%
+  add_predictions(biden_mmmod, var = 'pred0') %>%
+  add_residuals(biden_mmmod) %>%
+  {.} -> grid
+
+ggplot(grid, aes(pred0, resid)) +
+  labs(title = 'Residuals vs. Predicted values of Warmth Score',
+       y = 'Residual value',
+       x = 'Predicted warmth score') +
+  geom_point() +
+  geom_smooth(aes(color = "DEM"), data = filter(grid, dem == 1), method = lm) +
+  geom_smooth(aes(color = "REP"), data = filter(grid, rep == 1), method = lm) +
+  geom_smooth(aes(color = "IND"), data = filter(grid, (dem == 0) & (rep == 0)), method = lm) +
+  scale_color_manual('', values = c("DEM" = "blue", "REP" = "red", "IND" = "green"))
+```
+
+We did indeed fix the previous problem. Before the, the smooth fit regression lines and corresponding confidence intervals for each of the three possible party affiliations was distinct, with slightly differing slopes and very different (visually) intercepts. Now, however, after we have included party affiliation into our model, we see that all three smooth fit lines for Democrats, Republicans, and Independents have a slope of approximately 0 as well as a 0 intercept. They are all quite similar now, suggesting that in our current model that party affiliation, or lack thereof, has no effect on our residuals.
+
+Note however, that there is still a distinct pattern to the residuals. While this is not ideal, it is because `age`, and years of education (`educ`) are only measured as integers in our data, and since we did not include them as factors (which would be cumbersome, to be honest) in our model, they are treated as if they exist in the real numbers.
+
+# Interactive Linear Regression Model
+```{r, ilrm}
+# Make the linear model
+biden_po_mod <- biden %>% 
+  filter(dem == 1 | rep == 1)  %>%
+  lm(biden ~ female * dem, data = .)
+
+# Estimate predicted thermometer ratings and 95% Confidence intervals
+biden_po_mod$model %>%
+    data_grid(female, dem) %>%
+    augment(biden_po_mod, newdata = .) %>%
+    mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96) %>%
+    rename(c('female' = 'gender', 'dem' = 'party', '.fitted' = 'warmth rating', 'ymin' = 'CI_lower_bound', 'ymax' = 'CI_upper_bound')) %>%
+    mutate(gender = ifelse(gender == 0, "Male", "Female"),
+         party = ifelse(party == 0, "Republican", "Democrat")) %>%
+    {.} -> pred_ci_gender_party
+pred_ci_gender_party
+```
+## 1. 
+
+The relationship between party ID and Biden warmth does appear to differ for males/females. This is most pronounced for the Republican party, we see that female Republicans have a predicted warmth rating over 6 points higher than their male Republican counterparts. (`r pred_ci_gender_party$warmth_rating[3]` vs `r pred_ci_gender_party$warmth_rating[1]`) This difference also appears to be significant at the 95% level, as the 95% confidence intervals of warmth score for male and memale Republicans do not overlap at all! (The 95% CI lower bound for for female Republicans, `r pred_ci_gender_party$CI_lower_bound[3]` is greater than the 95% CI upper bound for male Republicans `r pred_ci_gender_party$CI_upper_bound[3]`)
+
+There is much less of a difference for the Democratic party. The predicted warmth rating for female Democrats is just over 2 points higher than male Democrats. (`r pred_ci_gender_party$warmth_rating[4]` vs `r pred_ci_gender_party$warmth_rating[2]`). This difference also appears insignificant at the 95% level, as the 95% confidence intervals of warmth score for male and female Democrats do overlap. (The 95% CI lower bound for for female Democrats, `r pred_ci_gender_party$CI_lower_bound[4]` is lower than the 95% CI upper bound for male Democrats, `r pred_ci_gender_party$CI_upper_bound[2]`)
+
+

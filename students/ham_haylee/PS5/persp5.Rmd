@@ -1,0 +1,134 @@
+---
+title: "Perspectives Assignment 5"
+author: "Haylee Ham"
+date: "2/10/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(broom)
+library(modelr)
+```
+
+```{r, echo=FALSE}
+biden_df <- read.csv('biden.csv')
+```
+
+### Describe the data
+```{r}
+ggplot(biden_df, aes(biden)) + geom_histogram(binwidth = 1) + labs(title="Histogram for Biden Feeling Thermometer Ratings", x="Biden Feeling Thermometer Rating", y="Frequency Count of Ratings")
+```
+
+Interestingly, a vast majority of the values of the feeling thermometer ratings fall at very decided intervals. Although respondents were free to choose any integer between 0 and 100, all but a few responses fell at intervals of 5. This pattern is understandable since humans may have a strong tendency to think in clean intervals such as 5 and 10.
+
+### Simple Linear Regression
+```{r simple_model}
+simple_model <- lm(formula = biden ~ age, data = biden_df)
+tidy(simple_model)
+```
+1. There does appear to be a relationship between the predictor (`age`) and the response (the feeling rating). The age variable has a coefficient value of 0.06241 and a p-value of 0.0563, meaning that this coefficient value is significant at a 90% confidence interval. 
+2. With a coefficient of 0.06241, the relationship between the predictor and the response is not very strong. With each increase in one year of age, the feeling rating only increases by 0.06241 of a point, which means that in a 100 year increase in age only results in a 6.421 point increase in the feeling rating.
+3. The relationship between the predictor and the response is positive, since the coefficient on the predictor (`age`) is a positive value of 0.06241. This means that when the age increases by a unit of 1 the thermometer rating increases by 0.06241. The response increasing when the predictor increases means that there is a postive relationship.
+4. The $R^2$ of the model is `r summary(simple_model)$r.squared`. This means that the simple model only explains about 0.2% of the variation that exists within the response variable, the feeling thermometer rating. An $R^2$ value that low indicates a fairly poor model, since it explains so little of the variation.
+5. The predicted biden thermometer raing associated with an age of 45 is 62.0056. The 95% confidence intervals on either side are 60.92148 and 63.09872.
+```{r age_45}
+(pred_ci <- augment(simple_model, newdata = data_frame(age = c(45))) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96))
+```
+
+6. See the plot of the response and predictor below and the fitted least squares regression line.
+```{r simple_plot}
+grid <- biden_df %>% 
+  data_grid(age)
+grid <- grid %>% 
+  add_predictions(simple_model) 
+ggplot(biden_df, aes(x = age)) +
+  geom_point(aes(y = biden)) + 
+  geom_line(aes(y = pred), data = grid, color = '#E59866', size = 1) +
+  labs(title='Biden Feeling Thermometer Ratings and Age', x="Age", y='Biden Feeling Thermometer Rating')
+```
+
+### Multiple Linear Regression
+```{r mult_model}
+mult_model <- lm(formula = biden ~ age + female + educ, data = biden_df)
+tidy(mult_model)
+```
+1. The predictors `female` and `educ` do have statistically significant relationships with `biden`. The `female` and `educ` predictors have p-values that show that the predictors are significant at above a 99% level. Once the other predictors are included in the model, the `age` predictor becomes statistically insignificant with a very high p-value of 0.198.
+2. The parameter for `female` suggests that females respond with thermometer ratings that are about 6.19 points higher than males' thermometer ratings, when `educ` and `age` are not altered.
+3. The $R^2$ value for this model is `r summary(mult_model)$r.squared`. This means that the combination of `age`, `female`, and `educ` explain about 2.7% of the variation in the response variable. This model still explains only a small percentage of the variation but it does explain about 10 times more than the simple model explains.
+4. There is a problem with this model. Party affiliation has a large effect on residuals, which should all be around zero. Instead, Republicans' residuals are causing their thermometer ratings to be lower than they actually are and Democrat's residuals are causing their thermometer ratings to be higher than they actually are.
+```{r}
+biden_df %>% 
+  add_predictions(mult_model) %>%
+  add_residuals(mult_model) -> grid2
+
+dem <- filter(grid2, dem == 1)
+rep <- filter(grid2, rep == 1)
+ind <- filter(grid2, dem == 0 & rep == 0)
+
+ggplot(grid2, aes(pred)) + 
+  geom_point(aes(y = resid)) +
+  geom_smooth(method='loess', aes(y=resid, color = 'Democratic'), data=dem) +
+  geom_smooth(method='loess', aes(y=resid, color = 'Republican'), data=rep) +
+  geom_smooth(method='loess', aes(y=resid, color = 'Independent'), data=ind) +
+  labs(title = "Predicted Values Compared to Residuals", x = "Biden Feeling   Thermometer Rating", y = "Residuals") +
+  scale_color_manual(name = "Party Affiliation",breaks = c('Democratic', 'Republican', 'Independent'), values = c('#5499C7', '#45B39D', '#CD6155'))
+```
+
+
+### Multiple Linear Regression (with even more variables!)
+```{r more_model}
+more_model <- lm(formula = biden ~ age + female + educ + dem + rep, data = biden_df)
+tidy(more_model)
+```
+1. The relationship between `gender` and Biden warmth decreased in strength in this new model. Once predictors for political party were included in the model, the effect of `gender` on the thermometer rating `biden` decreased from women rating Biden higher by about 6.19 points to women rating Biden higher by only about 4.1 points. 
+2. The $R^2$ value for this model is `r summary(more_model)$r.squared`. This means that the model that includes `age`, `female`, `educ`, `dem`, and `rep` explains about 28% of the variation seen in the response variable `biden`. This model is about 10 times better at explaining the variation in the response variable than the previous model.
+3. The problem from the previous model was fixed by adding variables for party affiliation. The residulas for each of the parties are generally centered around zero, which means we are controlling for the effect that party affiliation has on the residuals.
+```{r}
+biden_df %>% 
+  add_predictions(more_model) %>%
+  add_residuals(more_model) -> grid3
+
+dem <- filter(grid3, dem == 1)
+rep <- filter(grid3, rep == 1)
+ind <- filter(grid3, dem == 0 & rep == 0)
+
+ggplot(grid3, aes(pred)) + 
+  geom_point(aes(y = resid)) +
+  geom_smooth(method='loess', aes(y=resid, color = 'Democratic'), data=dem) +
+  geom_smooth(method='loess', aes(y=resid, color = 'Republican'), data=rep) +
+  geom_smooth(method='loess', aes(y=resid, color = 'Independent'), data=ind) +
+  labs(title = "Predicted Values Compared to Residuals II", x = "Biden Feeling   Thermometer Rating", y = "Residuals") +
+  scale_color_manual(name = "Party Affiliation",breaks = c('Democratic', 'Republican', 'Independent'), values = c('#5499C7', '#45B39D', '#CD6155'))
+```
+
+
+### Interactive Linear Regression Model
+```{r}
+gender_party <- filter(biden_df, dem == 1 | rep == 1)
+gender_party_model <- lm(formula = biden ~ female + dem + female*dem, data = biden_df)
+tidy(gender_party_model)
+```
+1. There are obviously differences between the warmth ratings given by females and males and those from different parties. Republicans, regardless of gender, gave lower warmth ratings than Democrats, with male Republicans giving the lowest rating of about 50.2. Female republicans gave a rating of about 55.2. Democrats of both genders gave ratings in the mid-70s, with female Democrats giving the highest rating of about 75.5 and male Democrats with a lower rating of about 73.1.
+
+    These ratings show that there is a marked difference between female and male attitudes toward Biden. Female republicans gave a distinctly higher rating than male republicans, so much so that at their 95% confidence intervals do not overlap. There is also a visible difference between the genders in the Democratic party, however it is much weaker. The lower bound of the female Democratic rating (~73.6) is lower than the upper bound of the male Democratic rating (~75.4).
+    
+    With that being said, it is still clear that the largest difference in ratings is a result of party affiliation rather than gender, with female Democrats giving a warmth rating about 20 points higher than female Republicans, and male Democrats giving a rating about 23 points higher than male Republicans.
+```{r}
+grid3 <- gender_party %>%
+  data_grid(female, dem)
+grid3 <- grid3 %>%
+  add_predictions(gender_party_model)
+
+pred_g <- augment(gender_party_model, newdata = grid3) %>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96)
+pred_g
+```
+

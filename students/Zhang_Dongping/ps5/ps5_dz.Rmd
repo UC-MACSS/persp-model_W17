@@ -1,0 +1,190 @@
+---
+title: 'MACS 30100: Problem Set 5'
+author: "Dongping Zhang"
+date: "2/10/2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(plyr)
+library(dplyr)
+library(tidyr)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+```
+
+
+# I. Describe the data: 
+Plot a histogram of biden with a binwidth of 1. Make sure to give the graph a title and proper x and y-axis labels. In a few sentences, describe any interesting features of the graph.
+
+* Load the `biden.csv` dataset
+```{r biden}
+biden <- read.csv('biden.csv')
+```
+
+* Plot a histogram of biden with a binwidth of `1`.
+```{r plot biden}
+ggplot(biden, aes(x = biden)) + geom_histogram(aes(y = ..density..), binwidth = 1) + 
+  ggtitle("Histogram of Biden Plot") +
+  labs(x = "Thermometer Scale (in degree)", y = "Percent of observations in bin") +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+According to the histogram above, the sample population in general has favorable and warm feelings toward Biden, because most of the ratings are falling between 50 degrees and 100 degrees. The tallest bin is at 50 degrees, meaning about 20% of the sample population is indifferent toward Biden. One feature of the dataset that makes it interesting is that most of the survey respondents would select multiples of 5 when responding to this question.
+
+
+# II. Simple Linear Regression Model 
+* Run a simple linear regression of `biden` on `age`
+```{r simple regression}
+simple_lm = lm(biden~age, data = biden)
+summary(simple_lm)
+```
+
+\noindent __1. Is there a relationship between the predictor and the response?__
+<br /> In order to determine whether there is a relationship between the predictor and the response, I would refer to the p-value of the `age` variable. Becasue the p-value for the `age` variable is 0.0563, it implies that the probability of observing $\beta_1$ value equals to 0.06241, or larger, is 0.0563. This probability is greater using a 5% significance level, so we fail to reject $H_0$ and thus can claim that the effect of the `age` variable is indeed 0.
+
+
+\noindent __2. How strong is the relationship between the predictor and the response?__
+<br /> The relationship between `age` and `biden` is that 1 unit increase of `age` would lead to an increase of response variable `biden` by 0.06241 degree on average. Thus, we can conclude that the relationship between the predictor and the response is not strong at all.  
+
+
+\noindent __3. Is the relationship between the predictor and the response positive or negative?__
+<br /> The relationship between the predictor and the response, or the coefficient of the `age` variable, is 0.06241, which has a positive effect, meaning an increase in the predictor would likely to cause an increase in the response. 
+
+
+\noindent __4. Report the $R^2$ of the model. What percentage of the variation in biden does age alone explain? Is this a good or bad model?__
+```{r get simple r2}
+summary(simple_lm)$r.squared
+```
+<br /> The $R^2$ of the model is 0.002018, meaning that 0.2018% of variability in `biden` can be explained by using `age`. This low $R^2$ statistic indicates that this regression model did not explain much of the variability in the response because the model might be wrong, or the inherent error $\sigma^2$ is high, or both.
+
+
+\noindent __5. What is the predicted biden associated with an age of 45? What are the associated 95% confidence intervals?__
+<br /> The predicted `biden` associated with an age of 45 is 62.00581, and the associated 95% confidence interval is (60.91248, 63.09872).
+```{r predict 45}
+(pred_ci45 <- augment(simple_lm, 
+                      newdata = data_frame(age = c(45))) %>%
+   mutate(ymin = .fitted - .se.fit * 1.96,
+          ymax = .fitted + .se.fit * 1.96))
+```
+
+
+\noindent __6. Plot the response and predictor. Draw the least squares regression line__
+```{r least square regression line}
+# create a dataframe
+biden_grid <-  biden %>%
+  data_grid(age) %>%
+  add_predictions(simple_lm)
+
+# plotting
+ggplot(biden, aes(age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = biden_grid, color = "red", size = 1) + 
+  ggtitle("Least Square Regression Line: Biden on Age") +
+  labs(x = "Age", y = "Thermometer Scale (in degree)") +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 100, by = 10)) + 
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+# III. Multiple Linear Regression (Part I)
+* Run a multiple linear regression of `biden` on `age`, `female`, and `educ`
+```{r multiple regression}
+multiple_lm = lm(biden~age + female + educ, data = biden)
+summary(multiple_lm)
+```
+
+\noindent __1. Is there a statistically significant relationship between the predictors and response?__
+<br /> According to the p-values of each regressors, `female` and `educ` are both statistically significant meaning there are linear relationships between those two regressors with the response because their p-vales, $1.86 \times 10^{-8}$ and $7.94 \times 10^{-5}$, are both lower than the typically used 5% significance level. Meanwhile, `age` is still not statistically significant becasue its p-value, 0.198, is greater than the 5% significance level, thus we would fail to reject $H_0$ of $\beta_{Age} = 0$.
+
+\noindent __2. What does the parameter for female suggest?__
+<br /> Because `female` is a dummy variable, its coefficient represents the average differences between females and males, ceteris paribus. According to the model above, the parameter for `female` suggests a female respondent would likely give a response 6.19607 degrees higher than a scores given by a male respondent on average, ceteris paribus.
+
+\noindent __3. Report the $R^2$ of the model. What percentage of the variation in `biden` does `age`, `gender`, and `education` explain? Is this a better or worse model than the age-only model?__
+```{r get multiple r2}
+(r2_comparison <- c("simple"   = summary(simple_lm)$r.squared,
+                    "multiple" = summary(multiple_lm)$r.squared))
+```
+<br /> The $R^2$ of this multiple regression model is 0.02722727. The proportion of variability in `biden` that can be explained by those three variables is about 2.72%. Comparing the $R^2$ statistic of the age-only model with the multiple regression model, this later is certainly a better model. 
+
+\noindent __4.Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. Is there a problem with this model? If so, what?__
+<br /> According to the residual vs. fitted values plot shown below, it is easily observable that the residuals are not centered at 0 and are differing by the parties the respondents affiliated to. The current model tends to overestimate the responses by Republicans while underestimate the responses by Democrats. This suggests we might want to add other variales to differentiate respondents by parties so as to make better predictions. 
+```{r pred vals vs. residuals}
+biden_stats <- augment(multiple_lm, biden) %>%
+  mutate(rep = rep * 2, 
+         party_id = factor(dem + rep)) %>%
+  mutate(Party = factor(party_id, labels = c("Others", "Democrats", "Republicans"))) %>%
+  mutate(Party = factor(Party, levels = rev(levels(Party))))
+
+ggplot(biden_stats, aes(x = .fitted, y = .resid)) +
+  geom_point(aes(color = Party), size = 0.3) + 
+  geom_smooth(aes(color = Party), method = 'loess', size = 1) +
+  labs(x = "Fitted Values",
+       y = "Residuals",
+       title = "Fitted Value vs. Residual Plot \n (Multiple Regression Model 1)") + 
+    theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+# IV. Multiple Linear Regression (Part II)
+* Run a multiple linear regression of `biden` on `age`, `female`, `educ`, `dem`, and `rep`
+```{r multiple regression 2}
+multiple_lm2 = lm(biden~age + female + educ + dem + rep, data = biden)
+summary(multiple_lm2)
+```
+\noindent __5. Did the relationship between gender and Biden warmth change?__
+<br /> The relationship between `female` and `biden` has changed and it has decreased from 6.19607 to 4.10323 but maintaining a positive effect.
+
+\noindent __6. Report the $R^2$ of the model. What percentage of the variation in `biden` does `age`, `gender`, `education`, and `party` identification explain? Is this a better or worse model than the age + gender + education model?__
+```{r get multiple2 r2}
+(r2_comparison2 <- c("simple"   = summary(simple_lm)$r.squared,
+                     "multiple" = summary(multiple_lm)$r.squared,
+                     "multiple2" = summary(multiple_lm2)$r.squared))
+```
+<br /> The $R^2$ of this version multiple regression model is 0.281539147. So now, the proportion of variability in `biden` that can be explained by current selected regressors is about 28.15%. Comparing the $R^2$ statistic with the previous multiple regression model, the current model is definitely a lot and the prediction would be more reliable. 
+
+\noindent __7. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type. By adding variables for party ID to the regression model, did we fix the previous problem?__
+<br /> According to the residual vs. fitted values plot shown below, the patterns of residuals across all parties are centering around 0, so the current multiple regression model has fixed, or at leaset has improved, the previous problems by adding dummies of parties. Nevertheless, we are still able to see that comparing with "Others", "Republicans" and "Democrates" still has fluctuating residuals, and it implies that there might be some other variables out there not included but can potentially improve the current model. 
+```{r pred vals vs. residuals 2}
+biden_stats <- augment(multiple_lm2, biden) %>%
+  mutate(rep = rep * 2, 
+         party_id = factor(dem + rep)) %>%
+  mutate(Party = factor(party_id, labels = c("Others", "Democrats", "Republicans"))) %>%
+  mutate(Party = factor(Party, levels = rev(levels(Party))))
+
+ggplot(biden_stats, aes(x = .fitted, y = .resid)) +
+  geom_point(aes(color = Party), size = 0.3) + 
+  geom_smooth(aes(color = Party), method = 'loess', size = 1) +
+  labs(x = "Fitted Values",
+       y = "Residuals",
+       title = "Fitted Value vs. Residual Plot \n (Multiple Regression Model 2)") + 
+    theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+# V. Interactive Linear Regression 
+* Run a multiple linear regression of `biden` on `female`, `dem`, and `female` $\times$ `dem`
+```{r interavtive regression}
+dem_rep = biden[biden$dem == 1 | biden$rep == 1, ]
+interactive_lm = lm(biden~female*dem, data = dem_rep)
+summary(interactive_lm)
+```
+\noindent __1. Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?__
+```{r interactive predict}
+(pred_ci_party <- augment(interactive_lm, 
+                          newdata = data.frame(female = c(1, 0, 1, 0), dem = c(1, 1, 0, 0))) %>%
+   mutate(ymin = .fitted - .se.fit * 1.96,
+          ymax = .fitted + .se.fit * 1.96))
+```
+<br /> The relationship between party ID and Biden warmth differ for males/females. Female Democrats would return a response of 29.74 units more than female Republicans on average while male democrats would return a response of 33.68752 units more than male republicans on average. At the same time, there are also differences between gender and Biden warmth for Democrats/Republicans. Female Democratics would return a response of 2.44929 degrees higher than male Democratics on average while female Republicans would return a response of 6.39518 degrees higher than male Republicans on average. In conclusion, we could claim using these statistics that Democrats favor Biden regardless of gender, but females, regardless of political party, favor Biden more than males. 
