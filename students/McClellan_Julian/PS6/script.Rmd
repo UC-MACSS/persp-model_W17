@@ -2,7 +2,10 @@
 title: "Problem Set 6 | MACS 301"
 author: "Julian McClellan"
 date: "Due 2/20/17"
-output: html_document
+output:
+  pdf_document: 
+    latex_engine: lualatex
+  html_document: default
 ---
 ```{r setup, echo = FALSE, include = FALSE}
 library(ggplot2)
@@ -48,7 +51,7 @@ The scatterplot with the linear smoothing line tells us that in general, higher 
 
 ```{r basic_model, results = 'asis'}
 logit.mh_vt <- glm(vote96 ~ mhealth_sum, data = df.mhealth, family = binomial)
-stargazer(logit.mh_vt, type = 'html', title = 'Summary of Voting Status Regressed on Mental Health')
+stargazer(logit.mh_vt, type = 'latex', title = 'Summary of Voting Status Regressed on Mental Health', header = FALSE)
 
 param <- logit.mh_vt$coefficients[2]
 
@@ -147,7 +150,7 @@ I don't think this is a very good model. The proportional reduction in error is 
   * Our link function is: $$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
 
 ### 2.
-```{r est_model, echo = TRUE, results = 'asis', hold = TRUE}
+```{r est_model, echo = TRUE, results = 'asis', hold = TRUE, tidy.opts=list(width.cutoff=60)}
 # Define a full and a null model. 
 logit.mh_all <- glm(vote96 ~ ., data = df.mhealth,
                     family = binomial)
@@ -156,7 +159,7 @@ logit.mh_none <- glm(vote96 ~ 1, data = df.mhealth, family = binomial)
 # We will use backward stepwise AIC selection to select a model
 # In simple terms, AIC offers a tradeoff between model parsimony and log likelihood.
 logit.mh_bselect <- stepAIC(logit.mh_all, trace = 0)
-stargazer(logit.mh_bselect, type = 'html', title = 'Results of Backwards AIC selected Model')
+stargazer(logit.mh_bselect, type = 'latex', title = 'Results of Backwards AIC selected Model (Logit)', header = FALSE)
 ```
 
 ### 3.
@@ -214,7 +217,7 @@ Thus, we see the effect of `educ` the most impactful non-binary predictor on pre
   * Our link function is: $$g(vote96_i) = \log(tvhours_{i})$$
   
 ### 2.
-```{r est_pois_model, echo = TRUE, results = 'asis', hold = TRUE}
+```{r est_pois_model, echo = TRUE, results = 'asis', tidy.opts=list(width.cutoff=60)}
 # Define a full and a null model. 
 df.gss <- na.omit(df.gss)
 
@@ -225,14 +228,15 @@ pois.gss_none <- glm(tvhours ~ 1, data = df.gss, family = poisson)
 # We will use backward stepwise AIC selection to select a model
 # In simple terms, AIC offers a tradeoff between model parsimony and log likelihood.
 pois.gss_bselect <- stepAIC(pois.gss_all, trace = 0)
-stargazer(pois.gss_bselect, type = 'html', title = 'Results of Backwards AIC selected Model')
+stargazer(pois.gss_bselect, type = 'latex', title = 'Results of Backwards AIC selected Model (GLM | Poisson)', header = FALSE)
 ```
+
 
 ### 3.
 ```{r interp_results_fightme}
 bsel_crit <- acc_pre_auc(df.gss, pois.gss_bselect, 'tvhours')
 ```
-From the above table, we see the backwards AIC selection has resulted in a model with 4 predictor variables, not including the intercept. Thankfully, backwards AIC selection left out variables that wouldn't make much sense to affect TV hours watched, including the Zodiac symbols and whether or not someone saw an X-rated movie or voted in 2004. All of the predictors are significant at the `.05` level, except `grass`, which is only significant at the `.1` level.  With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
+Looking at the table below, we see the backwards AIC selection has resulted in a model with 4 predictor variables, not including the intercept. Thankfully, backwards AIC selection left out variables that wouldn't make much sense to affect TV hours watched, including the Zodiac symbols and whether or not someone saw an X-rated movie or voted in 2004. All of the predictors are significant at the `.05` level, except `grass`, which is only significant at the `.1` level.  With a .5 threshold, the accuracy rate of this model is `r round(100 * bsel_crit$acc_rate, 2)`%, the proportional reduction in error over the useless classifier is `r round(100 * bsel_crit$pre, 2)`%, and the AUC (over all threshold values) is `r bsel_crit$auc`.
 
 Two of the predictors, `educ` (years of education), and `grass` (believes marijuana should be legalized), have negative coefficients, and the other two, `hrsrelax` and `black` have positive coefficients. These coefficients represent the effect a one unit increase of the predictor, with all other predictors held constant, has on the log count of `tvhours`. However, as before it is beneficial to visualize the effect of our predictors on actual predicted probabilities.
 
