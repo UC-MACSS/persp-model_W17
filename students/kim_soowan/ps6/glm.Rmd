@@ -43,9 +43,11 @@ ggplot(data = mhealth, mapping = aes(x = vote96)) +
        caption = "Source: 1998 General Social Survey") + 
   theme(plot.caption = element_text(face =  "italic"))
 
+prob <- mean(mhealth$vote96, na.rm = TRUE)
+
 ```
 
-The unconditional probability of a given individual turning out to vote is `r mean(mhealth$vote96, na.rm = TRUE)`.
+The unconditional probability of a given individual turning out to vote is `r prob`.
 
   2. **Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?**
   
