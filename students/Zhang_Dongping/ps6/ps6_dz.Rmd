@@ -1,0 +1,289 @@
+---
+title: 'MACS 30100: Problem Set 6'
+author: "Dongping Zhang"
+date: "2/19/2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(pROC)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+```
+
+# Part I: Modeling Voter Turnover
+### I. Describe the data
+* __Plot a histogram of voter turnout. Make sure to give the graph a title and proper x and y-axis labels. What is the unconditional probability of a given individual turning out to vote?__
+    + __load in data__
+    ```{r voter load}
+    # load the data
+    voter = read.csv('mental_health.csv')
+    ```
+    + __plot the histogram__
+    ```{r voter hist}
+    voter = voter %>%
+      mutate(vote = factor(vote96, exclude = NULL, labels = c("Did not vote", 'Did vote', 'NA')))
+    
+    vstatus = as.data.frame(prop.table(table(voter$vote)))
+    names(vstatus) = c('Status', 'Probability')
+    ggplot(vstatus, aes(x = Status, y = Probability)) + 
+      geom_bar(aes(color = Status, fill = Status), stat = 'identity') + 
+      ggtitle("Histogram of Voting Status") +
+      labs(x = "Voting status", y = "Percent of observations in bin") +
+      theme(plot.title = element_text(hjust = 0.5))
+    ```
+    + __compute unconditional probability of a given individual turning out to vote__: 
+    <br/> As showned in the histogram above and the unconditional probability table below, the unconditional probability of a given individual turning out to vote is about **62.96%**.
+    ```{r prob uncond to vote}
+    vstatus
+    ```
+    
+* __Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?__
+    <br/> The scatterplot below describes the relationship between voting status and mental health index is that they likely to be negatively correlated, meaning that higher value of mental health index would typically make the individual less likely to vote. This plot certainly has some issues: voting status is a binary response variable with a 0/1 encoding, while the `lm` smoothing line could be interpreted as an crude estimate of Pr(voting|mental = X). If we were plotting futher down along the x-axis, some of our estimates might be ourside the [0, 1] interval, making them hard to interpret as probabilities.  
+
+```{r scatter mental health}
+mhealth_vote = na.omit(voter[,1:2])
+ggplot(mhealth_vote, aes(x = mhealth_sum, y = vote96)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  ggtitle("Scatterplot of voting status on mental health index") +
+  labs(x = "Mental health index", y = "Voting Status") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### II. Basic Models
+\noindent __1. Is the relationship between mental health and voter turnout statistically and/or substantively significant?__
+```{r simple logit}
+mhealth_voter_logit = glm(vote96 ~ mhealth_sum, data = mhealth_vote, family = binomial)
+summary(mhealth_voter_logit)
+```
+According to the coefficient $\beta_1$, an increase in `mhealth_sum` is associated with a decrease in the probability of voting. Looking at the p-value of $\beta_1$, which is $3.13 \times 10^{-13}$, it means the null hypothesis could be rejected at 1% significance level, thus the relationship between mental health and voter turnout is statistically significant. In addtion, the coefficient of $\beta_1$ would cause the odds of voting to decrease by $e^{0.14348} = 1.154284$ or 15% with one-unit increase of `mhealth_sum`, making the effect also to be substantive. 
+  
+\noindent __2. Interpret the estimated parameter for mental health in terms of log-odds. Generate a graph of the relationship between mental health and the log-odds of voter turnout.__
+<br /> According to the coefficient of $\beta_1$ in the above logistic regression model, a one-unit increase in `mhealth_sum` is associated with a decrease in the log-odds of voting turnover by 0.14348. 
+```{r mental health vs. log-odds of voter turnover}
+mhealth_vote <- mhealth_vote %>%
+  add_predictions(mhealth_voter_logit)
+
+ggplot(mhealth_vote, aes(x = mhealth_sum, y = pred)) +
+  geom_line(size = 1)+
+  labs(x = 'Mental health index',
+       y = 'Log-odds of voter turnover',
+       title = 'Voter turnover of 1966 election \n Log-odds of voting turnover on mental health index') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+\noindent __3. Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.__
+<br /> To interpret the estimated parameter for mental health in terms of odds, a one-unit increase in `mhealth_sum` is associated with a decrease in the log-odds of voting turnover by 0.14348, or equivalently, is associated with a decrease in the odds of voting by $e^{0.14348} = 1.154284$.
+```{r mental health vs. odds of voter turnover}
+mhealth_vote <- mhealth_vote %>%
+  mutate(odds = exp(pred))
+
+ggplot(mhealth_vote, aes(x = mhealth_sum, y = odds)) +
+  geom_line(size = 1)+
+  labs(x = 'Mental health index',
+       y = 'Odds of voter turnover',
+       title = 'Voter turnover of 1966 election \n Odds of voting turnover on mental health index') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+\noindent __4. Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?__
+```{r estimate prob}
+# functions to convert logit to prob
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+mhealth_vote <- mhealth_vote %>%
+  mutate(probability = logit2prob(odds))
+
+# plotting
+ggplot(mhealth_vote, aes(x = mhealth_sum, y = probability)) +
+  geom_line(size = 1)+
+  labs(x = 'Mental health index',
+       y = 'Probability of voting',
+       title = 'Voter turnover of 1966 election \n Probability of voting on mental health index') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# compute the probability of given index
+(prob1256 <- data.frame(mhealth_sum = c(1, 2, 5, 6)) %>%
+  add_predictions(mhealth_voter_logit) %>%
+  mutate(prob = logit2prob(pred)))
+```
+<br /> The difference for an increase in the mental health index from 1 to 2 is: $0.7010409 - 0.7302191 = -0.0291782$, meaning an increase in the mental index from 1 to 2 would reduce the probability of voting by 0.0291782.
+<br /> The difference for an increase in the mental health index from  to 2 is: $0.5691437 - 0.6039219 = -0.0347782$, meaning an increase in the mental index from 5 to 6 would reduce the probability of voting by 0.0347782.
+
+\noindent __5. Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?__
+
+* The accuracy rate is about: 0.6778
+```{r accuracy rate simple logit}
+accuracy <- na.omit(voter[,1:2]) %>%
+  add_predictions(mhealth_voter_logit) %>%
+  mutate(pred = logit2prob(pred)) %>%
+  mutate(binary = as.numeric(pred > .5))
+    
+mean(accuracy$vote96 == accuracy$binary)
+```
+
+* proportional reduction in error (PRE): 0.01616628
+```{r pre simple logit}
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+PRE(mhealth_voter_logit)
+```
+
+* AUC: 0.6243
+```{r auc simple logit}
+(auc_simple_logit <- auc(accuracy$vote96, accuracy$pred))
+```
+<br /> \indent In conclusion, based on the above three statistics: approximately 67.78% of the predictions based on `mhealth_sum` only were correct using a standard baseline of 0.5; the statistical model reduced 1.616628% (PRE) of the prediction error; the overall performance of the classifier across all potential thresholds is 0.6243(AUC), which is greater than 0.5. From my perspective, the accuracy rate is 67.78% and AUC is 0.6243 implies that the model might be better than flipping a fair coin and making a random guess, but the PRE is too small to actually trust the model. So, it might only imply that `mhealth_sum` is a good predictor, but the current model is not a decent model to make predictions. 
+
+
+### III. Multiple variable model 
+\noindent __1. Write out the three components of the GLM for your specific model of interest.__
+
+* __Probability distribution (random component):__ The random component is the Bernoulli distribution
+$$Pr(Y_i = y_i | \pi) = \pi_i^{y_i}(1 - \pi_i)^{(1 - y_i)}$$
+
+* __Linear predictor:__
+$$\eta_i = \beta_0 + \beta_1 \times mhealth\_sum_i + \beta_2 \times age_i + \beta_3 \times educ_i + \beta_4 \times black_i + \beta_5 \times female_i + \beta_6 \times married_i + \beta_7 \times inc10_i$$
+
+* __Link function__: is the logit function
+$$\pi_i = g(\eta_i) = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$$
+
+\noindent __2. Estimate the model and report your results.__
+```{r multi logit}
+# git rid of all NAs
+voter = na.omit(voter[,1:8])
+voter_multi_logit <- glm(vote96 ~ ., data = voter, family = binomial)
+summary(voter_multi_logit)
+```
+
+\noindent __3. Interpret the results in paragraph format.__
+
+According to the table above, in the current logistic regression model, `mhealth_sum`, `age`, `educ`, and `inc10` are four predictors that are statistically significant. So based on the sign of those statistically significant coefficients, it can be implied that if a person is more aged, or more educated, or have a higher income, or previous three combined, the person is more likely to vote. On the other hand, people with higher mental health index would less likely to vote. 
+
+The rest of three predictors, `black`, `female`, and `married` are not statistically significant when setting $\alpha = 0.05$, so I am interested to see if there is any difference between single/married African American males and females, and single/married non-African American males and females while holding everything else constant at median.
+```{r black female married}
+aa_voters = voter%>%
+  data_grid(mhealth_sum, black, female, married) %>%
+  cbind(age = median(voter$age),
+        educ = median(voter$educ),
+        inc10 = median(voter$inc10)) %>%
+  add_predictions(voter_multi_logit)%>%
+  mutate(probability = logit2prob(pred))
+
+ggplot(aa_voters, aes(x = mhealth_sum, y = probability))+
+  geom_line(aes(group = interaction(black, married, female), color = interaction(black, married, female))) +
+  scale_color_discrete(name = 'Classifications',
+                       labels = c('Single Non-AA Male',
+                                  'Single AA Male',
+                                  'Married Non-AA Male',
+                                  'Married AA Male', 
+                                  'Single Non-AA Female',
+                                  'Single AA Female',
+                                  'Married Non-AA Female',
+                                  'Married AA Female')) +
+  labs(x = 'Mental health index',
+       y = 'Probablity of voting',
+       title = 'Probablity of Voting vs.Mental Health Index \n Group by (black, married, female)')
+```
+
+So from the above plot, we are able to observe something very interesting: Married AA males and females have the highest probability of voting while single Non-AA males and females have the lowest probability of voting. Thus, I definitely see there is some interaction effect and the current model can still be imporved using those interaction variables.
+
+```{r assess multi logit}
+# accuracy rate
+accuracy_multiLogit <- voter %>%
+  add_predictions(voter_multi_logit) %>%
+  mutate(pred = logit2prob(pred)) %>%
+  mutate(binary = as.numeric(pred > .5))
+accuracy_rate_ML = mean(accuracy_multiLogit$vote96 == accuracy_multiLogit$binary)
+
+# pre
+pre_ML <- PRE(voter_multi_logit)
+
+# auc
+auc_simple_logit = auc(accuracy_multiLogit$vote96, accuracy_multiLogit$pred)
+
+c('Accuracy Rate' = accuracy_rate_ML,
+  'PRE' = pre_ML,
+  'AUC' = auc_simple_logit)
+```
+In order to assess the prediction power of the current multivariate logistic regression model, I would implement the same procedures to compute the accuracy rate, PRE, and AUC. Based on the above three new statistics: approximately 72.36% of the predictions are correct based on current predictors using a standard baseline of 0.5; the statistical model reduced 14.81% (PRE) of the prediction error; the overall performance of the classifier across all potential thresholds is 0.7596240(AUC), which is greater than 0.5. From my perspective, after adding more predictors into the model, it definitely has imporved and is performing better than the previous simple logistic regression model. The accuracy rate is 72.36% and AUC is 0.7596240 implies that the current model is definitely performing better than random guess, but the PRE is still relatively small meaning there might be other predictors or interaction effects can be take into the model. 
+
+# Part II: Modeling tv consumption
+\noindent __1. Write out the three components of the GLM for your specific model of interest.__
+
+* __Probability distribution (random component)__: the poission distribution
+$$Pr(Y_i = y_i | \mu) = \frac{\mu^ke^{-y_i}}{y_i!}$$
+
+* __Linear predictor__
+$$\eta_i = \beta_0 + \beta_1 \times age_i + \beta_2 \times childs_i + \beta_3 \times educ_i + \beta_4 \times female_i + \beta_5 \times hrsrelax_i + \beta_6 \times black_i +\\ \beta_7 \times social\_connect_i + \beta_8 \times voted04_i$$
+* __Link function__: the log function
+$$\mu_i = g(\eta_i) =e^{\eta_i}$$
+
+\noindent __2. Estimate the model and report your results.__
+```{r tv consumption}
+tv = read.csv('gss2006.csv')
+tv = tv[,1:12]
+tv_glm = glm(tvhours~age + childs+ hrsrelax + black + social_connect + female + educ + voted04 + grass, data = tv, family = poisson)
+summary(tv_glm)
+```
+
+\noindent __3. Interpret the results in paragraph format.__
+According to the table above, in the current linear model, `hrsrelax`, `black`, `educ`, and `voted04` are four predictors that are statistically significant at 5% significance level. Based on the sign of those statistically significant coefficients, it can be implied that if a person has more hours to relax, or is black, or both, the person is more likley to consume more TV. On the other hand, if a person is more educated, and has voted, or both, the person would consume less TV. Among other predictors, one surprising finding is that `female` has a positive coefficient. I originally expect it to be negative because women would tend to have more responsibilites in a households. So I am interested in seeing whether there would be any interaction effect mong `female`, `grass`, and `black`, or AA males/females vs. non-AA males/females, while setting other variables to be the median.
+
+```{r}
+tv2 = tv %>%
+  data_grid(childs, female, black, grass) %>%
+  cbind(age = median(voter$age, na.rm = TRUE),
+        hrsrelax = median(tv$hrsrelax, na.rm = TRUE),
+        social_connect = median(tv$social_connect, na.rm = TRUE),
+        educ = median(tv$educ, na.rm = TRUE),
+        voted04 = median(tv$voted04, na.rm = TRUE)) %>%
+  add_predictions(tv_glm)
+
+ggplot(tv2, aes(x = childs, y = pred))+
+  geom_line(aes(group = interaction(female, black, grass), color = interaction(female, black, grass))) +
+  scale_color_discrete(name = 'Classifications',
+                       labels = c('Non-AA Anti-marijuana',
+                                  'Non-AA Female Anti-marijuana',
+                                  'AA Male Anti-marijuana',
+                                  'AA Female Anti-marijuana',
+                                  'Non-AA Male Pro-marijuana',
+                                  'Non-AA Female Pro-marijuana',
+                                  'AA Male Pro-marijuana',
+                                  'AA Female Pro-marijuana')) +
+  labs(x = 'Number of Children',
+       y = 'TV consumptions (hrs)',
+       title = 'TV consumptions on number of children \n Group by (female, black, Grass)')
+```
+
+According to the plot above, the result is also very interesting. So in general, as expected, the more children a person have, the less TV s/he would consume. However, holding other predictors to be constant at median, African Americans, regardless of gender and opinion on marijuana, would typically consume more TV than non-African Americans. Within each group, females tend to consume more TV than males; however, within each racial group, more TV consumption tend to make people not likely to support legalizing marijuana while less TV consumption tend to make people support legalizing marijuana. Thus, I would definitely suspect there are some interaction effect among `female`, `grass`, and `black`. 
