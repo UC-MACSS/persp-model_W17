@@ -48,7 +48,7 @@ days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless,
 
 We begin by reading in the data.  Because it does not make sense to consider respondents for whom either voting behavior or depression index score is missing, we subset the data to include only those respondents with valid responses in both variables.  We also add a factor-type variable to describe voting; this will decrease the time necessary to construct plots.
 
-```{r, read_data}
+```{r read_data}
 df = read.csv('data/mental_health.csv')
 df = df[(!is.na(df$vote96) & !is.na(df$mhealth_sum)), ]
 df$Turnout = factor(df$vote96, labels = c("Did not vote", "Voted"))
@@ -58,7 +58,7 @@ df$Turnout = factor(df$vote96, labels = c("Did not vote", "Voted"))
 
 1.  We plot a histogram of voter turnout:
 
-```{r, vote_histogram, echo=FALSE}
+```{r vote_histogram, echo=FALSE}
 ggplot(df, aes(x=Turnout, fill=Turnout)) + geom_bar() +
        ylab("Frequency count of respondents") +
        xlab("Whether the respondent voted") +
@@ -73,7 +73,7 @@ The unconditional probability of a given respondent voting in the election is `r
 
 1.  We generate a scatterplot of voter turnout versus depression index score, with points colored by whether the respondent voted.  Because mental health scores are integers ranging from [0,16] and turnout is categorical, there can be a maximum of 34 points on the plot.  This would not be terribly informative, so we jitter the points, increase their transparency, and add a horizontal line between the distributions of voters and non-voters; however, we must remember that the jittered position is not the true position: we must imagine the same number of points, with all the blue ones at 1 and all the red ones at 0.  (That is:  any within-group variability in the y direction is false.)  These additions are somewhat helpful, but because voter turnout is dichotomous, it is not well suited to a scatterplot.  (We will address this soon.)
 
-```{r, scatterplot_turnout_vs_mentalhealth, echo=FALSE}
+```{r scatterplot_turnout_vs_mentalhealth, echo=FALSE}
 
 ggplot(df, aes(x=mhealth_sum, y=vote96)) + 
        geom_point(aes(color=Turnout), size=.75, alpha=.4, position="jitter") + 
@@ -92,7 +92,7 @@ The regression line shows that respondents with higher depression scores trend t
 
 We now return to the matter of visualizing the distribution of depression scores by voter turnout.  Because the outcome is dichotomous and the predictor is continuous but over a short interval, the scatterplot does a poor job of clearly showing the correlation between depression score and turnout.  We therefore turn to a density plot:
 
-```{r, density_plot, echo=FALSE}
+```{r density_plot, echo=FALSE}
 
 ggplot(df, aes(mhealth_sum, fill = Turnout)) + geom_density(alpha = 0.2) + 
        xlab("Depression index score") + ylab("Proportion of respondents") + 
@@ -154,7 +154,7 @@ threshold_compare = function(thresh, dataframe, model){
 
 We estimate a logistic regression model of the relationship between mental health and voter turnout:
 
-```{r, basic_logistic_regression}
+```{r basic_logistic_regression}
 
 logit_voted_depression = glm(vote96 ~ mhealth_sum, family = binomial, data=df)
 summary(logit_voted_depression)
@@ -183,7 +183,7 @@ voted_depression_accuracy = df %>%
 
 We graph the relationship between mental health and the log-odds of voter turnout:
 
-```{r, log_odds_plot, echo=FALSE}
+```{r log_odds_plot, echo=FALSE}
 
 ggplot(voted_depression_pred, aes(mhealth_sum, pred)) +
        geom_line(color="orangered1", size=1.5) +
@@ -196,15 +196,18 @@ ggplot(voted_depression_pred, aes(mhealth_sum, pred)) +
 ```
 
 1. Odds: The coefficient for depression index score cannot be interpreted in terms of odds without being evaluated at a certain depression score.  This is because the relationship between depression score and odds is logistic, not linear:
+![](./eq1.png)
+```{r eq1, echo=FALSE, results="hide"}
+#$$
+#Odds\_of\_voting = \frac{p(depression\_index\_score)}{1 - p(depression\_index\_score)} = e^{1.13921 - (0.1434752 \times depression\_index\_score)}
+#$$
+```
 
-$$
-Odds\_of\_voting = \frac{p(depression\_index\_score)}{1 - p(depression\_index\_score)} = e^{1.13921 - (0.1434752 \times depression\_index\_score)}
-$$
 For example, for a respondent with a depression index score of 12 would have odds of voting equal to `r calcodds(12)`.  This means the respondent is `r calcodds(12)` times more likely to vote than not vote, because this is less than one, such a respondent would be unlikely to vote.  In contrast, a respondent with a depression index score of 3 would be `r calcodds(3)` times more likely to vote than not vote.  A respondent with a depression score of 8 would be approximately just as likely to vote as not vote because the odds for that score equal `r calcodds(8)`.
 
 We graph the relationship between depression index score and the odds of voting:
 
-```{r, voted_depression_odds_plot, echo=FALSE}
+```{r voted_depression_odds_plot, echo=FALSE}
 ggplot(voted_depression_pred, aes(mhealth_sum, odds)) +
        geom_line(color = "springgreen3", size = 1.5) +
        labs(title = "Odds of Voting Based on Depression Index Score",
@@ -221,7 +224,7 @@ The first difference for an increase in the mental health index from 1 to 2 is `
 
 We plot the probabilty of voting against depression score, including the actual responses as points (this time, without jitter):
 
-```{r, logit_voted_depression_prob_plot, echo=FALSE}
+```{r logit_voted_depression_prob_plot, echo=FALSE}
 
 ggplot(voted_depression_pred, aes(x=mhealth_sum, y=vote96)) + 
        geom_point(aes(color=Turnout), size=1.75, alpha=.15) + 
@@ -273,7 +276,7 @@ threshold_x = seq(0, 1, by = .001) %>%
 auc_x_voted_depression <- auc(df$vote96, voted_depression_pred$prob)
 ```
 
-1.  Using a cutoff of .5, we estimate the accuracy rate of the model at `r ar`.
+1.  Using a threshold value of .5, we estimate the accuracy rate of the model at `r ar`.
 
 We find that the useless classifier for this data predicts that all voters will vote; because the voter variable is dichotomous, we find this by simply taking the median of the distribution:  `r uc`.
 
@@ -301,7 +304,7 @@ threshold_x %>% gather(measure, value, -threshold) %>%
 
 We also plot the ROC curve:
 
-```{r, roc_plot, echo=FALSE}
+```{r roc_plot, echo=FALSE}
 
 ggplot(threshold_x, aes(1 - specificity, sensitivity)) +
        geom_line(color="darkturquoise", size=1.5) +
@@ -314,36 +317,51 @@ ggplot(threshold_x, aes(1 - specificity, sensitivity)) +
             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+We can see that the ROC curve falls above the graph's diagonal, which means that the model performs better than simply guessing.
+
 ## Multiple variable model
 
 Using the other variables in the dataset, derive and estimate a multiple variable logistic regression model of voter turnout.
 
-1. Write out the three components of the GLM for your specific model of interest. This includes the
-    * Probability distribution (random component): Because we are using logistic regression, we assume that the outcome (voted or did not vote) is drawn from the Bernoulli distribution, with probability $\pi$:
 
-$$
-Pr(Y_i = y_i|\pi_i) = \pi_i^{y_i}(1-\pi_i)^{(1-y_i)}
-$$
 
-    * Linear predictor: The linear predictor is the following multivariate linear model:
+1. Using depression index score, age, and income, we now estimate a multivariate logistic regression.  We have chosen to use the depression index score because it alone yielded reasonable results, so we suppose that it will form a good basis for a robust model.  Age is important because it is common knowledge that voting behavior increases with age; the same can be said for income.  With these three variables, we hope to achieve higher rates of sensitivity and sprecificy as well as a higher AUC compared to the bivariate model.
 
-$$
-g(\pi_i) \equiv \eta_i = \beta_0 + \beta_1DepressionIndexScore_i + \beta2Age_i + \beta_3Income10K_i
-$$
-     * Link function:  The link function is the logit function:
+Here we define the three components of the GLM for the model to be constructed:
+—Probability distribution (random component): Because we are using logistic regression, we assume that the outcome (y: voted or did not vote) is drawn from the Bernoulli distribution, with probability $\pi$:
+    
+![](./eq2.png)
 
-$$
-\pi_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}
-$$
+```{r eq2, echo=FALSE, results="hide"}
+#$$
+#Pr(Y_i = y_i|\pi_i) = \pi_i^{y_i}(1-\pi_i)^{(1-y_i)}
+#$$
+```
+—Linear predictor: The linear predictor is the following multivariate linear model:
+    
+![](./eq3.png)
+
+```{r eq3, echo=FALSE, results="hide"}
+#$$
+#g(\pi_i) \equiv \eta_i = \beta_0 + \beta_1DepressionIndexScore_i + \beta_2Age_i + \beta_3Income10K_i
+#$$
+```
+—Link function:  The link function is the logit function:
+
+![](./eq4.png)
+
+```{r eq4, echo=FALSE, results="hide"}
+#$$
+#\pi_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}
+#$$
+```
 
     
 1. We estimate the model:
 
-```{r, multivariate_logistic_regression}
+```{r multivariate_logistic_regression}
 
-#logit_voted_mv = glm(vote96 ~ age + inc10, family = binomial, data=df)
 logit_voted_mv = glm(vote96 ~ mhealth_sum + age + inc10, family = binomial, data=df)
-
 summary(logit_voted_mv)
 ```
 
@@ -351,30 +369,20 @@ We generate the additional dataframes and variables necessary to answer the ques
 
 ```{r mv_gen_df_and_vars}
 
-int_mv = tidy(logit_voted_mv)[1,2]
-coeff_mv_mh = tidy(logit_voted_mv)[2,2]
-coeff_mv_age = tidy(logit_voted_mv)[3,2]
-coeff_mv_inc = tidy(logit_voted_mv)[4,2]
+b0_mv = tidy(logit_voted_mv)[1,2]
+b1_mv = tidy(logit_voted_mv)[2,2]
+b2_mv = tidy(logit_voted_mv)[3,2]
+b3_mv = tidy(logit_voted_mv)[4,2]
 
 voted_mv_pred = df[(!is.na(df$age) & !is.na(df$inc10)), ] %>%
-                #data_grid(mhealth_sum, age, inc10) %>%
+                data_grid(mhealth_sum, age = c(25,65), inc10 = c(5,10,15)) %>%
                 add_predictions(logit_voted_mv) %>%
                 mutate(prob = logit2prob(pred)) %>%
-                mutate(odds = prob2odds(prob))
-
-med_age = median(voted_mv_pred$age)
-med_inc = median(voted_mv_pred$inc10)
-
-attach(voted_mv_pred)
-
-voted_mv_pred$age_inc = 0
-voted_mv_pred$age_inc[age < med_age & inc10 >= med_inc] = 1
-voted_mv_pred$age_inc[age < med_age & inc10 < med_inc] = 2
-voted_mv_pred$age_inc[age >= med_age & inc10 >= med_inc] = 3
-voted_mv_pred$age_inc[age >= med_age & inc10 < med_inc] = 4
-
-voted_mv_pred$age_inc = factor(voted_mv_pred$age_inc, labels = c("Younger, higher income", "Younger, lower income", "Older, higher income", "Older, lower income"))
-  
+                mutate(odds = prob2odds(prob)) %>%
+                mutate(age = factor(age, levels = c(25, 65), labels = c("Younger", "Older")),
+                       inc10 = factor(inc10, levels = c(5, 10, 15),
+                                       labels = c("Low income", "Medium income", "High income")))# %>%
+                #mutate(age_inc = interaction(factor(age), factor(inc10)))
   
 voted_mv_accuracy <- df[(!is.na(df$age) & !is.na(df$inc10)), ] %>%
                      add_predictions(logit_voted_mv) %>%
@@ -382,45 +390,91 @@ voted_mv_accuracy <- df[(!is.na(df$age) & !is.na(df$inc10)), ] %>%
                      pred = as.numeric(pred > .5))
 ```
 
+We also define some helpful functions:
+
+```{r mv_functions}
+calcodds_mv = function(mhealth,age,income10K){
+  exp(b0_mv + b1_mv * mhealth + b2_mv * age + b3_mv * income10K)
+}
+
+oddsratio_mv = function(x,y,n){
+  if (n == 1){
+    exp(b1_mv * (x - y))
+  }
+  if (n == 2){
+    exp(b2_mv * (x - y))
+  }
+  if (n == 3){
+    exp(b3_mv * (x - y))
+  }
+}
+
+calcprob_mv = function(mhealth,age,income10K){
+  power = b0_mv + b1_mv * mhealth + b2_mv * age + b3_mv * income10K
+  exp(power) / (1 + exp(power))
+}
+
+
+firstdifference_mv = function(x,y,n){
+  mh_med = median(df$mhealth_sum, na.rm = TRUE)
+  age_med = median(df$age, na.rm = TRUE)
+  inc_med = median(df$inc10, na.rm = TRUE)
+  if(n == 3){
+      calcprob_mv(mh_med,age_med,y) - calcprob_mv(mh_med,age_med,x)
+  }
+  if (n == 1){print("n==1; this doesn't return results and I don't know why")
+      calcprob_mv(y,age_med,inc_med) - calcprob_mv(x,age_med,inc_med)
+  }
+  if(n == 2){print("n==2; this doesn't return results and I don't know why")
+      calcprob_mv(mh_med,y,inc_med) - calcprob_mv(mh_med,x,inc_med)
+  }
+}
+```
+
 1. Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-odds, odds, predicted probabilities, and first differences - choose what makes sense to you and provides the most value to the reader. Use graphs and tables as necessary to support your conclusions.
 
 
-We find that depression index score, age, and education are statistically significant at the p<.001 level and income (in tens of thousands) is significant at the p<.01 level.
 
 
 
-```{r, mv_log_odds_plot, echo=FALSE}
 
-ggplot(voted_mv_pred, aes(mhealth_sum, pred, color=age_inc)) +
-       geom_line(size=1.5) +
-       labs(title = "Log-odds of Voting in 1996 Presidential Election\nbased on Depression Index Score, Age, & Income",
+
+
+
+
+
+```{r mv_log_odds_plot, echo=FALSE}
+
+ggplot(voted_mv_pred, aes(mhealth_sum, pred)) +
+       geom_line(size=1.5, aes(linetype=age, color=inc10)) +
+       labs(title = "Predicted Log-odds of Voting in 1996 Presidential Election\nbased on Depression Index Score, Age, & Income",
             x = "Depression index score",
-            y = "Log-Odds of Voting") + scale_color_discrete(name="Age & Income Group") + 
+            y = "Predicted Log-Odds of Voting") + scale_color_discrete(name="Income") + scale_linetype(name="Age")+ 
        theme(plot.title = element_text(hjust = 0.5, face="bold"),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
        scale_x_continuous(breaks = c(0,4,8,12,16))
 ```
 
+We can see that the log-odds lines are parallel to each other.  Log-odds of voting compared to not voting decrease linearly as depression index scores increase; it is important to note, however, that the predicted log-odds of voting for older respondents will always be higher than those for younger respondents with similar income and depression index score.  Additionally, respondents with higher incomes will always have higher log-odds of voting than similar respondents (in terms of age and depression index score) with lower incomes.
 
-
-```{r, voted_mv_odds_plot, echo=FALSE}
-ggplot(voted_mv_pred, aes(mhealth_sum, odds, color = age_inc)) +
-       geom_line(size = 1.5) +
-       labs(title = "Odds of Voting in 1996 Presidential Election\nbased on Depression Index Score, Age, & Income",
+```{r voted_mv_odds_plot, echo=FALSE}
+ggplot(voted_mv_pred, aes(mhealth_sum, odds, color =inc10)) +
+       geom_line(size = 1.5, aes(linetype=age)) +
+       labs(title = "Predicted Odds of Voting in 1996 Presidential Election\nbased on Depression Index Score, Age, & Income",
             x = "Depression index score",
-            y = "Odds of voting rather than not voting") + scale_color_discrete(name="Age & Income Group") + 
+            y = "Predicted odds of voting rather than not voting") + scale_color_discrete(name="Income") + scale_linetype(name="Age") + 
        theme(plot.title = element_text(hjust = 0.5, face="bold"),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
        scale_x_continuous(breaks = c(0,4,8,12,16))
 ```
 
-```{r, logit_mv_prob_plot, echo=FALSE}
+```{r logit_mv_prob_plot, echo=FALSE}
 
-ggplot(voted_mv_pred, aes(x=mhealth_sum, y=prob, color = age_inc)) + 
-       geom_line(size = 1.5) +
+ggplot(voted_mv_pred, aes(x=mhealth_sum, y=prob, color = inc10)) + 
+       geom_line(size = 1.5, aes(linetype=age)) +
        labs(title = "Probability of Voting in 1996 Presidential Election\nbased on Depression Index Score, Age, & Income",
             x = "Depression index score",
-            y = "Probability of voting") + scale_color_discrete(name="Age & Income Group") + 
+            y = "Probability of voting") + scale_color_discrete(name="Income") + scale_linetype(name="Age") + 
        theme(plot.title = element_text(hjust = 0.5, face="bold"),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
        scale_x_continuous(breaks = c(0,4,8,12,16))
@@ -433,7 +487,7 @@ ggplot(voted_mv_pred, aes(x=mhealth_sum, y=prob, color = age_inc)) +
 
 We begin by reading in the data.  Having chosen the variables of interest, we subset the dataframe such that all cases contain valid responses for all such variables.  We also convert social_connect to a factor variable and label the levels.
 
-```{r, read_data_3}
+```{r read_data_3}
 df2 = read.csv('data/gss2006.csv')
 df2 = df2[(!is.na(df2$tvhours) & !is.na(df2$hrsrelax) & !is.na(df2$social_connect)), ]
 df2$social_connect = factor(df2$social_connect, labels = c("Low", "Medium", "High"))
@@ -462,9 +516,35 @@ In this part of the problem set, you are going to derive and estimate a series o
 Using the other variables in the dataset, derive and estimate a multiple variable Poisson regression model of hours of TV watched.
 
 1. Write out the three components of the GLM for your specific model of interest. This includes the
-    * Probability distribution (random component)
-    * Linear predictor
-    * Link function
+—Probability distribution (random component):  Because we are creating a model of the number of hours of television that respondents watch, we use a Poisson distribution:
+
+![](./eq5.png)
+
+```{r eq5, echo=FALSE, results="hide"}
+#$$
+#P(Y_i = y_i|\mu) = \frac{\mu^ke^{-y_i}}{y_i!}
+#$$
+```
+
+—Linear predictor:  The linear preditor is the following log-linear regression model:
+
+![](./eq6.png)
+
+```{r eq6, echo=FALSE, results="hide"}
+#$$
+#\eta_i = \beta_0 + \beta_1HoursRelax_i + \beta_2SocialConnect_i
+#$$
+```
+—Link function:  The link function for the Poisson distribution is the log function:
+
+![](./eq7.png)
+    
+```{r eq5, echo=FALSE, results="hide"}
+#$$
+#\mu_i = ln(\eta_i)
+#$$
+```
+
 1. Estimate the model and report your results.
 
 
@@ -472,7 +552,7 @@ Using the other variables in the dataset, derive and estimate a multiple variabl
 
 We estimate a Poisson model to explain television consumption with leisure time and social connectedness:
 
-```{r, poisson_model}
+```{r poisson_model}
 
 poisson_tv <- glm(tvhours ~ hrsrelax + social_connect, family = "quasipoisson", data = df2)
 summary(poisson_tv)
@@ -480,7 +560,7 @@ summary(poisson_tv)
 ```
 
 
-```{r, poisson_log_count_plot}
+```{r poisson_log_count_plot}
 df2 %>%
   data_grid(hrsrelax, social_connect) %>%
   add_predictions(poisson_tv) %>%
@@ -492,7 +572,7 @@ df2 %>%
 
 
 
-```{r, poisson_tv_predicted_count_plot}
+```{r poisson_tv_predicted_count_plot}
 df2 %>%
   data_grid(hrsrelax, social_connect) %>%
   add_predictions(poisson_tv) %>%
