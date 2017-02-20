@@ -16,29 +16,69 @@ Part 1: Modeling voter turnout
 Describe the data (1 point)
 ---------------------------
 
-Here is a histogram of the voter turnout data:
-![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20histogram-1.png)
+Here are two histograms of the voter turnout data, one with missing values and the other witout:
+![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20histogram%201-1.png) ![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20histogram%202-1.png)
 
 The unconditional probabilities for each voter turnout category are as follows:
 
     ## [1] "Unconditional probability with missing values"
 
-    ## # A tibble: 3 × 2
-    ##   vote96 `probability (with missing values)`
-    ##    <dbl>                               <dbl>
-    ## 1      0                          0.29307910
-    ## 2      1                          0.62959040
-    ## 3     NA                          0.07733051
+<table style="width:50%;">
+<colgroup>
+<col width="12%" />
+<col width="37%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">vote96</th>
+<th align="center">probability (with missing values)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">0</td>
+<td align="center">0.29307910</td>
+</tr>
+<tr class="even">
+<td align="center">1</td>
+<td align="center">0.62959040</td>
+</tr>
+<tr class="odd">
+<td align="center">NA</td>
+<td align="center">0.07733051</td>
+</tr>
+</tbody>
+</table>
 
     ## [1] "Unconditional probability without missing values"
 
-    ## # A tibble: 2 × 2
-    ##   vote96 `probability (without missing values)`
-    ##    <dbl>                                  <dbl>
-    ## 1      0                              0.3176426
-    ## 2      1                              0.6823574
+<table style="width:54%;">
+<colgroup>
+<col width="12%" />
+<col width="41%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">vote96</th>
+<th align="center">probability (without missing values)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">0</td>
+<td align="center">0.3176426</td>
+</tr>
+<tr class="even">
+<td align="center">1</td>
+<td align="center">0.6823574</td>
+</tr>
+</tbody>
+</table>
 
 The following scattorplot with a overlaying linear smoothing line indicates a negative correlation between the voter turnout and the mental health index. The points are jittered to better ilustrate how many observations exist for each mental health index score. Without jittering, multiple observations for the given mental health index appear on the plot as if there is only a single observation.
+
+The linear model suffers from a potential problem of higher-than-one or lower-then-zero probability, because it assumes that the range of the response variable is all real numbers.
+
 ![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20scatterplot-1.png)
 
 Basic model (3 points)
@@ -71,9 +111,11 @@ The relationship between mental health and voter turnout is statistically signif
     ## Number of Fisher Scoring iterations: 4
 
 Here is a line plot for log-odds:
+
 ![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20basic%20model%20log-odds%20plot-1.png)
 
 And a line plot for odds:
+
 ![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20basic%20model%20odds%20plot-1.png)
 
     ## mapping: y = vote96 
@@ -82,6 +124,7 @@ And a line plot for odds:
     ## position_identity
 
 Finally, a line plot for probability with the jittered scattorplot for voter turnout:
+
 ![](Kang_persp-model_PS6_files/figure-markdown_github/Part%201%20basic%20model%20probabilities%20plot-1.png)
 
 The first difference in probability for an increase in the mental health index from 1 to 2, and for 5 to 6.
@@ -153,9 +196,9 @@ The accuracy rate, proportional reduction in error (PRE) and area under the curv
 
 We can also compare the current model with the previous model using the same two cases of first difference in the mental health index, 1 to 2 and 5 to 6. To hold other variables constant, I will use the case of a 30-old-year black female single with 16 years of education and income of $50,000. In the previous model, they were 0.02917824 for 1 to 2 and 0.03477821 for 5 to 6. For the multivariate model:
 
-    ## The difference in probability for an increase in the mental health index from 1 to 2 is 0.0141544
+    ## The difference in predicted probability for an increase in the mental health index from 1 to 2 is 0.0141544
 
-    ## The difference in probability for an increase in the mental health index from 5 to 6 is 0.01717635
+    ## The difference in predicted probability for an increase in the mental health index from 5 to 6 is 0.01717635
 
 Finally, the following plot illustrate the difference between the respondents with college education and the others. While the higher mental health index is associated with less probability of voting for both groups, the effect of higher education is remarkable.
 
@@ -211,3 +254,9 @@ Estimate the model and report your results:
 In this Poisson regression model, the response variable is the number of hours for watching TV per day. The predictors I chose include the following: age, number of children, education, gender (1 if female), opinion on legalizing marijuana, hours to relex, and race (1 if black). The regression result illustrates that the coefficients for only three predictors are statistically significant. These coefficients are, respectively -0.0380001 for education, 0.0457914 for hours to relax and 0.4363657 for race. Each of these coefficients indicates the extent of a change in the log-count of the respondent's Tv-watching hours, to which a unit increase in the given predictor will lead on average when other variables are held constant.
 
 These cofficients also mean the following: a unit increase in edcuation is associated with a 0.9627128-fold change in the mean number of the hours of watching TV per day. Also, each additioanl hour of relaxing is associated with a 1.046856-fold change in the mean number of the hours of watching TV per day. Finally, being black is associated with a 1.547074-fold change in the mean number of the hours of watching TV per day.
+
+Finally, the following plot shows the effect of three statistically significant predictors on the hours of watching TV. The plot illustrates that while leisure and racial factors are positively correlated with the hours of watching TV, education is negatively correlated with the hours of watching TV.
+
+    ## `geom_smooth()` using method = 'loess'
+
+![](Kang_persp-model_PS6_files/figure-markdown_github/Part%202%20multivariate%20model%20plot-1.png)

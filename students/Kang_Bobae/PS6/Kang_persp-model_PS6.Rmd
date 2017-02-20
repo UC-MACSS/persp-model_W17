@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(modelr)
 library(pROC)
+library(pander)
 data1 <- read_csv('data/mental_health.csv')
 data2 <- read_csv('data/gss2006.csv')
 ```
@@ -19,9 +20,9 @@ data2 <- read_csv('data/gss2006.csv')
 # Part 1: Modeling voter turnout
 ## Describe the data (1 point)
 
-Here is a histogram of the voter turnout data:  
-```{r Part 1 histogram, echo=FALSE}
-# histogram
+Here are two histograms of the voter turnout data, one with missing values and the other witout:  
+```{r Part 1 histogram 1, echo=FALSE}
+# histogram 1
 data1 %>%
   group_by(vote96) %>%
   count() %>%
@@ -29,6 +30,20 @@ data1 %>%
   geom_bar(stat='identity') +
   labs(title = "Observed voter turnout distribution",
        subtitle = '0 = no, 1 = yes, NA = missing',
+       x = 'Observed voter turnout',
+       y = 'Fraction of voters in each category')
+```
+```{r Part 1 histogram 2, echo=FALSE}
+
+# histogram 2 without missing values
+data1 %>%
+  group_by(vote96) %>%
+  filter(vote96!='NA') %>%
+  count() %>%
+  ggplot(aes(x=as.character(vote96), y=n/sum(n))) +
+  geom_bar(stat='identity') +
+  labs(title = "Observed voter turnout distribution",
+       subtitle = '0 = no, 1 = yes',
        x = 'Observed voter turnout',
        y = 'Fraction of voters in each category')
 ```
@@ -43,7 +58,7 @@ prob_w_NA <- data1 %>%
   select(-n)
 
 print('Unconditional probability with missing values')
-prob_w_NA
+pander(prob_w_NA)
 
 # unconditional probability (without missing values)
 prob_wo_NA <- data1 %>%
@@ -54,17 +69,20 @@ prob_wo_NA <- data1 %>%
   select(-n)
 
 print('Unconditional probability without missing values')
-prob_wo_NA
+pander(prob_wo_NA)
 ```
 
-The following scattorplot with a overlaying linear smoothing line indicates a negative correlation between the voter turnout and the mental health index. The points are jittered to better ilustrate how many observations exist for each mental health index score. Without jittering, multiple observations for the given mental health index appear on the plot as if there is only a single observation.        
+The following scattorplot with a overlaying linear smoothing line indicates a negative correlation between the voter turnout and the mental health index. The points are jittered to better ilustrate how many observations exist for each mental health index score. Without jittering, multiple observations for the given mental health index appear on the plot as if there is only a single observation.
+
+The linear model suffers from a potential problem of higher-than-one or lower-then-zero probability, because it assumes that the range of the response variable is all real numbers.  
+
 ```{r Part 1 scatterplot, echo=FALSE, warning=FALSE}
 # scatterplot
 data1 %>%
   ggplot(aes(mhealth_sum, vote96)) +
   geom_jitter(na.rm=TRUE, height=.03, width=.3, alpha=.3) +
   geom_smooth(method='lm') +
-  labs(title = "Observed voter turnout by mental health state",
+  labs(title = "Observed voter turnout by the mental health index",
        subtitle = '0 = no, 1 = yes; missing values are removed',
        x = 'Mental health ',
        y = 'Probability of vote turnout')
@@ -98,20 +116,22 @@ vote_mental_pred <- data1 %>%
   mutate(logodds = prob2logodds(prob))
 ```
 
-Here is a line plot for log-odds:    
+Here is a line plot for log-odds:  
+
 ```{r Part 1 basic model log-odds plot, echo=FALSE, warning=FALSE}
 ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
   geom_line(aes(y = logodds), color = "blue", size = 1) +
-  labs(title = "Log-odds of voter turout for different mental health states",
+  labs(title = "Log-odds of voter turout by the mental health index",
        x = "Mental health",
        y = "Log-odds of voter turnout")
 ```
 
 And a line plot for odds:  
+
 ```{r Part 1 basic model odds plot, echo=FALSE, warning=FALSE}
 ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
   geom_line(aes(y = odds), color = "red", size = 1) +
-  labs(title = "Odds of voter turout for different mental health states",
+  labs(title = "Odds of voter turout by the mental health index",
        x = "Mental health",
        y = "Odds of voter turnout")
 
@@ -119,18 +139,20 @@ geom_point(aes(y = vote96))
 ```
 
 Finally, a line plot for probability with the jittered scattorplot for voter turnout:  
+
 ```{r Part 1 basic model probabilities plot, echo=FALSE, warning=FALSE}
 ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
 #  geom_point(aes(y = vote96)) +
   geom_jitter(aes(y=vote96), na.rm=TRUE, height=.03, width=.3, alpha=.3) +
   geom_line(aes(y = prob), color = "green", size = 1) +
-  labs(title = "Probability of voter turout for different mental health states",
+  labs(title = "Predicted probability of voter turout by the mental health index",
        subtitle = '0 = no, 1 = yes; missing values are removed',
        x = "Mental health",
        y = "Probability of voter turnout")
 ```
 
 The first difference in probability for an increase in the mental health index from 1 to 2, and for 5 to 6.  
+
 ```{r Part 1 basic model first difference, echo=FALSE, warning=FALSE}
 prob1 <- exp(1.1392097 + (1 * -0.1434752)) / (1 + exp(1.1392097 + (1 * -0.1434752)))
 prob2 <- exp(1.1392097 + (2 * -0.1434752)) / (1 + exp(1.1392097 + (2 * -0.1434752)))
@@ -190,7 +212,8 @@ The three components of the logistic regression:
   where $X_1$ is `mhealth_sum`, $X_2$ is `age`, $X_3$ is `educ`, $X_4$ is `blakc`, $X_5$ is `female`, $X_6$ is `married`, and $X_7$ is `inc10`.  
 * Link function: the logit function, $\pi_i$ $=$ $e^{\eta_i}$ / (1 + $e^{\eta_i}$)  
 
-Estimate the model and report your results.
+Estimate the model and report your results.  
+
 ```{r Part 1 multivariate model, echo=FALSE}
 fit_logistic_mul <- glm(vote96 ~ ., data=data1, family=binomial())
 summary(fit_logistic_mul)
@@ -223,8 +246,8 @@ prob5_mul <- exp(-4.304103 + (5 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272
 prob6_mul <- exp(-4.304103 + (6 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (6 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
 diff_5to6_mul <- prob5_mul - prob6_mul
 
-cat("The difference in probability for an increase in the mental health index from 1 to 2 is", diff_1to2_mul)
-cat("The difference in probability for an increase in the mental health index from 5 to 6 is", diff_5to6_mul)
+cat("The difference in predicted probability for an increase in the mental health index from 1 to 2 is", diff_1to2_mul)
+cat("The difference in predicted probability for an increase in the mental health index from 5 to 6 is", diff_5to6_mul)
 ```
 
 Finally, the following plot illustrate the difference between the respondents with college education and the others. While the higher mental health index is associated with less probability of voting for both groups, the effect of higher education is remarkable.  
@@ -236,12 +259,15 @@ vote_mental_pred2 <- data1 %>%
   mutate(prob = logit2prob(pred))
 
 ggplot(vote_mental_pred2, aes(x = mhealth_sum, y = prob, color = ifelse(educ > 12, "College", "No college"))) +
+  geom_line() +
   geom_smooth() +
-  labs(title = "Probability of voter turout for different mental health states",
-       subtitle = '0 = no, 1 = yes; missing values are removed',
+  labs(title = "Predicted probability of voter turout",
+       subtitle = 'by metnal health index and education, contolling for other variables',
        x = "Mental health",
-       y = "Probability of voter turnout") +
+       y = "Predicted probability of voter turnout") +
   guides(color = guide_legend(''))
+
+
 ```
 
 # Part 2: Modeling tv consumption
@@ -254,7 +280,7 @@ The three components of the Poisson regression:
 * Link function: the log function, $\mu_i$ $=$ ln($\eta_i$)
 
 Estimate the model and report your results:
-```{r Part 2 regression model, echo=FALSE}
+```{r Part 2 multivariate model, echo=FALSE}
 fit_poisson_mul2 <- glm(tvhours ~ .-social_connect -xmovie -zodiac -voted04 -dem -rep- ind, data=data2, family=poisson())
 summary(fit_poisson_mul2)
 ```
@@ -262,3 +288,24 @@ summary(fit_poisson_mul2)
 In this Poisson regression model, the response variable is the number of hours for watching TV per day. The predictors I chose include the following:  age, number of children, education, gender (1 if female), opinion on legalizing marijuana, hours to relex, and race (1 if black). The regression result illustrates that the coefficients for only three predictors are statistically significant. These coefficients are, respectively -0.0380001 for education, 0.0457914 for hours to relax and 0.4363657 for race. Each of these coefficients indicates the extent of a change in the log-count of the respondent's Tv-watching hours, to which a unit increase in the given predictor will lead on average when other variables are held constant.
 
 These cofficients also mean the following: a unit increase in edcuation is associated with a 0.9627128-fold change in the mean number of the hours of watching TV per day. Also, each additioanl hour of relaxing is associated with a 1.046856-fold change in the mean number of the hours of watching TV per day. Finally, being black is associated with a 1.547074-fold change in the mean number of the hours of watching TV per day.
+
+Finally, the following plot shows the effect of three statistically significant predictors on the hours of watching TV. The plot illustrates that while leisure and racial factors are positively correlated with the hours of watching TV, education is negatively correlated with the hours of watching TV.       
+
+```{r Part 2 multivariate model plot, echo=FALSE, warning=FALSE}
+tv_pred1 <- data2 %>%
+  data_grid(educ, hrsrelax, black, .model=fit_poisson_mul2) %>%
+  add_predictions(fit_poisson_mul2) %>%
+  # predicted counts are in the logs - convert to counts
+  mutate(count = exp(pred))
+
+ggplot(tv_pred1, aes(x = hrsrelax, y = count, color = ifelse(educ > 12, "College", "No college"))) +
+  geom_line() +
+  geom_smooth() +
+  labs(title = "Predicted hours of watching TV",
+     subtitle = 'by hours to relax, college, and race',
+     x = "Hours to relax",
+     y = "Predicted hours of watching TV") +
+  guides(color = guide_legend('')) +
+  facet_wrap(~ifelse(black==1, "black", "not black"))
+
+```
