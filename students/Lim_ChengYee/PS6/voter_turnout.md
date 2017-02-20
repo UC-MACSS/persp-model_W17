@@ -8,7 +8,7 @@ Part 1: Modeling Voter Turnout
 
 ### Describe the data (1 point)
 
-1.  Plot a histogram of voter turnout. Make sure to give the graph a title and proper *x* and *y*-axis labels. What is the unconditional probability of a given individual turning out to vote?
+#### Plot a histogram of voter turnout. Make sure to give the graph a title and proper *x* and *y*-axis labels. What is the unconditional probability of a given individual turning out to vote?
 
 ``` r
 health %>% 
@@ -21,14 +21,14 @@ health %>%
                    labels = c("Did not vote", "Voted"))
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-1-1.png) 1. Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-1-1.png) Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
 
 ``` r
 health %>%
   filter(!is.na(mhealth_sum) & !is.na(vote96)) %>%
   ggplot(aes(x = mhealth_sum, y = vote96)) + 
   geom_point() + 
-  geom_smooth(model = "lm", color = "deepskyblue1") + 
+  geom_smooth(method = "lm", color = "deepskyblue1") + 
   labs(x = "Mental Health Index", 
        y = "Voter Turnout")
 ```
@@ -247,7 +247,10 @@ Pr(*Y*<sub>*i*</sub> = *y*<sub>*i*</sub>|*π*) = *π*<sub>*i*</sub><sup>*y*<
 health %>% 
   filter(!is.na(vote96)) %>%
   ggplot() + 
-  geom_histogram(aes(x = vote96, y = ..density..), fill = "deepskyblue1", na.rm = TRUE) + 
+  geom_histogram(aes(x = vote96, 
+                     y = ..density..), 
+                 fill = "deepskyblue1", 
+                 na.rm = TRUE) + 
   labs(x = "Voter Turnout") + 
   scale_x_continuous(breaks = c(0,1), 
                    labels = c("Did not vote", "Voted")) #fix density
@@ -312,7 +315,7 @@ gss <- read.csv("./data/gss2006.csv")
 
 ### Describe the data
 
-1.  Plot a histogram of voter turnout. Make sure to give the graph a title and proper *x* and *y*-axis labels. What is the unconditional probability of a given individual turning out to vote?
+`health` contains a subset of the 2006 General Social Survey of 4510 American individuals in 2006. The response variable `tvhours` contains a count of TV hours watched per day for each individual in 2006.
 
 ``` r
 gss %>% 
@@ -320,7 +323,8 @@ gss %>%
   ggplot() + 
   geom_histogram(aes(x = tvhours), fill = "deepskyblue1", binwidth=2) + 
   labs(x = "Number of hours of TV watched per day", 
-       y = "Count") 
+       y = "Count", 
+       title = "Histogram of TV hours watched per day") 
 ```
 
 ![](voter_turnout_files/figure-markdown_github/unnamed-chunk-11-1.png)
@@ -329,23 +333,23 @@ gss %>%
 
 Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr(*T**V**h**o**u**r**s*<sub>*i*</sub> = *k*|*μ*) = (*μ*<sup>*k*</sup>*e*<sup>−*μ*</sup>) / *k*! .
 
-The linear predictor of our model is:
+In our model of predicting number of hours of TV watched per day, we include the following additional variables:
+1. `age` - Age (in years)
+2. `childs` - Number of children
+3. `educ` - Highest year of formal schooling completed
+4. `female` - 1 if female, 0 if male
+5. `hrsrelax` - Hours per day respondent has to relax
+6. `black` - 1 if respondent is black, 0 otherwise
+7. `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)
+8. `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise
+9. `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise
+
+Thus, the linear predictor of our model is:
 *η*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*a**g**e* + *β*<sub>2</sub>*c**h**i**l**d**r**e**n* + *β*<sub>3</sub>*e**d**u**c* + *β*<sub>4</sub>*f**e**m**a**l**e* + *β*<sub>5</sub>*h**r**s**r**e**l**a**x* + *β*<sub>6</sub>*b**l**a**c**k*
 +*β*<sub>7</sub>*s**o**c**i**a**l*<sub>*c*</sub>*o**n**n**e**c**t* + *β*<sub>8</sub>*v**o**t**e**d*04 + *β*<sub>9</sub>*x**m**o**v**i**e* + *ϵ*<sub>*i*</sub>
 
 The link function for the poisson distribution is:
 *μ*<sub>*i*</sub> = log(*η*<sub>*i*</sub>)
-
-`health` contains a subset of the 2006 General Social Survey of 4510 American individuals in 2006. The response variable `tvhours` contains a count of TV hours watched per day for each individual in 2006. Additional covariates in our model include:
-\* `age` - Age (in years)
-\* `childs` - Number of children
-\* `educ` - Highest year of formal schooling completed
-\* `female` - 1 if female, 0 if male
-\* `hrsrelax` - Hours per day respondent has to relax
-\* `black` - 1 if respondent is black, 0 otherwise
-\* `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)
-\* `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise
-\* `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise
 
 The results of the estimated multivariate poisson model is as follows:
 
@@ -388,7 +392,22 @@ summary(tv_hours)
     ## 
     ## Number of Fisher Scoring iterations: 5
 
-From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level.
+From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level. Since we used a multivariate poisson regression, the effects of variables will be calculated as exponential of the estimated parameters.
+
+``` r
+exp(coef(tv_hours))
+```
+
+    ##    (Intercept)            age         childs           educ         female 
+    ##      2.7231633      1.0010229      0.9949548      0.9732266      1.0125227 
+    ##       hrsrelax          black social_connect        voted04         xmovie 
+    ##      1.0480684      1.5440365      1.0323226      0.8826336      1.0997168
+
+#### Education and Ethnicity
+
+For a one year increase in maximum years of schooling, the number of TV hours watched per day is expected to decrease by 0.973, given the rest of the variables in the model are held constant. The decline in hours of TV watched per day as maximum education years increase can also be shown in by the overall decreasing trend in the line graphs below. This trend is also valid across black and non-black ethnicities
+
+Furthermore, a black individual is, on average, expected to watch 1.54 more hours of TV per day than a non-black individual, given that the rest of the variables in the model are held constant. The differential between hours of TV watched by an average black and non-black individual can be visualized with the disparity between the blue and red lines.
 
 ``` r
 gss %>%
@@ -399,10 +418,17 @@ gss %>%
   ggplot(aes(x = educ, y = pred)) +
   geom_line(aes(color = factor(black))) +
   labs(y = "Predicted Number of Hours of TV watched per day", 
-       x = "Maximum Years of Education")
+       x = "Maximum Years of Education") + 
+  scale_color_discrete(name = "Race", 
+                     breaks = c(0,1), 
+                     labels = c("Non-black", "Black"))
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-13-1.png)
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-14-1.png)
+
+#### Taste and Preferences
+
+Unsurprisingly, according to the regression results, individuals who devote more time to relaxation per day are more likely to watch more hours of television. For an hour increase in hours the respondent has to relax, the number of TV hours watched per day is expected to increase by 1.048, given the rest of the variables in the model are held constant.
 
 ``` r
 gss %>%
@@ -416,4 +442,47 @@ gss %>%
        x = "Hours per day Respondent has to Relax")
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-14-1.png)
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-15-1.png)
+
+#### Over or under-dispersion
+
+The dispersion parameter is 1.116. While the dispersion parameter is larger than 1, it is rather close to 1 so over-dispersion does not appear to be a significant problem.
+
+``` r
+tv_disp <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = "quasipoisson")
+summary(tv_disp)
+```
+
+    ## 
+    ## Call:
+    ## glm(formula = tvhours ~ age + childs + educ + female + hrsrelax + 
+    ##     black + social_connect + voted04 + xmovie, family = "quasipoisson", 
+    ##     data = gss)
+    ## 
+    ## Deviance Residuals: 
+    ##     Min       1Q   Median       3Q      Max  
+    ## -2.9656  -0.7125  -0.0833   0.4486   5.3006  
+    ## 
+    ## Coefficients:
+    ##                 Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)     1.001794   0.206888   4.842 1.74e-06 ***
+    ## age             0.001022   0.002789   0.366   0.7142    
+    ## childs         -0.005058   0.023157  -0.218   0.8272    
+    ## educ           -0.027138   0.011929  -2.275   0.0234 *  
+    ## female          0.012445   0.063657   0.196   0.8451    
+    ## hrsrelax        0.046949   0.010075   4.660 4.11e-06 ***
+    ## black           0.434400   0.072940   5.956 5.03e-09 ***
+    ## social_connect  0.031811   0.039429   0.807   0.4202    
+    ## voted04        -0.124845   0.073675  -1.695   0.0908 .  
+    ## xmovie          0.095053   0.071165   1.336   0.1823    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for quasipoisson family taken to be 1.093068)
+    ## 
+    ##     Null deviance: 578.52  on 487  degrees of freedom
+    ## Residual deviance: 480.02  on 478  degrees of freedom
+    ##   (4022 observations deleted due to missingness)
+    ## AIC: NA
+    ## 
+    ## Number of Fisher Scoring iterations: 5

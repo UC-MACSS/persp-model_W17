@@ -13,6 +13,7 @@ library(broom)
 library(modelr)
 library(knitr)
 library(caret)
+library(pander)
 
 theme_set(theme_bw())
 ```
@@ -23,7 +24,7 @@ health <- read.csv("./data/mental_health.csv")
 ##Part 1: Modeling Voter Turnout 
 ### Describe the data (1 point)
 
-1. Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels. What is the unconditional probability of a given individual turning out to vote?
+####Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels. What is the unconditional probability of a given individual turning out to vote?
 ```{r}
 health %>% 
   filter(!is.na(vote96)) %>%
@@ -34,7 +35,7 @@ health %>%
   scale_x_discrete(breaks = c(0,1), 
                    labels = c("Did not vote", "Voted"))
 ```
-1. Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
+Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
 
 ```{r}
 
@@ -42,7 +43,7 @@ health %>%
   filter(!is.na(mhealth_sum) & !is.na(vote96)) %>%
   ggplot(aes(x = mhealth_sum, y = vote96)) + 
   geom_point() + 
-  geom_smooth(model = "lm", color = "deepskyblue1") + 
+  geom_smooth(method = "lm", color = "deepskyblue1") + 
   labs(x = "Mental Health Index", 
        y = "Voter Turnout")
 
@@ -182,7 +183,10 @@ Pr$(Y_i = y_i | \pi)$ = $\pi_i^{y_i}$ $(1 - \pi_i)^{1-y_i}$
 health %>% 
   filter(!is.na(vote96)) %>%
   ggplot() + 
-  geom_histogram(aes(x = vote96, y = ..density..), fill = "deepskyblue1", na.rm = TRUE) + 
+  geom_histogram(aes(x = vote96, 
+                     y = ..density..), 
+                 fill = "deepskyblue1", 
+                 na.rm = TRUE) + 
   labs(x = "Voter Turnout") + 
   scale_x_continuous(breaks = c(0,1), 
                    labels = c("Did not vote", "Voted")) #fix density
@@ -214,36 +218,37 @@ gss <- read.csv("./data/gss2006.csv")
 ```
 
 ### Describe the data 
+`health` contains a subset of the 2006 General Social Survey of 4510 American individuals in 2006. The response variable `tvhours` contains a count of TV hours watched per day for each individual in 2006. 
 
-1. Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels. What is the unconditional probability of a given individual turning out to vote?
 ```{r}
 gss %>% 
   filter(!is.na(tvhours)) %>%
   ggplot() + 
   geom_histogram(aes(x = tvhours), fill = "deepskyblue1", binwidth=2) + 
   labs(x = "Number of hours of TV watched per day", 
-       y = "Count") 
+       y = "Count", 
+       title = "Histogram of TV hours watched per day") 
 ```
 
 ###Multivariate Poisson Regression Model of Hours of TV Watched 
 Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr$(TVhours_i=k|\mu)$ = $(\mu^ke^{-\mu})$ / ${k!}$ .
 
-The linear predictor of our model is:  
+In our model of predicting number of hours of TV watched per day, we include the following additional variables:  
+1. `age` - Age (in years)  
+2. `childs` - Number of children  
+3. `educ` - Highest year of formal schooling completed  
+4. `female` - 1 if female, 0 if male  
+5. `hrsrelax` - Hours per day respondent has to relax  
+6. `black` - 1 if respondent is black, 0 otherwise  
+7. `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)  
+8. `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise  
+9. `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise 
+
+Thus, the linear predictor of our model is:  
 $$\eta_{i} = \beta_{0} + \beta_{1}age + \beta_{2}children + \beta_{3}educ + \beta_{4}female + \beta_{5}hrsrelax + \beta_{6}black$$ $$+ \beta_{7}social_connect + \beta_{8}voted04 + \beta_{9}xmovie + \epsilon_i$$
 
 The link function for the poisson distribution is:  
 $$\mu_{i} = \log(\eta_{i})$$
-
-`health` contains a subset of the 2006 General Social Survey of 4510 American individuals in 2006. The response variable `tvhours` contains a count of TV hours watched per day for each individual in 2006. Additional covariates in our model include:  
-*  `age` - Age (in years)  
-*  `childs` - Number of children  
-*  `educ` - Highest year of formal schooling completed  
-*  `female` - 1 if female, 0 if male  
-*  `hrsrelax` - Hours per day respondent has to relax  
-*  `black` - 1 if respondent is black, 0 otherwise  
-*  `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)  
-*  `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise  
-*  `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise  
 
 The results of the estimated multivariate poisson model is as follows:
 ```{r}
@@ -251,7 +256,15 @@ tv_hours <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + soci
 summary(tv_hours)
 ```
 
-From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level. 
+From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level. Since we used a multivariate poisson regression, the effects of variables will be calculated as exponential of the estimated parameters. 
+
+```{r}
+exp(coef(tv_hours))
+```
+####Education and Ethnicity 
+For a one year increase in maximum years of schooling, the number of TV hours watched per day is expected to decrease by 0.973, given the rest of the variables in the model are held constant. The decline in hours of TV watched per day as maximum education years increase can also be shown in by the overall decreasing trend in the line graphs below. This trend is also valid across black and non-black ethnicities 
+
+Furthermore, a black individual is, on average, expected to watch 1.54 more hours of TV per day than a non-black individual, given that the rest of the variables in the model are held constant. The differential between hours of TV watched by an average black and non-black individual can be visualized with the disparity between the blue and red lines. 
 ```{r}
 gss %>%
   na.omit() %>%
@@ -261,10 +274,14 @@ gss %>%
   ggplot(aes(x = educ, y = pred)) +
   geom_line(aes(color = factor(black))) +
   labs(y = "Predicted Number of Hours of TV watched per day", 
-       x = "Maximum Years of Education")
+       x = "Maximum Years of Education") + 
+  scale_color_discrete(name = "Race", 
+                     breaks = c(0,1), 
+                     labels = c("Non-black", "Black"))
 ```
 
-
+####Taste and Preferences
+Unsurprisingly, according to the regression results, individuals who devote more time to relaxation per day are more likely to watch more hours of television. For an hour increase in hours the respondent has to relax, the number of TV hours watched per day is expected to increase by 1.048, given the rest of the variables in the model are held constant. 
 ```{r}
 gss %>%
   na.omit() %>%
@@ -276,4 +293,12 @@ gss %>%
   labs(y = "Predicted Number of Hours of TV watched per day", 
        x = "Hours per day Respondent has to Relax")
 
+```
+
+####Over or under-dispersion 
+The dispersion parameter is 1.116. While the dispersion parameter is larger than 1, it is rather close to 1 so over-dispersion does not appear to be a significant problem. 
+
+```{r}
+tv_disp <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = "quasipoisson")
+summary(tv_disp)
 ```
