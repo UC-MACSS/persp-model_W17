@@ -11,7 +11,7 @@ I.Describe the data
 
 #### I.1.(a)Plot a histogram of voter turnout. Make sure to give the graph a title and proper *x* and *y*-axis labels.
 
-![](PS6_HJ_files/figure-markdown_github/I.1.(a)Histogram-1.png)
+![](I.1.(a)Histogram-1.png)
 
 #### I.1.(b)What is the unconditional probability of a given individual turning out to vote?
 
@@ -22,7 +22,7 @@ I.Describe the data
 
 #### I.2.(a)Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line.
 
-![](PS6_HJ_files/figure-markdown_github/I.2.(a)Scatterplot%20&%20Linear%20Smoothing%20Line-1.png)
+![](I.2.(a)Scatterplot%20&%20Linear%20Smoothing%20Line-1.png)
 
 #### I.2.(b)What information does this tell us? What is problematic about this linear smoothing line?
 
@@ -61,19 +61,19 @@ The relationship between mental health and voter turnout is statistically signif
 
 #### II.2.Interpret the estimated parameter for mental health in terms of log-odds. Generate a graph of the relationship between mental health and the log-odds of voter turnout.
 
-![](PS6_HJ_files/figure-markdown_github/II.2.Log-odds%20Plot-1.png)
+![](II.2.Log-odds%20Plot-1.png)
 
 The estimated parameter for mental health in terms of log-odds is -0.1434752. The change in log-odds by a unit increase in mental health is -0.1434752. The graph shows linear relationship.
 
 #### II.3.Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.
 
-![](PS6_HJ_files/figure-markdown_github/II.3.Odds%20Plot-1.png)
+![](II.3.Odds%20Plot-1.png)
 
 The estimated parameter for mental health in terms of odds is 0.8663423. The change in odds by a unit increase in mental health is 0.8663423.
 
 #### II.4.Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
 
-![](PS6_HJ_files/figure-markdown_github/II.4.Probability%20Plot-1.png)
+![](II.4.Probability%20Plot-1.png)
 
     ## $title
     ## [1] "Probability of Voter Turout for Mental Health"
