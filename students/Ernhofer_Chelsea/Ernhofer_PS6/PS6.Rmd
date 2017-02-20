@@ -1,0 +1,247 @@
+---
+title: "PS5"
+author: "Chelsea Ernhofer"
+output: github_document
+---
+
+```{r setup, include= FALSE}
+require(mosaic)
+require(gap)
+
+library(tidyverse)
+library(modelr)
+library(pROC)
+library(broom)
+library(ggplot2)
+
+
+mh_data = read.csv("mental_health.csv")
+
+gss_data = read.csv("gss2006.csv")
+
+```
+
+##Question 1
+
+##Describe the Data
+
+```{r}
+attach(mh_data)
+
+vote96 = na.omit(vote96)
+mhealth_sum = na.omit(mhealth_sum)
+
+# counts
+ggplot(mh_data, aes(vote96)) +
+  geom_bar() + 
+  labs(title = 'Voter Turnout 1996', x = 'Voted', y = 'Count') +
+  guides(fill = guide_legend(title = ''))
+
+vote_prob = sum(vote96)/length(vote96)
+
+```
+The unconditional probability of a given individual turning out to vote is 0.682.  
+
+```{r}
+ggplot(mh_data, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),
+              se = FALSE, fullrange = TRUE, color = "blue", size = 1) +
+  ggtitle("Voter Turnout and Mental Health Sum") +
+  labs(x = "Mental Health Sum",
+       y = "Voter Turnout")
+
+
+
+```
+
+This graph shows us that mental health and voter turnout have a negative relationship. However, since voter turnout is a dichotomous variable, it does no make sense to plot a line to the data since there are no observed (or even possible) value between 1 and 0.  
+
+##Simple Regression
+
+```{r}
+vote_mhealth <- glm(vote96 ~ mhealth_sum , data = mh_data, family = binomial)
+tidy(vote_mhealth)
+
+summary(vote_mhealth)
+
+```
+
+1. This relationship is statistically significant. The p-value for the relationship between mental health and voter turnout is less than 0.001. I also believe this model to show substantive significance. For every one unit increase in mental health sum, the log odds of an individual voting descreases by 0.143. This estimate may seem small, but that is desceptive because of the fact that it's log odds. 
+
+```{r}
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+prob2odds <- function(x){
+  x / (1 - x)
+}
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+vote_log <- mh_data %>%
+  add_predictions(vote_mhealth) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+ggplot(vote_log, aes(x = mhealth_sum)) +
+  geom_line(aes(y = logodds), color = "blue", size = 1) +
+  labs(title = "Voter Turnout and Mental Health; Log-odds",
+       x = "Mental health",
+       y = "Voter Turnout Log Odds")
+
+```
+2. When an individual's mental health sum increases by one unit, the log odds of that indiviual voting decrease by 0.143.
+
+
+```{r}
+ggplot(vote_log, aes(x = mhealth_sum)) +
+  geom_line(aes(y = odds), color = "blue", size = 1) +
+  labs(title = "Voter Turnout and Mental Health; Odds",
+       x = "Mental health",
+       y = "Odds of voter turnout")
+
+geom_point(aes(y = vote96))
+
+```
+3. When an individual's mental health sum increases by one unit, the odds of that indiviual voting decrease by 15%.
+
+
+```{r}
+ggplot(vote_log, aes(x = mhealth_sum)) +
+  geom_jitter(aes(y=vote96), na.rm=TRUE, height=.03, width=.3, alpha=.3) +
+  geom_line(aes(y = prob), color = "blue", size = 1) +
+  labs(title = "Probability of voter turout for different mental health states",
+       subtitle = '0 = no, 1 = yes; missing values are removed',
+       x = "Mental health",
+       y = "Probability of voter turnout")
+
+tibble(mhealth_sum = 0:16) %>%
+  add_predictions(vote_mhealth, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  {.} -> diff_grid
+
+dif1 = diff_grid[3,]$prob - diff_grid[2,]$prob
+dif2 = diff_grid[7,]$prob - diff_grid[6,]$prob
+
+```
+4. The change in voter turnout probability is -0.029 from scores of 1-2 in mental health sum. With a change in mental health from 5-6, the change in probability is -0.034.
+
+```{r}
+vote_accuracy <- mh_data %>%
+  na.omit %>%
+  add_predictions(vote_mhealth) %>%
+  mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > .5))
+
+ac_rate = mean(vote_accuracy$vote96 == vote_accuracy$pred, na.rm = TRUE)
+
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+pre_val = PRE(vote_mhealth)
+
+auc <- auc(vote_accuracy$vote96, vote_accuracy$pred, na.rm=TRUE)
+```
+5. Accuracy rate: 0.682
+   PRE: 0.016
+   AUC: 0.541
+
+I do not believe this model is very good. Although the accuracy rate could be seen as high (at 68%), there is no baseline to compare with this number. The PRE, therefore is calculated to determine how we have reduced the error from the useless classifier. A value of 0.016 for the PRE, shows that we have not reduced that error very well. Finally, the AUC value also suggests that the results, as influenced by the independent variable we chose, are not far from what could have been generated randomly. 
+
+##Multivariate Regression
+
+```{r}
+vote_pred <- glm(vote96 ~ ., data=mh_data, family=binomial())
+summary(vote_pred)
+```
+1. The elements of this general linear model are as follows:
+
+The random component of this model is the Bernoulli distribution.
+
+\[Pr({Y_i} = {y_i}|\pi ) = {\pi_{i}}^{y_i}{(1 - {\pi_i})}^{(1-{y_i})}\]
+
+The linear predictor is the basic linear regression equation. 
+
+\[{\eta} = {\beta_0} + {\beta_1}{MentalHealth} + {\beta_2}{Age} + {\beta_3}{Education} + {\beta_4}{Black} + {\beta_5}{Female} + {\beta_6}{Married} + {\beta_7}{inc10}\]
+
+Where \[{\eta}\] = voter turnout. 
+
+The link function is: 
+
+\[{\pi_i} = \frac{e^{\eta_i}}{1 + e^{\eta_i}}\]
+
+2. 
+
+```{r}
+vote_all <- mh_data %>%
+  data_grid(mhealth_sum, educ, .model=vote_pred) %>%
+  add_predictions(vote_pred) %>%
+  mutate(pred = logit2prob(pred))
+
+vote_all_reg <- glm(vote96 ~ ., data = mh_data, family = binomial)
+summary(vote_all_reg)
+
+
+```
+3. From this regression output, we can state a few conclusions. Firstly, mental health index continues to have a significant relationship with voting status, with log odds of voting decreasing by 0.08 with every added unit in mental health sum.  We can also posit that both age and education also have significant relationships with the log odds of an individual voting. With a one unit increase in age, individuals' log odds of voting increase by 0.04. Similarly, with a one unit increase in education, the log odds of an individual voting increase by 0.22. Increasing income and being married also increase the log odds that one will vote. 
+
+
+##Question 2 
+
+1. The elements of this general linear model are as follows:
+
+The random component of this model is the Poisson distribution. 
+
+\[Pr(Y = y | \mu) = \frac{\mu^k e^{-y}}{y!}\]
+
+The linear predictor is, again, a basic linear model:
+
+\[\eta = \beta_0 + {\beta_1}{hrsrelax} + {\beta_2}{black}\]
+
+The link function is the log function: 
+
+\[\mu = ln(\eta)\]
+
+```{r}
+detach(mh_data)
+
+attach(gss_data)
+
+
+tv_pred <- glm(tvhours ~ hrsrelax + black, data=gss_data, family=poisson())
+summary(tv_pred)
+
+```
+
+```{r}
+gss_data %>%
+  data_grid(hrsrelax, black = c(0,1)) %>%
+  add_predictions(tv_pred) %>%
+  mutate(pred = exp(pred),
+         black = factor(black)) %>%
+  ggplot(aes(hrsrelax, pred, color = black)) +
+  geom_line() +
+  ggtitle("Hours of TV watched, Hours of Relaxation, and Race") +
+  labs(x = "Hours of Relaxation",
+       y = "Predicted count of hours of TV watched")
+
+```
+3. For my poisson model, I chose to model the predicted count of TV hours watched with hours of relaxation and race. From the regression output, we can see that both of these variables have a significant relationship with the response variable, hours of television watched. A unit increase in hours of relaxation is correlated with a 0.037-fold increase in hours of television watched. This make intuitive sense, since if one has more time to relax, they are more likely to spend and increased amount of time watching television when compared with someone who has little to no relaxation time. 
+What I found particularly interesting in this model is the effect of race on hours of television watched. From the regression we can conclude that being black is correlated with a 0.48-fold increase in hours of television watched. 
+To further demostrate this interesting relationship, I create the plot above which shows the different predicted counts of TV hours watched vs. hours of relaxation, taking race into account as well. From this, we can see that the initial values for hours of television watched is already higher for black respondents than it is for individuals of other races. It is of note, however, that this difference grows with more hours of relaxation. Because of this, we can conclude that there may be a systematic difference of TV watching habits between black individuals and individuals of other races. 
