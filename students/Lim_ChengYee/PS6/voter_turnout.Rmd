@@ -203,7 +203,6 @@ From the regression results, we can identify that the mental health, age, educat
 
 ```{r}
 coeff_1 <- exp(coef(voter))
-coeff_1[3]
 ```
 
 For a one unit increase in the mental health index (more depressed), the odds of voting (versus not voting) changes by a factor of `r coeff_1[2]`, given that the rest of the variables remain unchanged.
@@ -269,13 +268,6 @@ health1 %>%
        y = "Odds") + 
   scale_color_discrete(name = "Family Income") +
   ggtitle("Relationship between mental health and odds of voting by family income level")
-
-health_acc <- health %>% 
-  add_predictions(voter) %>% 
-  mutate(pred = logit2prob(pred), 
-         pred = as.numeric(pred > .5))
-
-mean(health_acc$vote96 == health_acc$pred)
 ```
 
 ##Part 2: Modelling TV Consumption 
@@ -327,12 +319,12 @@ summary(tv_hours)
 From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level. Since we used a multivariate poisson regression, the effects of variables will be calculated as exponential of the estimated parameters. 
 
 ```{r}
-exp(coef(tv_hours))
+coeff_2 <- exp(coef(tv_hours))
 ```
 ####Education and Ethnicity 
-For a one year increase in maximum years of schooling, the number of TV hours watched per day is expected to decrease by a factor of 0.973, given the rest of the variables in the model are held constant. The decline in hours of TV watched per day as maximum education years increase can also be shown in by the overall decreasing trend in the line graphs below. This trend is also valid across black and non-black ethnicities 
+For a one year increase in maximum years of schooling, the number of TV hours watched per day is expected to decrease by a factor of `r coeff_2[4]`, given the rest of the variables in the model are held constant. The decline in hours of TV watched per day as maximum education years increase can also be shown in by the overall decreasing trend in the line graphs below. This trend is also valid across black and non-black ethnicities 
 
-Furthermore, a black individual is, on average, expected to change by a factor of 1.54 more hours of TV per day than a non-black individual, given that the rest of the variables in the model are held constant. The differential between hours of TV watched by an average black and non-black individual can be visualized with the disparity between the blue and red lines. 
+Furthermore, a black individual is, on average, expected to change by a factor of `r coeff_2[7]` more hours of TV per day than a non-black individual, given that the rest of the variables in the model are held constant. The differential between hours of TV watched by an average black and non-black individual can be visualized with the disparity between the blue and red lines. 
 ```{r}
 gss1 <- gss %>%
   data_grid(age, childs, educ, female, hrsrelax, black, social_connect, voted04, xmovie) %>%
@@ -352,13 +344,13 @@ gss1 %>%
 ```
 
 ####Taste and Preferences
-Unsurprisingly, according to the regression results, individuals who devote more time to relaxation per day are more likely to watch more hours of television. For an hour increase in hours the respondent has to relax, the number of TV hours watched per day is expected to increase by a factor of 1.048, given the rest of the variables in the model are held constant. 
+Unsurprisingly, according to the regression results, individuals who devote more time to relaxation per day are more likely to watch more hours of television. For an hour increase in hours the respondent has to relax, the number of TV hours watched per day is expected to increase by a factor of `r coeff_2[6]`, given the rest of the variables in the model are held constant. 
 ```{r}
 gss1 %>%
   group_by(hrsrelax) %>% 
   summarize(pred = mean(pred)) %>%
   ggplot(aes(x = hrsrelax, y = pred)) +
-  geom_point() +
+  geom_line() +
   labs(y = "Predicted Number of Hours of TV watched per day", 
        x = "Hours per day Respondent has to Relax")
 
