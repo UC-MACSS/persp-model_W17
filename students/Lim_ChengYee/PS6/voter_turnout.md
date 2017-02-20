@@ -333,10 +333,7 @@ gss %>%
 
 Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr(*T**V**h**o**u**r**s*<sub>*i*</sub> = *k*|*μ*) = (*μ*<sup>*k*</sup>*e*<sup>−*μ*</sup>) / *k*! .
 
-In our model of predicting number of hours of TV watched per day, we include the following additional variables:
-1. `age` - Age (in years)
-2. `childs` - Number of children
-3. `educ` - Highest year of formal schooling completed
+In our model of predicting number of hours of TV watched per day, we include the following additional variables: <br> 1. `age` - Age (in years) <br> 1. `childs` - Number of children <br> 3. `educ` - Highest year of formal schooling completed
 4. `female` - 1 if female, 0 if male
 5. `hrsrelax` - Hours per day respondent has to relax
 6. `black` - 1 if respondent is black, 0 otherwise

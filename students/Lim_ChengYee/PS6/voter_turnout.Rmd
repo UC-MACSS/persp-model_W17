@@ -233,16 +233,16 @@ gss %>%
 ###Multivariate Poisson Regression Model of Hours of TV Watched 
 Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr$(TVhours_i=k|\mu)$ = $(\mu^ke^{-\mu})$ / ${k!}$ .
 
-In our model of predicting number of hours of TV watched per day, we include the following additional variables:  <br>
-1. `age` - Age (in years)  <br>
-2. `childs` - Number of children  <br>
-3. `educ` - Highest year of formal schooling completed  
-4. `female` - 1 if female, 0 if male  
-5. `hrsrelax` - Hours per day respondent has to relax  
-6. `black` - 1 if respondent is black, 0 otherwise  
-7. `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)  
-8. `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise  
-9. `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise 
+In our model of predicting number of hours of TV watched per day, we include the following additional variables:  
+1. `age` - Age (in years)   
+1. `childs` - Number of children   
+1. `educ` - Highest year of formal schooling completed   
+1. `female` - 1 if female, 0 if male   
+1. `hrsrelax` - Hours per day respondent has to relax  
+1. `black` - 1 if respondent is black, 0 otherwise   
+1. `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)   
+1. `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise   
+1. `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise   
 
 Thus, the linear predictor of our model is:  
 $$\eta_{i} = \beta_{0} + \beta_{1}age + \beta_{2}children + \beta_{3}educ + \beta_{4}female + \beta_{5}hrsrelax + \beta_{6}black$$ $$+ \beta_{7}social_connect + \beta_{8}voted04 + \beta_{9}xmovie + \epsilon_i$$
