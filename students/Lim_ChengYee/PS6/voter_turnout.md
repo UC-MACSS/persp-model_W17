@@ -3,8 +3,10 @@ PS6
 Cheng Yee Lim
 17th February 2017
 
-Describe the data (1 point)
----------------------------
+Part 1: Modeling Voter Turnout
+------------------------------
+
+### Describe the data (1 point)
 
 1.  Plot a histogram of voter turnout. Make sure to give the graph a title and proper *x* and *y*-axis labels. What is the unconditional probability of a given individual turning out to vote?
 
@@ -33,8 +35,7 @@ health %>%
 
 ![](voter_turnout_files/figure-markdown_github/unnamed-chunk-2-1.png)
 
-Basic model (3 points)
-----------------------
+### Basic model (3 points)
 
 Estimate a logistic regression model of the relationship between mental health and voter turnout.
 
@@ -69,15 +70,15 @@ summary(m_voter)
     ## 
     ## Number of Fisher Scoring iterations: 4
 
-### Is the relationship between mental health and voter turnout statistically significant?
+#### Is the relationship between mental health and voter turnout statistically significant?
 
 The relationship between mental health and voter turnout has a p-value of 3.13 \* 10<sup>−13</sup> is statistically significant at 1% significance level.
 
-### Interpret the estimated parameter for mental health in terms of log-odds.
+#### Interpret the estimated parameter for mental health in terms of log-odds.
 
 For every one-unit increase in an individual's mental health (where 0 is an individual with no depressed feelings, and 9 is an individual with the most severe depressed mood), we expect the log-odds of voting to decrease by 0.143.
 
-### Generate a graph of the relationship between mental health and the log-odds of voter turnout.
+#### Generate a graph of the relationship between mental health and the log-odds of voter turnout.
 
 ``` r
 prob2odds <- function(x){
@@ -103,7 +104,7 @@ health %>%
 
 ![](voter_turnout_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
-### Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.
+#### Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.
 
 The relationship between mental health and the odds of turning up to vote is 0.892.
 
@@ -123,7 +124,7 @@ health %>%
 
 ![](voter_turnout_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
-### Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
+#### Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
 
 The expected change in probability given an unit increase in the mental health index is -0.0273.
 The first difference for an increase in the mental health index from 1 to 2 is -0.0292.
@@ -154,7 +155,7 @@ cat("First Difference from an increase in mental health index = ", probability(5
 
     ## First Difference from an increase in mental health index =  -0.03477953
 
-### Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
+#### Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
 
 It is a decent model, it results in an improvement of
 
@@ -233,13 +234,14 @@ confusionMatrix(mh_accuracy$pred2, mh_accuracy$vote96)
     ##        'Positive' Class : 0               
     ## 
 
-Multiple variable model (3 points)
-----------------------------------
+### Multiple variable model (3 points)
 
 Our GLM of voter turnout consists of three components:
 
 Firstly, we assume our outcome variable, voter turnout, is drawn from the binomial distribution with probability *π*, given the values of the predicator variables in the model. *π* is the probability that, for any observation *i*, *Y* will take on the particular value *Y*<sub>*i*</sub>.
 In our model, *Y*<sub>*i*</sub> takes on the expected value of 1 with probability *π* and 0 with probability 1 − *π*, so *π*<sub>*i*</sub> is the conditional probability of sampling a 1 in this group.
+
+Pr(*Y*<sub>*i*</sub> = *y*<sub>*i*</sub>|*π*) = *π*<sub>*i*</sub><sup>*y*<sub>*i*</sub></sup> (1 − *π*<sub>*i*</sub>)<sup>1 − *y*<sub>*i*</sub></sup>
 
 ``` r
 health %>% 
@@ -253,13 +255,10 @@ health %>%
 
 ![](voter_turnout_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
-Secondly, since the probability of voter turnout may systematically vary to given known predictors, we incorporate that into the model with a linear predictor.
-
-*π*<sub>*i*</sub> = *ρ*<sub>*i*</sub>
-
-Thus, the linear predictor is:
-
+Secondly, since the probability of voter turnout may systematically vary to given known predictors, we incorporate that into the model with a linear predictor. The linear predictor is:
 *g*(*π*<sub>*i*</sub>)≡*ρ*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*h**e**a**l**t**h*<sub>*i*</sub> + *β*<sub>2</sub>*a**g**e*<sub>*i*</sub> + *β*<sub>3</sub>*e**d**u**c*<sub>*i*</sub> + *β*<sub>4</sub>*b**l**a**c**k*<sub>*i*</sub> + *β*<sub>5</sub>*f**e**m**a**l**e*<sub>*i*</sub> + *β*<sub>6</sub>*m**a**r**r**i**e**d*<sub>*i*</sub> + *β*<sub>7</sub>*i**n**c**o**m**e*<sub>*i*</sub> + *ϵ*<sub>*i*</sub>
+
+Thirdly, we use a logit link function to constrain the linear predictor to the \[0,1\] range. A link function, *g*(*π*<sub>*i*</sub>) = *e*<sup>*ρ*<sub>*i*</sub></sup> / (1 + *e*<sup>*ρ*<sub>*i*</sub></sup>), transforms the expectation of the vector turnout to the linear predictor.
 
 ``` r
 voter <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = health, family = binomial)
@@ -298,6 +297,123 @@ summary(voter)
     ## 
     ## Number of Fisher Scoring iterations: 4
 
-Thirdly, we use a logit link function to constrain the linear predictor to the \[0,1\] range. A link function
-$$g(\\pi\_i) = \\frac{e^{\\rho\_i}}{1+e^{\\rho\_i}}$$
- which transforms the expectation of the vector turnout to the linear predictor.
+Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-odds, odds, predicted probabilities, and first differences - choose what makes sense to you and provides the most value to the reader. Use graphs and tables as necessary to support your conclusions.
+
+In this multivariate logistic regression model, the response variable is the binary voter turnout variable where 1 means the respondent voted and 0 means the respondent did not vote. The predictors include the mental health index, age, education, race (Black or not), gender (female or not), marital status (married or not), and family income (in $10,000s). The regression results indicate that four of the coefficients are statistically significant; these coefficients are, respectively, -0.089102 for the mental health index, 0.042534 for age, 0.228686 for education and 0.069614 for income. These coefficients are given in terms of log-odds.
+
+In terms of odds, hold other variables constant, a unit increase in the mental health index leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 0.9147523. Likewise, holding other variables constant, one year increase in age leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.043452. Again, holding other variables constant, one year increase in the number of years of formal education leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.256947. Finally, holding other variables constant, a unit increase in income leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.072094. In terms of predicted probabilities, these values correspond to, respectively, a multiplicative factor of 0.4777392 for each unit increase in the mental health index holding other variables constant, 0.510632 for age, 0.5569236 for educaiton, and 0.5173964 for income.
+
+Part 2: Modelling TV Consumption
+--------------------------------
+
+``` r
+gss <- read.csv("./data/gss2006.csv")
+```
+
+### Describe the data
+
+1.  Plot a histogram of voter turnout. Make sure to give the graph a title and proper *x* and *y*-axis labels. What is the unconditional probability of a given individual turning out to vote?
+
+``` r
+gss %>% 
+  filter(!is.na(tvhours)) %>%
+  ggplot() + 
+  geom_histogram(aes(x = tvhours), fill = "deepskyblue1", binwidth=2) + 
+  labs(x = "Number of hours of TV watched per day", 
+       y = "Count") 
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-11-1.png)
+
+### Multivariate Poisson Regression Model of Hours of TV Watched
+
+Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr(*T**V**h**o**u**r**s*<sub>*i*</sub> = *k*|*μ*) = (*μ*<sup>*k*</sup>*e*<sup>−*μ*</sup>) / *k*! .
+
+The linear predictor of our model is:
+*η*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*a**g**e* + *β*<sub>2</sub>*c**h**i**l**d**r**e**n* + *β*<sub>3</sub>*e**d**u**c* + *β*<sub>4</sub>*f**e**m**a**l**e* + *β*<sub>5</sub>*h**r**s**r**e**l**a**x* + *β*<sub>6</sub>*b**l**a**c**k*
++*β*<sub>7</sub>*s**o**c**i**a**l*<sub>*c*</sub>*o**n**n**e**c**t* + *β*<sub>8</sub>*v**o**t**e**d*04 + *β*<sub>9</sub>*x**m**o**v**i**e* + *ϵ*<sub>*i*</sub>
+
+The link function for the poisson distribution is:
+*μ*<sub>*i*</sub> = log(*η*<sub>*i*</sub>)
+
+`health` contains a subset of the 2006 General Social Survey of 4510 American individuals in 2006. The response variable `tvhours` contains a count of TV hours watched per day for each individual in 2006. Additional covariates in our model include:
+\* `age` - Age (in years)
+\* `childs` - Number of children
+\* `educ` - Highest year of formal schooling completed
+\* `female` - 1 if female, 0 if male
+\* `hrsrelax` - Hours per day respondent has to relax
+\* `black` - 1 if respondent is black, 0 otherwise
+\* `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)
+\* `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise
+\* `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise
+
+The results of the estimated multivariate poisson model is as follows:
+
+``` r
+tv_hours <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = poisson)
+summary(tv_hours)
+```
+
+    ## 
+    ## Call:
+    ## glm(formula = tvhours ~ age + childs + educ + female + hrsrelax + 
+    ##     black + social_connect + voted04 + xmovie, family = poisson, 
+    ##     data = gss)
+    ## 
+    ## Deviance Residuals: 
+    ##     Min       1Q   Median       3Q      Max  
+    ## -2.9656  -0.7125  -0.0833   0.4486   5.3006  
+    ## 
+    ## Coefficients:
+    ##                 Estimate Std. Error z value Pr(>|z|)    
+    ## (Intercept)     1.001794   0.197884   5.063 4.14e-07 ***
+    ## age             0.001022   0.002668   0.383   0.7016    
+    ## childs         -0.005058   0.022149  -0.228   0.8194    
+    ## educ           -0.027138   0.011410  -2.378   0.0174 *  
+    ## female          0.012445   0.060887   0.204   0.8380    
+    ## hrsrelax        0.046949   0.009637   4.872 1.11e-06 ***
+    ## black           0.434400   0.069766   6.227 4.77e-10 ***
+    ## social_connect  0.031811   0.037713   0.844   0.3989    
+    ## voted04        -0.124845   0.070469  -1.772   0.0765 .  
+    ## xmovie          0.095053   0.068068   1.396   0.1626    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for poisson family taken to be 1)
+    ## 
+    ##     Null deviance: 578.52  on 487  degrees of freedom
+    ## Residual deviance: 480.02  on 478  degrees of freedom
+    ##   (4022 observations deleted due to missingness)
+    ## AIC: 1749.4
+    ## 
+    ## Number of Fisher Scoring iterations: 5
+
+From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level.
+
+``` r
+gss %>%
+  na.omit() %>%
+  add_predictions(tv_hours) %>%
+  group_by(educ, black) %>% 
+  summarize(pred = mean(exp(pred))) %>%
+  ggplot(aes(x = educ, y = pred)) +
+  geom_line(aes(color = factor(black))) +
+  labs(y = "Predicted Number of Hours of TV watched per day", 
+       x = "Maximum Years of Education")
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-13-1.png)
+
+``` r
+gss %>%
+  na.omit() %>%
+  add_predictions(tv_hours) %>%
+  group_by(hrsrelax) %>% 
+  summarize(pred = mean(exp(pred))) %>%
+  ggplot(aes(x = hrsrelax, y = pred)) +
+  geom_line() +
+  labs(y = "Predicted Number of Hours of TV watched per day", 
+       x = "Hours per day Respondent has to Relax")
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-14-1.png)

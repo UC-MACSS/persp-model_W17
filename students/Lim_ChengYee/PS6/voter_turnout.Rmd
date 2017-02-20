@@ -20,7 +20,8 @@ theme_set(theme_bw())
 ```{r import, include = FALSE}
 health <- read.csv("./data/mental_health.csv")
 ```
-## Describe the data (1 point)
+##Part 1: Modeling Voter Turnout 
+### Describe the data (1 point)
 
 1. Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels. What is the unconditional probability of a given individual turning out to vote?
 ```{r}
@@ -47,7 +48,7 @@ health %>%
 
 ```
 
-## Basic model (3 points)
+### Basic model (3 points)
 
 Estimate a logistic regression model of the relationship between mental health and voter turnout.
 
@@ -57,14 +58,14 @@ m_voter <- glm(vote96 ~ mhealth_sum, data = health, family = binomial)
 summary(m_voter)
 ```
 
-###Is the relationship between mental health and voter turnout statistically significant?  
+####Is the relationship between mental health and voter turnout statistically significant?  
 
 The relationship between mental health and voter turnout has a p-value of $3.13 * 10^{-13}$ is statistically significant at 1% significance level.  
 
-###Interpret the estimated parameter for mental health in terms of log-odds.   
+####Interpret the estimated parameter for mental health in terms of log-odds.   
 For every one-unit increase in an individual's mental health (where 0 is an individual with no depressed feelings, and 9 is an individual with the most severe depressed mood), we expect the log-odds of voting to decrease by 0.143.
 
-###Generate a graph of the relationship between mental health and the log-odds of voter turnout.
+####Generate a graph of the relationship between mental health and the log-odds of voter turnout.
 ```{r}
 prob2odds <- function(x){
   x / (1 - x)
@@ -87,7 +88,7 @@ health %>%
        y = "Log-odds") 
 ```
 
-###Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.
+####Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.
 
 The relationship between mental health and the odds of turning up to vote is 0.892.
 
@@ -104,7 +105,7 @@ health %>%
 ```
 
 
-###Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
+####Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
 The expected change in probability given an unit increase in the mental health index is -0.0273.  
 The first difference for an increase in the mental health index from 1 to 2 is -0.0292.  
 The first difference for an increase in the mental health index from 5 to 6 is -0.0348.  
@@ -124,7 +125,7 @@ cat("First Difference from an increase in mental health index = ", probability(5
 ```
 
 
-###Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
+####Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
 It is a decent model, it results in an improvement of 
 ```{r}
 logit2prob <- function(x){
@@ -168,12 +169,14 @@ confusionMatrix(mh_accuracy$pred2, mh_accuracy$vote96)
 ```
 
 
-## Multiple variable model (3 points)
+### Multiple variable model (3 points)
 
 Our GLM of voter turnout consists of three components:  
 
 Firstly, we assume our outcome variable, voter turnout, is drawn from the binomial distribution with probability $\pi$, given the values of the predicator variables in the model. $\pi$ is the probability that, for any observation $i$, $Y$ will take on the particular value $Y_i$.  
-In our model, $Y_i$ takes on the expected value of 1 with probability $\pi$ and 0 with probability $1-\pi$, so $\pi_i$ is the conditional probability of sampling a 1 in this group.
+In our model, $Y_i$ takes on the expected value of 1 with probability $\pi$ and 0 with probability $1-\pi$, so $\pi_i$ is the conditional probability of sampling a 1 in this group.  
+  
+Pr$(Y_i = y_i | \pi)$ = $\pi_i^{y_i}$ $(1 - \pi_i)^{1-y_i}$
 
 ```{r}
 health %>% 
@@ -186,13 +189,11 @@ health %>%
 
 ```
 
-Secondly, since the probability of voter turnout may systematically vary to given known predictors, we incorporate that into the model with a linear predictor. 
-
-$$\pi_i = \rho_i$$
-
-Thus, the linear predictor is: 
-
+Secondly, since the probability of voter turnout may systematically vary to given known predictors, we incorporate that into the model with a linear predictor. The linear predictor is:  
 $$g(\pi_i) \equiv \rho_i = \beta_0 + \beta_1health_i + \beta_2age_i + \beta_3educ_i + \beta_4black_i + \beta_5female_i + \beta_6married_i + \beta_7income_i + \epsilon_i$$ 
+
+Thirdly, we use a logit link function to constrain the linear predictor to the [0,1] range. A link function, $g(\pi_i)$ $=$ $e^{\rho_i}$ / $(1+e^{\rho_i})$, transforms the expectation of the vector turnout to the linear predictor.
+
 
 ```{r}
 voter <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = health, family = binomial)
@@ -200,6 +201,79 @@ voter <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc1
 summary(voter)
 ```
 
-Thirdly, we use a logit link function to constrain the linear predictor to the [0,1] range. A link function $$g(\pi_i) = \frac{e^{\rho_i}}{1+e^{\rho_i}}$$ which transforms the expectation of the vector turnout to the linear predictor.
+Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-odds, odds, predicted probabilities, and first differences - choose what makes sense to you and provides the most value to the reader. Use graphs and tables as necessary to support your conclusions.
+
+In this multivariate logistic regression model, the response variable is the binary voter turnout variable where 1 means the respondent voted and 0 means the respondent did not vote. The predictors include the mental health index, age, education, race (Black or not), gender (female or not), marital status (married or not), and family income (in \$10,000s). The regression results indicate that four of the coefficients are statistically significant; these coefficients are, respectively, -0.089102 for the mental health index, 0.042534 for age, 0.228686 for education and 0.069614 for income. These coefficients are given in terms of log-odds.
+
+In terms of odds, hold other variables constant, a unit increase in the mental health index leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 0.9147523. Likewise, holding other variables constant, one year increase in age leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.043452. Again, holding other variables constant, one year increase in the number of years of formal education leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.256947. Finally, holding other variables constant, a unit increase in income leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.072094. In terms of predicted probabilities, these values correspond to, respectively, a multiplicative factor of 0.4777392 for each unit increase in the mental health index holding other variables constant, 0.510632 for age, 0.5569236 for educaiton, and 0.5173964 for income.
+
+##Part 2: Modelling TV Consumption 
+
+```{r}
+gss <- read.csv("./data/gss2006.csv")
+```
+
+### Describe the data 
+
+1. Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels. What is the unconditional probability of a given individual turning out to vote?
+```{r}
+gss %>% 
+  filter(!is.na(tvhours)) %>%
+  ggplot() + 
+  geom_histogram(aes(x = tvhours), fill = "deepskyblue1", binwidth=2) + 
+  labs(x = "Number of hours of TV watched per day", 
+       y = "Count") 
+```
+
+###Multivariate Poisson Regression Model of Hours of TV Watched 
+Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr$(TVhours_i=k|\mu)$ = $(\mu^ke^{-\mu})$ / ${k!}$ .
+
+The linear predictor of our model is:  
+$$\eta_{i} = \beta_{0} + \beta_{1}age + \beta_{2}children + \beta_{3}educ + \beta_{4}female + \beta_{5}hrsrelax + \beta_{6}black$$ $$+ \beta_{7}social_connect + \beta_{8}voted04 + \beta_{9}xmovie + \epsilon_i$$
+
+The link function for the poisson distribution is:  
+$$\mu_{i} = \log(\eta_{i})$$
+
+`health` contains a subset of the 2006 General Social Survey of 4510 American individuals in 2006. The response variable `tvhours` contains a count of TV hours watched per day for each individual in 2006. Additional covariates in our model include:  
+*  `age` - Age (in years)  
+*  `childs` - Number of children  
+*  `educ` - Highest year of formal schooling completed  
+*  `female` - 1 if female, 0 if male  
+*  `hrsrelax` - Hours per day respondent has to relax  
+*  `black` - 1 if respondent is black, 0 otherwise  
+*  `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)  
+*  `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise  
+*  `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise  
+
+The results of the estimated multivariate poisson model is as follows:
+```{r}
+tv_hours <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = poisson)
+summary(tv_hours)
+```
+
+From the regression results, we can identify that only `educ`, `hrsrelax`, and `black` are statistically significant at a 5% significance level. 
+```{r}
+gss %>%
+  na.omit() %>%
+  add_predictions(tv_hours) %>%
+  group_by(educ, black) %>% 
+  summarize(pred = mean(exp(pred))) %>%
+  ggplot(aes(x = educ, y = pred)) +
+  geom_line(aes(color = factor(black))) +
+  labs(y = "Predicted Number of Hours of TV watched per day", 
+       x = "Maximum Years of Education")
+```
 
 
+```{r}
+gss %>%
+  na.omit() %>%
+  add_predictions(tv_hours) %>%
+  group_by(hrsrelax) %>% 
+  summarize(pred = mean(exp(pred))) %>%
+  ggplot(aes(x = hrsrelax, y = pred)) +
+  geom_line() +
+  labs(y = "Predicted Number of Hours of TV watched per day", 
+       x = "Hours per day Respondent has to Relax")
+
+```
