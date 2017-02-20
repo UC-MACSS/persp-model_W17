@@ -37,17 +37,17 @@ df$Turnout = factor(df$vote96, labels = c("Did not vote", "Voted"))
 Describing the data
 -------------------
 
-1.  We plot a histogram of voter turnout:
+We plot a histogram of voter turnout:
 
 ![](ps6-emo_files/figure-markdown_github/vote_histogram-1.png)
 
 The unconditional probability of a given respondent voting in the election is 0.672466. The data are distributed bimodally, with about twice as many respondents voting as not voting.
 
-1.  We generate a scatterplot of voter turnout versus depression index score, with points colored by whether the respondent voted. Because mental health scores are integers ranging from \[0,16\] and turnout is categorical, there can be a maximum of 34 points on the plot. This would not be terribly informative, so we jitter the points, increase their transparency, and add a horizontal line between the distributions of voters and non-voters; however, we must remember that the jittered position is not the true position: we must imagine the same number of points, with all the blue ones at 1 and all the red ones at 0. (That is: any within-group variability in the y direction is false.) These additions are somewhat helpful, but because voter turnout is dichotomous, it is not well suited to a scatterplot. (We will address this soon.)
+We generate a scatterplot of voter turnout versus depression index score, with points colored by whether the respondent voted. Because mental health scores are integers ranging from \[0,16\] and turnout is categorical, there can be a maximum of 34 points on the plot. This would not be terribly informative, so we jitter the points, increase their transparency, and add a horizontal line between the distributions of voters and non-voters; however, we must remember that the jittered position is not the true position: we must imagine the same number of points, with all the blue ones at 1 and all the red ones at 0. (That is: any within-group variability in the y direction is false.) These additions are somewhat helpful, but because voter turnout is dichotomous, it is not well suited to a scatterplot. (We will address this soon.)
 
 ![](ps6-emo_files/figure-markdown_github/scatterplot_turnout_vs_mentalhealth-1.png)
 
-The regression line shows that respondents with higher depression scores trend toward not voting. We note again, however, that because voter turnout is dichotomous—a respondent either votes (1) or doesn't (0), with no possile outcomes in between—the regression line is misleading. It suggests, for example, that potential respondents with scores so high that they are off the index could have a negative chance of voting, which makes no sense; similarly, respondents with scores well below zero could have greater than a 1.0 chance of voting. Additionally, because the depression index score ranges from \[0,16\], it does not have support over the entire domain of real numbers; the regression line, however, suggests that such scores are possible and points to probabilites for them—and some of those probabilites fall outside of the real of possible prbabilities (which range from \[0,1\]). These problems imply that linear regression is the wrong type of analysis for the type of data with which we are dealing.
+The regression line shows that respondents with higher depression scores trend toward not voting. We note again, however, that because voter turnout is dichotomous—a respondent either votes (1) or doesn't (0), with no possile outcomes in between—the regression line is misleading. It suggests, for example, that potential respondents with scores so high that they are off the index could have a negative chance of voting, which makes no sense; similarly, respondents with scores well below zero could have greater than a 1.0 chance of voting. Additionally, because the depression index score ranges from \[0,16\], it does not have support over the entire domain of real numbers; the regression line, however, suggests that such scores are possible and points to probabilites for them—and some of those probabilites fall outside of the realm of possible probabilities (which range from \[0,1\]). These problems imply that linear regression is the wrong type of analysis for the type of data with which we are dealing.
 
 We now return to the matter of visualizing the distribution of depression scores by voter turnout. Because the outcome is dichotomous and the predictor is continuous but over a short interval, the scatterplot does a poor job of clearly showing the correlation between depression score and turnout. We therefore turn to a density plot:
 
@@ -151,28 +151,25 @@ voted_depression_accuracy = df %>%
                             pred = as.numeric(pred > .5))
 ```
 
-1.  We find a statistically significant relationship at the p &lt; .001 level between depression score and voting behavior. The relationship is negative and the coefficient is -0.1434752. Because the model is not linear, we cannot simply say that a change in depression index score results in a corresponding change in voter turnout. Instead, we must interpret the coefficient in terms of log-odds, odds, and probability. We will interpret the coefficient thus in the following responses.
+We find a statistically significant relationship at the p &lt; .001 level between depression score and voting behavior. The relationship is negative and the coefficient is -0.1434752. Because the model is not linear, we cannot simply say that a change in depression index score results in a corresponding change in voter turnout. Instead, we must interpret the coefficient in terms of log-odds, odds, and probability. We will interpret the coefficient thus in the following responses.
 
-2.  Log-odds: For every one-unit increase in depression score, we expect the log-odds of voting to decrease by -0.1434752.
+Log-odds: For every one-unit increase in depression score, we expect the log-odds of voting to decrease by -0.1434752. Note that this is the mhealth\_sum coefficient from the logistic model summarized above. This is because the logistic model describes the linear change in log-odds as a function of the intercept (1.1392097) and of depression index score (as multiplied by the corresponding coefficient, -0.1434752).
 
 We graph the relationship between mental health and the log-odds of voter turnout:
 
 ![](ps6-emo_files/figure-markdown_github/log_odds_plot-1.png)
 
-1.  Odds: The coefficient for depression index score cannot be interpreted in terms of odds without being evaluated at a certain depression score. This is because the relationship between depression score and odds is logistic, not linear:
+Odds: The coefficient for depression index score cannot be interpreted in terms of odds without being evaluated at a certain depression score. This is because the relationship between depression score and odds is logistic, not linear: ![](./eq1.png)
 
-$$
-Odds\\\_of\\\_voting = \\frac{p(depression\\\_index\\\_score)}{1 - p(depression\\\_index\\\_score)} = e^{1.13921 - (0.1434752 \\times depression\\\_index\\\_score)}
-$$
- For example, for a respondent with a depression index score of 12 would have odds of voting equal to 0.5585044. This means the respondent is 0.5585044 times more likely to vote than not vote, because this is less than one, such a respondent would be unlikely to vote. In contrast, a respondent with a depression index score of 3 would be 2.0315196 times more likely to vote than not vote. A respondent with a depression score of 8 would be approximately just as likely to vote as not vote because the odds for that score equal 0.9914448.
+For example, for a respondent with a depression index score of 12 would have odds of voting equal to 0.5585044. This means the respondent is 0.5585044 times more likely to vote than not vote; because this is less than one, such a respondent would be unlikely to vote. In contrast, a respondent with a depression index score of 3 would be 2.0315196 times more likely to vote than not vote. A respondent with a depression score of 8 would be approximately just as likely to vote as not vote because the odds for that score equal 0.9914448.
 
 We graph the relationship between depression index score and the odds of voting:
 
 ![](ps6-emo_files/figure-markdown_github/voted_depression_odds_plot-1.png)
 
-1.  Probability: The relationship between depression index score and voting is not linear; like with odds, we must use a specific depression index score in order to calculate the probability of such a respondent voting. For example, a respondent with a depression index score of 3 would have a probability of voting equal to 0.6701324 and a respondent who scored 12 would have a probability of 0.3583592. As we noted earlier, a respondent with a score of 8 would be about equally likely to vote as not vote, with a probability of 0.497852.
+Probability: The relationship between depression index score and voting is not linear; like with odds, we must use a specific depression index score in order to calculate the probability of such a respondent voting. For example, a respondent with a depression index score of 3 would have a probability of voting equal to 0.6701324 and a respondent who scored 12 would have a probability of 0.3583592. As we noted earlier, a respondent with a score of 8 would be about equally likely to vote as not vote, with a probability of 0.497852.
 
-The first difference for an increase in the mental health index from 1 to 2 is -0.0291782; for 5 to 6, it is -0.0347782.
+The first difference for an increase in the depression index score from 1 to 2 is -0.0291782; for 5 to 6, it is -0.0347782. This means that as depression index score increases from 1 to 2, the probability of voting decreases by 0.0291782; for an increase from 5 to 6, the probability of voting decreases by 0.0347782
 
 We plot the probabilty of voting against depression score, including the actual responses as points (this time, without jitter):
 
@@ -195,7 +192,6 @@ cm.5_voted_depression <- confusionMatrix(voted_depression_accuracy$pred, voted_d
 
 cm.5_table = cm.5_voted_depression$table
 
-
 actlpos = cm.5_table[1,2] + cm.5_table[2,2]
 predposcrrct = cm.5_table[2,2]
 
@@ -208,56 +204,57 @@ tnr.notes =  prednegcrrct / actlneg
 tpr.cm.5 = sum(cm.5_voted_depression$byClass[1])
 tnr.cm.5 = sum(cm.5_voted_depression$byClass[2])
 
-
 threshold_x = seq(0, 1, by = .001) %>%
               map_df(threshold_compare, df, logit_voted_depression)
 
 auc_x_voted_depression <- auc(df$vote96, voted_depression_pred$prob)
 ```
 
-1.  Using a cutoff of .5, we estimate the accuracy rate of the model at 0.677761.
+Using a threshold value of .5, we estimate the accuracy rate of the logistic model at 0.677761.
 
 We find that the useless classifier for this data predicts that all voters will vote; because the voter variable is dichotomous, we find this by simply taking the median of the distribution: 1.
 
-With the useless classifier (which predicts all respondents will vote), we find that the proportional reduction in error is 0.7344111. This means that the model based only on depression index scores provides an improvement in the proportional reduction in error of 73.4411085 over the useless-classifier model.
+With the useless classifier (which predicts all respondents will vote), we find that the proportional reduction in error is 0.7344111. This means that the model based only on depression index scores provides an improvement in the proportional reduction in error of 73.4411085% over the useless-classifier model.
 
 The AUC score for this model is 0.6243087.
 
-This model performs reasonably well, especially considering that it uses only one predictor. With a moderately high proportional reduction in error based on the 50% threshold as well as moderate accuracy rate and AUC, the model performs surprisingly well given the single predictor, depression index score, on which it is based. We expect to improve the model by including additional predictors.
+This model's performance is mediocre, but we temper that by considerin that it uses only one predictor. With a moderately high proportional reduction in error based on the 50% threshold as well as moderate accuracy rate and AUC, the model performs surprisingly well given the single predictor, depression index score, on which it is based. We expect to improve the model by including additional predictors.
 
 For good measure we plot the accuracy, sensitivity, and specificy rates for thresholds between 0 and 1:
 
 ![](ps6-emo_files/figure-markdown_github/ar_vs_threshold_plot-1.png)
 
+This plot suggests that using a threshold of approximately .7 would strike a good balance between sensitivity and specificity, but at the slight expense of accuracy. Interestingly, the accuracy curve is roughly flat below thresholds below approximately .67 and then drops steeply before leveling out at a threshold of approximately .75. The accuracy curve shows that regardless of the threshold, this model can never achieve accuracy much greater than 0.677761.
+
 We also plot the ROC curve:
 
 ![](ps6-emo_files/figure-markdown_github/roc_plot-1.png)
 
+We can see that the ROC curve falls above the graph's diagonal, which means that the model performs better than simply guessing. The area under the curve is 0.6243087, implying that model performance is weak.
+
 Multiple variable model
 -----------------------
 
-Using the other variables in the dataset, derive and estimate a multiple variable logistic regression model of voter turnout.
+Using depression index score, age, and income, we now estimate a multivariate logistic regression. We have chosen to use the depression index score because it alone yielded somewhat reasonable results, so we suppose that it will form a good basis for a more robust model. Age is important because it is common knowledge that voting participation increases with age; the same can be said for income. With these three variables, we hope to achieve higher rates of sensitivity and sprecificy as well as a higher AUC compared to the bivariate model.
 
-1.  Write out the three components of the GLM for your specific model of interest. This includes the
-    -   Probability distribution (random component): Because we are using logistic regression, we assume that the outcome (voted or did not vote) is drawn from the Bernoulli distribution, with probability *π*:
+Here we define the three components of the GLM for the model to be constructed:
 
-*P**r*(*Y*<sub>*i*</sub> = *y*<sub>*i*</sub>|*π*<sub>*i*</sub>)=*π*<sub>*i*</sub><sup>*y*<sub>*i*</sub></sup>(1 − *π*<sub>*i*</sub>)<sup>(1 − *y*<sub>*i*</sub>)</sup>
+—Probability distribution (random component): Because we are using logistic regression, we assume that the outcome (y: voted or did not vote) is drawn from the Bernoulli distribution, with probability *π*:
 
-    * Linear predictor: The linear predictor is the following multivariate linear model:
+![](./eq2.png)
 
-*g*(*π*<sub>*i*</sub>)≡*η*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*D**e**p**r**e**s**s**i**o**n**I**n**d**e**x**S**c**o**r**e*<sub>*i*</sub> + *β*2*A**g**e*<sub>*i*</sub> + *β*<sub>3</sub>*I**n**c**o**m**e*10*K*<sub>*i*</sub>
- \* Link function: The link function is the logit function:
+—Linear predictor: The linear predictor is the following multivariate linear model:
 
-$$
-\\pi\_i = \\frac{e^{\\eta\_i}}{1 + e^{\\eta\_i}}
-$$
+![](./eq3.png)
 
-1.  We estimate the model:
+—Link function: The link function is the logit function:
+
+![](./eq4.png)
+
+We estimate the model:
 
 ``` r
-#logit_voted_mv = glm(vote96 ~ age + inc10, family = binomial, data=df)
 logit_voted_mv = glm(vote96 ~ mhealth_sum + age + inc10, family = binomial, data=df)
-
 summary(logit_voted_mv)
 ```
 
@@ -291,30 +288,20 @@ summary(logit_voted_mv)
 We generate the additional dataframes and variables necessary to answer the question:
 
 ``` r
-int_mv = tidy(logit_voted_mv)[1,2]
-coeff_mv_mh = tidy(logit_voted_mv)[2,2]
-coeff_mv_age = tidy(logit_voted_mv)[3,2]
-coeff_mv_inc = tidy(logit_voted_mv)[4,2]
+b0_mv = tidy(logit_voted_mv)[1,2]
+b1_mv = tidy(logit_voted_mv)[2,2]
+b2_mv = tidy(logit_voted_mv)[3,2]
+b3_mv = tidy(logit_voted_mv)[4,2]
 
 voted_mv_pred = df[(!is.na(df$age) & !is.na(df$inc10)), ] %>%
-                #data_grid(mhealth_sum, age, inc10) %>%
+                data_grid(mhealth_sum, age = c(25,65), inc10 = c(5,10,15)) %>%
                 add_predictions(logit_voted_mv) %>%
                 mutate(prob = logit2prob(pred)) %>%
-                mutate(odds = prob2odds(prob))
-
-med_age = median(voted_mv_pred$age)
-med_inc = median(voted_mv_pred$inc10)
-
-attach(voted_mv_pred)
-
-voted_mv_pred$age_inc = 0
-voted_mv_pred$age_inc[age < med_age & inc10 >= med_inc] = 1
-voted_mv_pred$age_inc[age < med_age & inc10 < med_inc] = 2
-voted_mv_pred$age_inc[age >= med_age & inc10 >= med_inc] = 3
-voted_mv_pred$age_inc[age >= med_age & inc10 < med_inc] = 4
-
-voted_mv_pred$age_inc = factor(voted_mv_pred$age_inc, labels = c("Younger, higher income", "Younger, lower income", "Older, higher income", "Older, lower income"))
-  
+                mutate(odds = prob2odds(prob)) %>%
+                mutate(age = factor(age, levels = c(25, 65), labels = c("Younger", "Older")),
+                       inc10 = factor(inc10, levels = c(5, 10, 15),
+                                       labels = c("Low income", "Medium income", "High income")))# %>%
+                #mutate(age_inc = interaction(factor(age), factor(inc10)))
   
 voted_mv_accuracy <- df[(!is.na(df$age) & !is.na(df$inc10)), ] %>%
                      add_predictions(logit_voted_mv) %>%
@@ -322,15 +309,107 @@ voted_mv_accuracy <- df[(!is.na(df$age) & !is.na(df$inc10)), ] %>%
                      pred = as.numeric(pred > .5))
 ```
 
-1.  Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-odds, odds, predicted probabilities, and first differences - choose what makes sense to you and provides the most value to the reader. Use graphs and tables as necessary to support your conclusions.
+We also define some helpful functions:
 
-We find that depression index score, age, and education are statistically significant at the p&lt;.001 level and income (in tens of thousands) is significant at the p&lt;.01 level.
+``` r
+calcodds_mv = function(mhealth,age,income10K){
+  exp(b0_mv + b1_mv * mhealth + b2_mv * age + b3_mv * income10K)
+  }
+
+oddsratio_mv = function(x,y,n){
+  if (n == 1){
+    exp(b1_mv * (x - y))
+  }
+  else if (n == 2){
+    exp(b2_mv * (x - y))
+  }
+  else if (n == 3){
+    exp(b3_mv * (x - y))
+  }
+}
+
+calcprob_mv = function(mhealth,age,income10K){
+  power = b0_mv + b1_mv * mhealth + b2_mv * age + b3_mv * income10K
+  exp(power) / (1 + exp(power))
+}
+
+
+firstdifference_mv = function(x,y,n){
+  mh_med = median(df$mhealth_sum, na.rm = TRUE)
+  age_med = median(df$age, na.rm = TRUE)
+  inc_med = median(df$inc10, na.rm = TRUE)
+  if(n == 3){
+      calcprob_mv(mh_med,age_med,y) - calcprob_mv(mh_med,age_med,x)
+  }
+  else if (n == 1){
+      calcprob_mv(y,age_med,inc_med) - calcprob_mv(x,age_med,inc_med)
+  }
+  else if(n == 2)
+      calcprob_mv(mh_med,y,inc_med) - calcprob_mv(mh_med,x,inc_med)
+  }
+```
 
 ![](ps6-emo_files/figure-markdown_github/mv_log_odds_plot-1.png)
 
+We can see that the log-odds lines are parallel to each other. Log-odds of voting compared to not voting decrease linearly as depression index scores increase; it is important to note, however, that the predicted log-odds of voting for older respondents will always be higher than those for younger respondents with similar income and depression index score. Additionally, respondents with higher incomes will always have higher log-odds of voting than similar respondents (in terms of age and depression index score) with lower incomes. For example, a 40-year-old respondent with a depression score of 8 and an income of $40,000 would have log-odds of voting of 0.0480321, while a 40-year-old respondent with a depression score of 8 and an income of $20,000 would have log-odds of voting of -0.23974.
+
 ![](ps6-emo_files/figure-markdown_github/voted_mv_odds_plot-1.png)
 
+This plot is much more informative than the last one. Here, we can clearly see the logistic relationships by group between depression index score and odds of voting. Note that for younger respondents with low incomes, odds are always low and though they are negatively impacted by increasing depression index scores, the difference between the odds at a score of zero and at a score of 16 are minor (from approximately .4 to 2). Compare this with the odds curve for older high-income respondents: those with low depression index scores have very high odds of voting—approximately 27 for a depression index score of zero—but for those with a scores of 16, the odds decrease to approximately 5. Because the odds start off so much higher for this group, the odds decrease much more swiftly than those of respondents in other groups. Even for a depression index score of 16, though, older high-income respondents maintain higher odds of voting than respondents in any other category. In fact, an older high-income respondent with a depression index score of 16 has only slightly lower odds of voting than an older medium-income respondent with a score of 8. This difference is remarkable and indicates that age and income together have a substantive impact on the odds of voting.
+
+The odds ratio for a respondent with depression score of 0 compared to 16 is 5.5931589.
+
 ![](ps6-emo_files/figure-markdown_github/logit_mv_prob_plot-1.png)
+
+Of the three plots thus far, we find this one to paint the clearest picture of what is predicted to happen to voting behavior by group as depression index scores increase. Of all the curves, the one for older high-income respondents appears the most stable over the domain of depression index: as scores increase from 0 to 16, the probability of voting decreases by only approximately .13. Compare this to younger low-income voters, whose probabilty of voting decreases by .4 as scores increase from 0 to 16.
+
+We can calculate the first difference for changes in one category by imputing the median values for the other two categories. For example, the first difference for a change in age from 30 to 55 is an increase of 0.1767575 in the probability of voting.
+
+``` r
+ar_mv = mean(voted_mv_accuracy$vote96 == voted_mv_accuracy$pred, na.rm = TRUE)
+
+uc_mv = median(voted_mv_accuracy$vote96)
+
+e1_mv = sum(voted_mv_accuracy$vote96 != uc_mv)
+e2_mv = sum(voted_mv_accuracy$pred != uc_mv, na.rm = TRUE)
+
+pre_mv = (e1_mv - e2_mv) / e1_mv
+
+cm.5_mv = confusionMatrix(voted_mv_accuracy$pred, voted_mv_accuracy$vote96,
+                         dnn = c("Prediction", "Actual"), positive = '1')
+
+cm.5_mv_table = cm.5_mv$table
+
+actlpos_mv = cm.5_mv_table[1,2] + cm.5_mv_table[2,2]
+predposcrrct_mv = cm.5_mv_table[2,2]
+
+actlneg_mv = cm.5_mv_table[1,1] + cm.5_mv_table[2,1]
+prednegcrrct_mv = cm.5_mv_table[1,1]
+
+tpr.notes_mv =  predposcrrct_mv / actlpos_mv
+tnr.notes_mv =  prednegcrrct_mv / actlneg_mv
+
+tpr.cm.5_mv = sum(cm.5_mv$byClass[1])
+tnr.cm.5_mv = sum(cm.5_mv$byClass[2])
+
+threshold_x_mv = seq(0, 1, by = .001) %>%
+                 map_df(threshold_compare, df, logit_voted_mv)
+
+
+auc_x_voted_mv = auc(voted_mv_accuracy$vote96, voted_mv_accuracy$pred)
+```
+
+The multivariate model has a proportional error reduction of 48.5488127% over the useless-classifier model. This is not as high an improvement as we saw with the bivariate model.
+
+![](ps6-emo_files/figure-markdown_github/amv_r_vs_threshold_plot-1.png)
+
+By plotting the accuracy, sensitivity, and specificity rates, we see that while the curves are smoother than they were for the model based solely on depression index, the multivariate model does not improve upon the bivariate model.
+
+![](ps6-emo_files/figure-markdown_github/mv_roc_plot-1.png)
+
+This ROC curve does not appear to improve upon the earlier one. In fact, with AUC of 0.6029709 (compared to 0.6243087), it offers slightly worse performance. This is despite the fact that depression index score (with a coefficient of -0.1075965), age (with a coefficient of 0.0321616), and income (with a coefficient of 0.143886) are all statistically significant at the p&lt;.001 level.
+
+Given the uninspiring performance of the multivariate model, we conclude that together, depression index score, age, and income significantly predict voter turnout, but not substantively so.
 
 Part 2: Modeling television consumption
 =======================================
@@ -363,12 +442,19 @@ Estimate a regression model (3 points)
 
 Using the other variables in the dataset, derive and estimate a multiple variable Poisson regression model of hours of TV watched.
 
-1.  Write out the three components of the GLM for your specific model of interest. This includes the
-    -   Probability distribution (random component)
-    -   Linear predictor
-    -   Link function
+1.  Write out the three components of the GLM for your specific model of interest. This includes the —Probability distribution (random component): Because we are creating a model of the number of hours of television that respondents watch, we use a Poisson distribution:
 
-2.  Estimate the model and report your results.
+![](./eq5.png)
+
+—Linear predictor: The linear preditor is the following log-linear regression model:
+
+![](./eq6.png)
+
+—Link function: The link function for the Poisson distribution is the log function:
+
+![](./eq7.png)
+
+1.  Estimate the model and report your results.
 
 We estimate a Poisson model to explain television consumption with leisure time and social connectedness:
 
