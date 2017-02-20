@@ -1,0 +1,248 @@
+---
+title: 'Perspectives on Computational Modeling'
+subtitle: 'Problem Set #6'
+author: "Xingyun Wu"
+date: "2/18/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+
+# Load libraries
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+library(MASS)
+library(pROC)
+library(modelr)
+library(broom)
+
+options(na.action = na.warn)
+mhlth <- read.csv("mental_health.csv")
+
+mhlth %>%
+  head() %>%
+  knitr::kable()
+
+#View(mhlth)
+gss <- read.csv("gss2006.csv")
+#View(gss)
+```
+
+## Part 1: Modeling voter turnout
+
+### Describe the data
+
+1. The histogram of voter turnout is shown as below. With observations with missing value on variable `vote96` excluded, the unconditional probability of a given individual turning out to vote is: 0.7069209.
+```{r unconditional_prob, echo=FALSE}
+x <- nrow(mhlth[mhlth$vote96==1,]) / nrow(mhlth[mhlth$vote96==0 | mhlth$vote96==1,])
+print(x)
+```
+
+```{r mental_health_hist}
+ggplot(mhlth, mapping = aes(x = vote96)) +
+  geom_histogram(binwidth = 0.1) +
+  labs(title = "Distribution of Voter Turnout",
+       x = "Vote (0 = didn't vote, 1 = voted",
+       y = "Frequency")
+```
+
+2. The required scatter plot is shown as below. It shows that there is a negative linear relationship between mental health and observed voter turnout. If individual is more depressed, he/she is more likely to have no political participation.
+    The problematic part is that the linear smoothing line assumes the voter turnout to be an continuous variable with range (0.25, 0.75). In fact, the voter turnout is a binary variable with value as either 0 or 1. The prediction made by the smoothing line does not match the binomial distribution of voter turnout.
+```{r scatter_plot}
+ggplot(mhlth, mapping = aes(x = mhealth_sum))+
+  geom_point(aes(y = vote96)) +
+  geom_smooth(aes(y=vote96, x=mhealth_sum), method = lm)+
+  labs(title = "Relationship between Mental Health and Voter Turnout",
+       x = "Mental Health",
+       y = "Voter Turnout")
+```
+
+### Basic model
+
+Here is the logistic regression model of the relationship between mental health and voter turnout:
+```{r health_vote}
+health_vote <- glm(vote96 ~ mhealth_sum, data = mhlth, family = binomial(link="logit"))
+summary(health_vote)
+```
+1. The relationship is negatve and is both statistically and substantively significant. The parameters for both the constant tne the `mental health` is statistially significant, with significant level 0.001. Although the magnitude of the parameter of  `mental health` does not seem to be big, it is still different from 0
+.
+2. The graph below shows the relationship between mental health and the log-odds of voter turnout. It shows a linear relationship: the a one-unit increase in `mental health` is associated with an decrease in log odds of `voter96` by 0.1434752 unit.
+```{r functions, echo = FALSE}
+# create functions for operation
+
+get_prob = function(x){
+  exp(x) / (1 + exp(x))
+}
+
+get_odds = function(x){
+  x / (1 - x)
+}
+
+get_log_odds = function(x){
+  log(x)
+}
+```
+
+```{r do_log_odds, echo=FALSE}
+# calculation
+b0 <- coef(health_vote)["(Intercept)"]
+b1 <- coef(health_vote)["mhealth_sum"]
+predicted <- b0 + b1 * mhlth["mhealth_sum"]
+hv_log_odds <- get_log_odds(get_odds(get_prob(predicted)))
+
+# plot
+ggplot(mhlth, mapping = aes(x = mhealth_sum))+
+  geom_line(aes(y = hv_log_odds)) +
+  labs(title = "Relationship between Mental Health and Voter Turnout (Log-odds)",
+       x = "Mental Health",
+       y = "Voter Turnout (Log-odds)")
+```
+
+
+```{r calculation, echo=FALSE, include=FALSE}
+temp <- get_log_odds(get_odds(get_prob(b0 + b1))) - get_log_odds(get_odds(get_prob(b0)))
+print(temp)
+```
+
+3. The graph below shows the relationship between mental health and the odds of voter turnout. It shows a one-unit increase in `mental health` would lead to a decrease in the odds of voting, which is the probability to vote over the probability to not vote. But the relationship is not linear.
+```{r do_odds, echo = FALSE}
+hv_odds = get_odds(get_prob(predicted))
+
+# plot
+ggplot(mhlth, mapping = aes(x = mhealth_sum))+
+  geom_line(aes(y = hv_odds)) +
+  labs(title = "Relationship between Mental Health and Voter Turnout (Odds)",
+       x = "Mental Health",
+       y = "Voter Turnout (Odds)")
+```
+
+4. The graph below shows the relationship between mental health and the probability of voter turnout. It shows one unit of increase in mental health would decrease individuals' probability to vote. But the relationship is not strictly linear.
+    The first diffference for an increase in the `mental health` index from 1 to 2 is: -0.02917824. The first difference for an increase in the `mental health` from 5 to 6 is: -0.03477821. This shows the relationship between `mental health` and `voter turnout` is not linear in terms of probabilities.
+    
+```{r calculate_probability, echo=FALSE, include=FALSE}
+diff1 <- get_prob(b0 + 2*b1) - get_prob(b0+b1)
+print(diff1)
+
+diff2 <- get_prob(b0 + 6*b1) - get_prob(b0 + 5*b1)
+print(diff2)
+```
+
+```{r do_probability, echo=FALSE}
+hv_prob <-get_prob(predicted)
+
+# plot
+ggplot(mhlth, mapping = aes(x = mhealth_sum))+
+  geom_line(aes(y = hv_prob)) +
+  labs(title = "Relationship between Mental Health and Voter Turnout (Probability)",
+       x = "Mental Health",
+       y = "Voter Turnout (Probibility)")
+```
+
+5. The accuracy rate is 0.677761, which means about 67.78% of the predictions based on `mental health` only were correct. The PRE of the model is 0.01616628, which means the model reduced the error from the null model by about 1.62%. The AUC is 0.6243, indicating that area under the ROC curve is about 62.43%.
+    I think the model is not very accurate, given by its accuracy rate. And it is difficult to say it to be good, since the PRE just slightly increased. 
+```{r evaluation, echo=FALSE}
+
+# (1) accuracy rate
+mental_accuracy <- mhlth%>%
+  add_predictions(health_vote)%>%
+  mutate(prob = get_prob(pred),
+         pred = as.numeric(prob >.5))
+#accuracy_pred = get_prob(predicted)
+#accuracy_pred = as.numeric(accuracy_pred > .5)
+mean(mental_accuracy$pred == mental_accuracy$vote96, na.rm = TRUE)
+
+# (2) proportional reduction in error
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  y <- model$y
+  y.hat <- round(model$fitted.values)
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+hv_PRE <- PRE(health_vote)
+print(hv_PRE)
+
+# (3) AUC
+library(pROC)
+auc_m <- auc(mental_accuracy$vote96, mental_accuracy$prob)
+auc_m
+```
+
+
+### Multiple variable model
+
+1. My model of interest is the relationship between voter turnout and `mental health`, `age`, and `education`. First, `mental health` is used because it is statistically significant in the basic model. Depression may reduce political participation by increasing individuals' feelings of hopelessness. Second, oder people may be more likely to participate in elections, because they tend to have more time and income. So I take `age` into consideration. Third, individuals with more years of `education` may be more interested in political participation. So it is also included in my model of interest.
+    (1) The probability distribution is Bernoulli distribution.
+    (2) The linear predictor is: $$vote96_{i}=\beta_{0}+\beta{1}*mhealth\_sum+\beta_{2}*age+\beta_{3}*educ+\beta_{4}*black+\beta_{5}*female+\beta_{6}*married+\beta_{7}*inc10$$.
+    (3) The link function is: $$Y{i}=e^{vote96_{i}}/(1+e^{vote96_{i}})$$.
+2. The result of estimated model is:
+```{r multivariate_model, echo=FALSE}
+multi_vote <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = mhlth, family = binomial)
+summary(multi_vote)
+```
+
+3. Compared to the basic model, the proportional reduction in error (PRE) has greatly improved. Now about 14.02% of prediction error has been reduced. It is a better model.
+```{r interpretation, echo=FALSE}
+clean_data <- na.omit(mhlth)
+mental_accuracy <- clean_data%>%
+  add_predictions(multi_vote)%>%
+  mutate(prob = get_prob(pred),
+         pred = as.numeric(prob >.5))
+
+null_err <- nrow(clean_data[clean_data$vote96 == 0,])
+model_err <- sum(mental_accuracy$pred != mental_accuracy$vote96)
+pre <- (null_err - model_err)/null_err
+pre
+```
+    However, among all the predictors, only `mental health`, `age`, `education` and `income` are statistically significant. Although `marriaed` is also statistically significant on the level of 0.1, it could not be considered to have strong explanatory power to the respondent variable `voter turnout`. The `income` is significant on the level of 0.01, while other significant predictors are with significant level of 0.001. And among these significant predictors, `mental health` has a negative relationship with `voter turnout`, while other predictors has positive relationships with `voter turnout`.
+    The graph below plots the relationship between `mental health` and `voter turnout` by different groups generated by the interaction of `black` and `married`. We could see that the overall relationship between `mental health` and `voter turnout` is still negative, indicating that one unit of increase in `mental health` would still lead to the decrease of individuals' probability to vote. But holding other conditions equal, different groups in `black` * `married` has different intercept of the probability of `voter turnout`.
+```{r problem 3 c plot}  
+mental_accuracy_pred <- clean_data%>%
+  data_grid(mhealth_sum, black, married)%>%
+  cbind(data_frame(age = mean(clean_data$age),
+                   educ = mean(clean_data$educ),
+                   female = median(clean_data$female),
+                   inc10 = mean(clean_data$inc10)
+                   ))%>%
+  add_predictions(multi_vote)%>%
+  mutate(prob = get_prob(pred))
+
+ggplot(mental_accuracy_pred, aes(x = mhealth_sum, y = prob))+
+  geom_line(aes(group = interaction(black, married), color = interaction(black, married)))+
+  scale_color_discrete(name = 'Group',
+    labels = c('Single non-African American',
+                               'Single African American',
+                               'Married non-African American',
+                               'Married African American'))+
+  labs(x = 'Mental Health',
+       y = 'Voter Turnout (Probability)',
+       title = 'Probablity of Voting vs.Mental Health Index by Black X Marriage Stauts)')
+```
+
+
+## Part 2: Modeling tv consumption
+
+1. My model of interest is the relationship between `TV consumption`, and `age`, `education` and `social connectedness`. Firstly, older people may have more spare time to watch TV, so `age` is used in this model. Secondly, people with more years of education may spend more time in reading instead of watching TV, which is why `education` is included. Thirdly, people of different races may have different culture, thus prefer different types of entertainment. So I also include the variable `black` into my model.
+    (1) The probability distribution is Poisson distribution.
+    (2) The linear predictor is: $$Pr(tvhours = k|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+    (3) The link function is: $$g(vote96_i) = \log(tvhours_{i})$$
+
+2. The results of my model of interes is shown as below.
+```{r tv_consumption, echo=FALSE}
+consumption <- glm(tvhours ~ age + educ + black, family = "poisson", data = gss)
+summary(consumption)
+```
+
+3. This model is statistically significant, since the parameters for the intercept, `age`, `educ` and `black` are statistically significant. According to the 
+
+
