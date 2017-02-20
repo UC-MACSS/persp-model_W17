@@ -135,14 +135,14 @@ scatter.smooth(x=1: length(linearModel3$fitted.values), y=linearModel2$residuals
 #Subsetting data 
 filterData <- subset(dat, dem == 1 | rep == 1, select=c(biden,female, age,dem, rep,educ))
 
-linearModel4 <- lm(biden~female+dem, data=filterData)
+linearModel4 <- lm(biden~female+dem + (female*dem), data=filterData)
 
 summary(linearModel4)
 
 ```
 
 ###2. Estimate predicted Biden warmth feeling thermometer ratings and 95% confidence intervals for female Democrats, female Republicans, male Democrats, and male Republicans. Does the relationship between party ID and Biden warmth differ for males/females? Does the relationship between gender and Biden warmth differ for Democrats/Republicans?
-After analyzing and comparing the different cases, we can clearly see that Biden warmth will differ more by the party ID than the gender of the person. For example, the fitted value for a Female democrat and a male democrat is 76.02831 vs 72.26313 with a 95% interval of  (37.87119, 114.1854) vs (34.09054, 110.4357). If we compare these results with female/male republican, we can see that is the same case with a fitted value of 44.51537 vs 40.75019 with a 95% interval of (6.325838, 82.7049) vs (2.557887, 78.94249). We also can see that there is not much difference between the gender of a particular party, but there is between different party, between democrats vs republican.  
+After analyzing and comparing the different cases, we can clearly see that Biden warmth will differ more by the party ID than the gender of the person. For example, the fitted value for a Female democrat and a male democrat is 75.51883 vs 73.06954 with a 95% interval of  (37.38224, 113.6554) vs (34.09054, 110.4357). If we compare these results with female/male republican, we can see that is the same case with a fitted value of 44.51537 vs 40.75019 with a 95% interval of (6.325838, 82.7049) vs (2.557887, 78.94249). We also can see that there is not much difference between the gender of a particular party, but there is between different party, between democrats vs republican.  
 
 ```{r}
 #When female democrats 

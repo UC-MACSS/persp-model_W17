@@ -1,0 +1,287 @@
+---
+title: "Problem Set 6: Generalized linear Models"
+author: "William L. Guzman"
+date: "February 20, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+  
+###Part 1: Modeling voter turnout
+
+####Describe the data (1 point)
+
+```{r}
+#Load the Libraries 
+library(ggplot2)
+library(tidyverse)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(forcats)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(forcats)
+library(pROC)
+
+#Getting the data 
+datapath <- "C:/Users/Walle/Documents/RScript/Data"
+
+dat <- read.csv(file=paste(datapath,"mental_health_np.csv",sep="/"))
+
+#Plotting the data
+counts <- table(dat$vote96)
+
+barplot(counts, main = "Voter Turnout for the 1996 presidential election", xlab = "Category", ylab = "Number of People", border = "blue", col = "red",
+        names.arg = c("Did not Vote", "Voted"), ylim = c(0,2000))
+
+#Plotting the scatterplot 
+scatter.smooth(x = dat$mhealth_sum, y= dat$vote96)
+
+```
+
+####1. What is the unconditional probability of a given individual turning out to vote?
+The unconditional propability will be 1,783/2,613 = 0.682357, or, 68.23% of the people are more likely to vote. 
+
+####2. What information does this tell us? What is problematic about this linear smoothing line?
+This graph does not tells us a lot of information because we are using categorical variables to explain a plot that explain continuos variables. The problem with the linear smoothing line is that none of the values are fitting the line. 
+
+```{r}
+#1.2 Generate a graph of the relationship between mental health and the log-odds of voter turnout.
+#From Notes and Rmarkdown 
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))}
+
+prob2odds <- function(x){
+    x / (1 - x)}
+
+prob2logodds <- function(x){
+    log(prob2odds(x))}
+
+logModel1 = glm(vote96 ~ mhealth_sum, data = dat, family = binomial)
+
+summary(logModel1)
+
+votePred <- add_predictions(dat, logModel1) 
+votePred <- mutate(votePred, prob = logit2prob(pred))
+votePred <- mutate(votePred, odds = prob2odds(prob))
+votePred <- na.omit(votePred)
+
+#Graph the Model
+ggplot(votePred, aes(mhealth_sum, pred)) +
+    geom_line(color = "red", size = 1) +
+    labs(
+        title = "Log odds: Voting vs Mental Health", x = "Mental Health Scale", y = "Log Odds of Voting")
+
+#1.3 Generate a graph of the relationship between mental health and the odds of voter turnout.
+ggplot(votePred, aes(mhealth_sum, odds)) +
+   geom_line(color = "red", size = 1) +
+   labs(
+        title = "Odds of Voter Turnout vs Mental Health", x = "Mental Health Scale", y = "Odds of Votings")
+
+#1.4 Generate a graph of the relationship between mental health and the probability of voter turnout
+ggplot(votePred, aes(mhealth_sum, prob)) +
+   geom_line(color = "red", size = 1) +
+   labs(
+     title = "Prob of voting vs Mental Health",x = "Mental Health", y = "Probability of Voting")
+
+#Interpret the estimated parameter for mental health in terms of probabilities
+datSet <- data_grid(dat, mhealth_sum)
+datSet<-  add_predictions(datSet, logModel1)
+datSet <- mutate(datSet, prob = logit2prob(pred))
+ 
+#Difference in 1 to 2
+incr12 <- datSet[3,] - datSet[2,]
+incr12 <- incr12$prob
+
+#Difference in 5 to 6
+incr56 <- datSet[7,] - datSet[6,]
+incr56 <- incr56$prob
+
+incr12
+incr56
+
+#Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model.
+PRE <- function(model){
+  y <- model$y
+  y.hat <- round(model$fitted.values)
+  
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  PRE <- (E1 - E2) / E1
+  
+  return(PRE)
+}
+
+voteAccuracy <- add_predictions(dat, logModel1)
+
+voteAccuracy <- mutate(voteAccuracy, pred = as.numeric(logit2prob(pred) > .5))
+
+accRate <- mean(voteAccuracy$vote96 == voteAccuracy$pred, na.rm = TRUE)
+
+proPRE <- PRE(logModel1)
+
+aucValues <- auc(voteAccuracy$vote96, voteAccuracy$pred)
+
+accRate
+proPRE
+aucValues
+
+```
+
+####Basic model (3 points)
+####3. Is the relationship between mental health and voter turnout statistically and/or substantively significant?
+After looking at the basic model from the logistic regression of voter turnout dependent on the mental health, we can see that by looking at the p-value of 0.000000000000313, there is an statistically relationship between voter turnout and mental health. 
+
+####4. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
+The difference for an increase in the mental health index from 1 to 2 is -002917824, and from 5 to 6 is -0.03477821.
+
+####5. Do you consider it to be a good model?
+With an accuracy rate of 0.677 we can say that we have a good model, but it can be improve. 
+
+###Part 1.2: Multiple Variable Model (3 points)
+
+```{r}
+#Using all the variables to interpret the model.
+logModel2 <- glm(vote96 ~ . , data = dat, family = binomial)
+
+summary(logModel2)
+
+tidy(logModel2)
+
+#Logmodel with only mhealth_sum and education 
+logModel3 <- glm(vote96 ~ mhealth_sum * age, data = dat, family = binomial)
+
+summary(logModel3)
+
+#Getting the log Odds 
+dat_age_mental <- dat %>%
+  data_grid(mhealth_sum, age) %>%
+  add_predictions(logModel3) %>%
+  mutate(pred = logit2prob(pred))
+dat_age_mental
+
+#Ploting the Interactive results 
+ggplot(dat_age_mental, aes(age, pred, color = mhealth_sum)) +
+  geom_line() +
+  labs(title = "Log-odds of going to vote by Age",
+       x = "Age",
+       y = "Log-odds of Voting",
+       color = "Mental Health")
+
+#Finding the accuracy of our model. 
+voteAccuracy2 <- add_predictions(dat, logModel2)
+
+voteAccuracy2 <- mutate(voteAccuracy2, pred = as.numeric(logit2prob(pred) > .5))
+
+accRate2 <- mean(voteAccuracy2$vote96 == voteAccuracy2$pred, na.rm = TRUE)
+
+proPRE2 <- PRE(logModel2)
+
+aucValues2 <- auc(voteAccuracy2$vote96, voteAccuracy2$pred)
+
+accRate2
+proPRE2
+aucValues2
+
+
+
+
+```
+
+####6. Write out the three components of the GLM for your specific model of interest. 
+
+####1. Random Component 
+Our random component is Y = Voter Turnout(vote96) and is binomial. 
+
+####2. Linear Predictor 
+$\eta = \beta_0 + \beta_1mhealthsum  + \beta_2age  + \beta_3educ +\beta_4black +\beta_5female +\beta_6married +\beta_7inc10$  
+The linear predictor's variables are: 
+Categorical Variables: Mental Health Index (mhealth_sum), Color ( black), Gender (Female) and Social Status (Married). 
+Continuos Variables: Age (age) and Income (inc10)
+
+####3. Link Function 
+$log(\mu) = \eta_i$  
+The function is Logit 
+
+####7. Interpret the results in paragraph format. 
+After doing a summary of the model with all the variables in our dataset, we can see that the variable of color, gender and social status are not statistically significant for trying to predict the 1996 voter turnout. We can see that the accuracy of the models explain 72.24% of the model. In our last model, using only a single predictor variable (mhealth_sum) our model was explained by 67.7%. We can decide to create a model with only the variables that are statistically significant to see and observe how much our model improves. When we create an interactive log norm of mental health and age, we can see that the older you are with less mental health issues, the more likely you will show up to vote. 
+
+###Part 2. Modeling tv consumption
+
+```{r}
+dat2 <- read.csv(file=paste(datapath,"gss2006.csv",sep="/"))
+
+#Create the model with all the variables 
+tvlogModel1 <- glm(tvhours ~ ., data = dat2, family = poisson())
+
+summary(tvlogModel1)
+
+#Model with only the Significant variables.
+tvlogModel2 <- glm(tvhours ~  hrsrelax + black + educ , data = dat2, family = poisson)
+
+summary(tvlogModel2)
+tvlogModel3 <- glm(tvhours ~  hrsrelax + black , data = dat2, family = poisson)
+
+#Getting the log Odds 
+dat2_hrs_black <- dat2 %>%
+  data_grid(hrsrelax, black) %>%
+  add_predictions(tvlogModel3) %>%
+  mutate(pred = logit2prob(pred))
+dat2_hrs_black
+
+#Ploting the Interactive results 
+ggplot(dat2_hrs_black, aes(black, pred, color = hrsrelax)) +
+  geom_line() +
+  labs(title = "Log-odds of TV Hours",
+       x = "Color",
+       y = "Log-odds of Hours",
+       color = "Hours")
+
+#Finding the accuracy of our model. 
+hoursAccuracy <- add_predictions(dat2, tvlogModel3)
+
+hoursAccuracy <- mutate(hoursAccuracy, pred = as.numeric(logit2prob(pred) > .5))
+
+accRateTV <- mean(hoursAccuracy$tvhours == hoursAccuracy$pred, na.rm = TRUE)
+
+proPRETV <- PRE(tvlogModel3)
+
+aucValuesTV <- auc(hoursAccuracy$tvhours, hoursAccuracy$pred)
+
+accRateTV
+
+proPRETV
+
+aucValuesTV
+```
+
+####2.1 EStimate a regression Model (3)
+####2.1 Write out the three components of the GLM for your specific model of interest. 
+
+####1. Random Component 
+Our random component is Y = Hours Watched TV and is familly is poisson. 
+
+####2. Linear Predictor
+$\eta = \beta_0 + \beta_1 hrsrelax + \beta_2 black + \beta_3 educ$  
+The linear predictor's variables are: 
+Categorical Variables: color (black)
+Continuos Variables: Education (edu) and Hours to relax (hrsrelax)
+
+####3. Link Function
+$log(\mu) = \eta_i$  
+The function is Logit 
+
+2.2 Estimate the model and report your results.
+
+```{r}
+summary(tvlogModel3)
+```
+
+2.3 Interpret the results in paragraph format
+After doing a summary of the model with all the variables in our dataset of the tv hours, we can see that the variable of color, education and hours of relaxation in the day status are statistically significant for trying to predict the tv hours spend by and individual. We can see that the accuracy of the models explain 24..08 of the model. By choosing only the variables that are significant to our test, we can see that we dont have a good model. When we create an interactive log norm of hours of relaxiation and color, we can see that the more hours you have of relaxiation and the your color is black, the more hours you will have for watching tv. 
