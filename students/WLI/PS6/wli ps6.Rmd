@@ -1,0 +1,326 @@
+---
+title: "Ps6"
+author: "Weijia Li"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE, echo = FALSE)
+library(ggplot2)
+library(tidyverse)
+library(broom)
+library(modelr)
+library(pROC)
+library(MASS)
+
+data.gss = read.csv('data/gss2006.csv')
+data.mhealth = read.csv('data/mental_health.csv')
+```
+
+
+# Part 1: Modelling Voter Turnout
+
+## Describe the Data
+
+```{r}
+ggplot(data.mhealth, aes(vote96, fill = ifelse(vote96 == 1, 'Voted', 'Did not Vote'))) +
+  geom_bar() + 
+  labs(title = 'Voter Turnout in 1996', x = 'Vote Status', y = 'Number of voters') +
+  scale_x_continuous(breaks = NULL) +
+  guides(fill = guide_legend(title = ''))
+
+unconditional_probability = round(sum(data.mhealth$vote96, na.rm = TRUE)
+                                        / length(data.mhealth$vote96), 2)
+unconditional_probability
+```
+
+
+The unconditional probability is 63%.
+
+
+```{r}
+ggplot(data.mhealth, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = lm) + 
+  scale_y_continuous(breaks = c(0, 1)) + 
+  labs(title = "Voting vs Mental Health Index",
+       y = "Voted (1) or Did not Vote (0)",
+       x = "Mental Health Index")
+```
+
+
+The plot shows that the worse the mental health(higher index), the less likely the person will vote.
+
+The plot is problematic in the sense that, the vertical coverage of the linear line is a range in between 0 and 1 while the actual response variables are 0 or 1. By only looking at the line plot, the y value at each end does not explain the voting pattern.
+
+
+## Basic Model
+```{r}
+logit.mh_mol <- glm(vote96 ~ mhealth_sum, data = data.mhealth, family = binomial)
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds <- function(x){
+  x / (1 - x)
+}
+
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+data.mhealth %>%
+  dplyr::select(vote96, mhealth_sum) %>%
+  add_predictions(logit.mh_mol, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  na.omit() %>%
+  {.} -> pred.mh_mol
+
+coef(summary(logit.mh_mol))
+```
+
+
+### 1. 
+The relationship between mental health and voter turnout is stastistically significant since p-value is about 3.133883e-13, which is very small.
+
+### 2.
+```{r}
+coef <- logit.mh_mol$coefficients[2]
+coef
+
+ggplot(aes(mhealth_sum), data = pred.mh_mol) + 
+  geom_line(aes(y = logit)) + 
+  labs(title = "Log Odds of Voting vs. Mental Health Status", 
+       x = "Mental Health Status",
+       y = "Log odds of Voting")
+```
+
+
+The estimated parameter for mental health is -0.1434752, this means the change in the log-odds associated with a one unit increase in `mhealth_sum`  is -0.1434752.
+
+
+### 3.
+```{r}
+ggplot(aes(mhealth_sum), data = pred.mh_mol) + 
+  geom_line(aes(y = odds)) + 
+  labs(title = "Odds of Voting vs. Mental Health Status", 
+       x = "Mental Health Status",
+       y = "Odds of Voting")
+```
+
+
+### 4.
+```{r}
+ggplot(aes(mhealth_sum), data = pred.mh_mol) + 
+  geom_line(aes(y = prob)) + 
+  labs(title = "Probability of Voting vs. Mental Health Status", 
+       x = "Mental Health Status",
+       y = "Probability of Voting")
+
+diff_grid <- tibble(mhealth_sum = 0:16) %>%
+            add_predictions(logit.mh_mol, var = 'logit') %>%
+            mutate(prob = logit2prob(logit))
+
+dif1 = diff_grid[3,]$prob - diff_grid[2,]$prob
+dif2 = diff_grid[7,]$prob - diff_grid[6,]$prob
+dif1
+dif2
+```
+
+
+The first difference for an increase in the mental health index from 1 to 2 is: -0.02917824.  
+The first difference for an increase in the mental health index from 5 to 6 is: -0.03477821.
+
+
+```{r}
+PRE <- function(model){
+  y <- model$y
+
+  y.hat <- round(model$fitted.values)
+
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+pred.mh_mol <- pred.mh_mol %>%
+  na.omit() %>%
+  mutate(pred_vote = ifelse(prob > .5, 1, 0))
+  
+accuracy <- mean(pred.mh_mol$vote96 == pred.mh_mol$pred_vote)
+round(accuracy, 2)
+
+
+pre <- PRE(logit.mh_mol)
+pre
+
+auc_val = auc(pred.mh_mol$vote96, pred.mh_mol$pred_vote)
+auc_val
+```
+
+Given a threshhold of .5, the accuracy rate is: 0.68 and the proportional reduction in error is: 0.0162; the AUC is 0.5401.
+
+
+This is not very good model. The proportional reduction in error is `1.62%`, which is a tiny increase to the baseline rate. More than this, the AUC score only have increase 0.04 in AUC score than the baseline 0.5.
+
+
+## Multiple Variable Model
+
+### 1.
+  * The random component of the probability distribution: Bernoulli distribution
+  
+  $$Pr(Y_i = y_i | \pi) = \pi_i^{y_i}(1 - \pi_i)^{1-y_i}$$
+  * The linear predictor: 
+  
+  $$\eta_i = \beta_0 + \beta_1 X_{mhealth_sum,i} + \beta_2 X_{age,i} + \beta_3 X_{educ,i} + \beta_4 X_{black,i} + \beta_5 X_{female,i} + \beta_6 X_{married,i} + \beta_7 X_{inc10,i}$$
+  
+  * Link function is: 
+  
+  $$pi_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$$
+  
+### 2. Estimate and report results
+```{r}
+logit_mul <- glm(vote96 ~ ., data=data.mhealth, family=binomial())
+summary(logit_mul)
+logit.select <- stepAIC(logit_mul, trace = 0)
+logit.select
+```
+
+### 3.
+```{r interpretation}
+pred <-  data.mhealth %>%
+    na.omit() %>%
+    add_predictions(logit_mul, var = 'logit') %>%
+    mutate(prob = logit2prob(logit)) %>%
+    mutate(odds = prob2odds(prob)) %>%
+    mutate(pred = ifelse(prob > .5, 1, 0))
+
+acc_rate <- mean(pred[['vote96']] == pred$pred)
+
+pre <- PRE(logit_mul)
+auc_val = auc(pred[['vote96']], pred$prob)
+
+pre
+acc_rate
+auc_val
+
+exp(coef(logit_mul))
+```
+
+
+From the results above, we can say the model performs well. First of all, five of the indicators are significant: 'mhealth_sum', 'age' and 'education', 'married' and 'income' with coefficients (log-odds) -0.08833, 0.04211, 0.22527, 0.29386, and 0.06624 respectively. Secondly, the model fits the real values fairly well with accuracy rate 72.4% , proportional reduction in error (PRE) 14.8%, and AUC 0.7596. Comparing to the simple model, all three indicators has been improved.
+
+Given the model is relatively valid, we argue that all seven factors have positive relationships with voting. Holding other factors constant, one unit index worse in mental health and one unit increase in age, education, race, gender, marriage and income will lead to on average increase of 0.9147523, 1.0434517, 1.2569476, 1.3138786, 0.9831740, 1.3457007 and 1.0720941 units in odds of voting.
+
+
+```{r first difference, echo=FALSE}
+prob1 <- exp(-4.304103 + (1 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) / (1 + exp(-4.304103 + (1 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+prob2 <- exp(-4.304103 + (2 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (2 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+diff_1_mul <- prob1 - prob2
+
+prob5 <- exp(-4.304103 + (5 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (5 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+prob6 <- exp(-4.304103 + (6 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (6 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+diff_2_mul <- prob5 - prob6
+
+diff_1_mul
+diff_2_mul
+```
+
+
+When comparing the first differences in mental health index between multivariable model and the simple model, I hold the indices of 1 to 2 and 5 to 6; and to keep other variables constant, I chose 30-old-year single black female with university level of education(15 years) whose income is \$50,000 as sample. Both differences are small than that of from the simple model.
+
+
+```{r}
+vote_pred <- data.mhealth %>%
+            data_grid(age, black, .model = logit_mul) %>%
+            add_predictions(logit_mul, var = 'logit') %>%
+            mutate(prob = logit2prob(logit))
+
+ggplot(vote_pred, aes(x = age , y = prob, color = ifelse(black == 1, 'Black', 'Other'))) +
+  geom_line() +
+  labs(title = 'Effect of age on Voting (black and others)',
+    x = 'Years of Education', y = 'Predicted Probability of Voting in 1996') +
+  guides(color = guide_legend(''))  
+```
+
+
+Taking the most statistically significant effect on voting 'age', I am graphing two predicted probability curves of black and other races to see their influences on voting pattern, holding other non-binary variables as constants. 
+
+From the plot above, we can see that education indeed have a remarkable effect on voting decisions and the blackness also shift predicted probability upwards. Also, notice the difference between races decreases as years of education increases.
+
+
+# Part 2: Modeling TV Consumption
+
+## Estimate a Regression Model
+
+### 1.
+  * The random component probability distribution: Poisson distribution
+  
+ $$Pr(Y_i = yi|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+
+  * The linear predictor:
+  
+  $$\eta_i = \beta_0 + \beta_1 X_{age,i} + \beta_2 X_{childs,i} + \beta_3 X_{educ,i} + \beta_4 X_{female,i} + \beta_5 X_{grass,i} + \beta_6 X_{hrsrelax,i} +$$
+  $$\beta_7 X_{black,i} + \beta_8 X_{social_connect, i} + \beta_9 X_{voted04} + \beta_10 X_{xmovie, i} + \beta_11 X_{zodiac, i} + \beta_12 X_{dem, i} + \beta_13 X_{rep, i} + \beta_14 X_{ind, i}$$
+  
+  * Link function: 
+  
+  $$\lambda_i = ln(\eta_i)$$
+  
+### 2. Estimate model and report results
+```{r, warning=FALSE}
+data.gss <- na.omit(data.gss)
+poiss <- glm(tvhours ~ ., data = data.gss, family=poisson)
+pois_select <- stepAIC(poiss, trace = 0)
+summary(poiss)
+
+pred2 <-  data.gss %>%
+    na.omit() %>%
+      add_predictions(pois_select, var = 'log_count') %>%
+      mutate(prob = logit2prob(log_count)) %>%
+      mutate(odds = prob2odds(prob)) %>%
+      mutate(pred = ifelse(prob > .5, 1, 0))
+  
+  acc_rate <- mean(pred2[['tvhours']] == pred2$pred)
+  
+  pre <- PRE(poiss)
+  auc_val = auc(pred2[['tvhours']], pred2$prob)
+  
+  pre
+  acc_rate
+  auc_val
+```
+
+### 3.
+From the result above,the backwards AIC selection only return 4 predictor variables, not including the intercept: education(-0.03897), grass(-0.10787), hours of relax(0.04663) and race(0.45064). The value of each coefficient represent on average the change in log-count in TV watching hours due to one unit increase of the given variable. However, the model is not performing so well with PRE -0.006825939, accuracy 22.7% and AUC 54.88%.
+
+
+When visualising the effect of 'hrsrelax' on predicted count, non-binary variable 'educ' need to be hold constant to plot 4 different combinations of 'grass' and 'black'.
+
+```{r graph__poisson}
+grid_hrsrelax <- data.gss %>%
+      data_grid(hrsrelax, black, grass, .model = pois_select) %>%
+      add_predictions(pois_select, var = 'log_count') %>%
+      mutate(count = exp(log_count), race_weed = paste(ifelse(grass, 'Endorse Weed'
+                                                              , "Don't endorse Weed"), 
+                                                   '+', 
+                                                   ifelse(black, "Black", "Others")))
+
+ggplot(grid_hrsrelax, aes(x = hrsrelax, y = count, 
+                               color = race_weed)) +
+  geom_line() +
+  labs(title = 'Effect of Hours of Lesiure on Predicted Hours of daily TV Watching',
+    x = 'Hours of Leisure per day', y = 'Predicted Hours of TV watched per day') +
+  guides(color = guide_legend('')) + 
+  scale_y_continuous(breaks = c(0, .25, .5, .75, 1))
+```
+
+
+Surprisingly, we see that there is a larger upward shift in predicted TV watching hour per day if the individual have a preference not to legalize marijuana.
+
