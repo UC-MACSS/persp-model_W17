@@ -1,0 +1,239 @@
+---
+title: MACS 301 PS6
+author: Shen Han
+output:
+  html_document:
+    toc: True
+    toc_float: True
+    code_folding: show
+    fig_width: 6.5
+    fig_height: 4
+---
+
+```{r environment, message=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', warning = FALSE)
+library(tidyverse)
+library(modelr)
+library(pROC)
+
+theme_set(theme_minimal())
+
+mental_health <- read_csv('data/mental_health.csv')
+gss2006 <- read_csv('data/gss2006.csv')
+```
+
+# Part 1
+## Describe the data
+
+
+```{r histogram, warning = FALSE}
+mental_health_groupby <- group_by(mental_health, vote96) %>% count()
+
+ggplot(mental_health_groupby, aes(x=c('No', 'Yes', 'NA'), y=n)) +
+  geom_histogram(stat='identity') +
+  labs(title = "Voter turnout in the 1996 presidential election",
+       x = 'Voter turnout',
+       y = 'Count')
+```
+
+### The unconditional probability
+```{r}
+prob <- mental_health %>%
+  group_by(vote96) %>%
+  count() %>%
+  mutate('probability' = n/sum(n)) %>%
+  select(-n)
+
+prob[2,2]
+```
+
+### Scatter plot and a linear smoothing line    
+```{r scatterplot, warning = FALSE}
+mental_health %>%
+  ggplot(aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method='lm') +
+  labs(title = "The relationship between mental health and observed voter turnout",
+       x = 'Mental health ',
+       y = 'Voter turnout')
+```
+The plot indicates a negative correlation between the voter turnout and the mental health index. 
+
+The linear smoothing line is problematic since it's value doesn't make sense. As it extends in both direction, the line will surpass the [0, 1] bound, which makes it harder to interpret.
+
+
+## Basic model
+
+### 1.
+```{r}
+logistic_model <- glm(vote96 ~ mhealth_sum, data=mental_health, family=binomial()) 
+summary(logistic_model)
+```
+
+The relationship between mental health and voter turnout is statistically and substantively significant, because the p-value of the coefficient of `mhealth_sum` is 3.13e-13, and the odd, given by the coefficient as the log-odd, is nontrivial.
+
+### 2.
+
+```{r}
+
+logit_to_prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+prob_to_odds <- function(x){
+  x / (1 - x)
+}
+prob_to_logodds <- function(x){
+  log(prob_to_odds(x))
+}
+
+mental_health_odds <- mental_health %>%
+  add_predictions(logistic_model) %>%
+  mutate(prob = logit_to_prob(pred)) %>%
+  mutate(odds = prob_to_odds(prob)) %>%
+  mutate(logodds = prob_to_logodds(prob))
+  
+  ggplot(mental_health_odds, aes(x = mhealth_sum)) +
+  geom_line(aes(y = logodds)) +
+  labs(title = "The relationship between mental health and the log-odds of voter turnout",
+       x = "Mental health",
+       y = "Log-odds of voter turnout")
+```
+
+The estimated parameter for mental health in terms of log-odds is -0.14348, which, after taking exponent, indicates the odds of vote.
+
+### 3. 
+
+```{r}
+ggplot(mental_health_odds, aes(x = mhealth_sum)) +
+  geom_line(aes(y = odds)) +
+  labs(title = "The relationship between mental health and the odds of voter turnout",
+       x = "Mental health",
+       y = "Odds of voter turnout")
+
+```
+
+After taking exponent on the coefficient, we get 0.8663381, which means the odds that the probability of vote change by 0.8663381/(1 + 0.8663381) = 0.4641914.  
+
+### 4.
+
+```{r}
+ggplot(mental_health_odds, aes(x = mhealth_sum)) +
+  geom_point(aes(y = vote96)) +
+  geom_line(aes(y = prob)) +
+  labs(title = "The relationship between mental health and the probability of voter turnout",
+       x = "Mental health",
+       y = "Probability of voter turnout")
+```
+
+
+```{r}
+
+first_diff_mental_health <- function(from, to) {
+  exp(1.1392097 + (from * -0.1434752)) / (1 + exp(1.1392097 + (from * -0.1434752))) - exp(1.1392097 + (to * -0.1434752)) / (1 + exp(1.1392097 + (to * -0.1434752)))
+}
+
+cat('1-2: ', first_diff_mental_health(1,2), '')
+cat('5-6: ', first_diff_mental_health(5, 6))
+```
+
+The first difference for an increase in the mental health index from 1 to 2 is 0.02917824, and from 5 to 6 is 0.03477821.
+
+### 5.
+
+```{r accuracy rate}
+accuracy <- mental_health %>%
+  add_predictions(logistic_model) %>%
+  mutate(pred = logit_to_prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+cat('Accuracy rate is: ', mean(accuracy$vote96 == accuracy$pred, na.rm = TRUE))
+```
+
+```{r}
+PRE <- function(model){
+  y <- model$y
+  y.hat <- round(model$fitted.values)
+  
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+cat("PRE: ", PRE(logistic_model))
+```
+
+```{r}
+auc(accuracy$vote96, accuracy$prob)
+```
+
+From the above analysis, the accuracy rate is 0.677761, the PRE is 0.01616628, and the AUC is 0.6243. Since it's PRE is merely 0.016 to the baseline model, this model is not good enough.
+
+
+## Multiple variable model
+
+The three components:  
+* Probability distribution:  Bernoulli distribution
+* Linear predictor: The linear predictor includes all other variables: `mhealth_sum`, `age`, `educ`, `blakc`, `female`, `married`, and `inc10`.  
+* Link function: logit function 
+
+
+```{r}
+multi_logistic_model <- glm(vote96 ~ ., data=mental_health, family=binomial())
+summary(multi_logistic_model)
+```
+
+ 
+```{r}
+accuracy_mul <- mental_health %>%
+  add_predictions(multi_logistic_model) %>%
+  mutate(pred = logit_to_prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+accuracy_rate_mul <- mean(accuracy_mul$vote96 == accuracy_mul$pred, na.rm = TRUE)
+cat("Accuracy rate: ", accuracy_rate_mul, '');
+cat("PRE: ", PRE(multi_logistic_model), '');
+cat("AUC: ", auc(accuracy_mul$vote96, accuracy_mul$prob))
+```
+
+From the result above, we can see that the coefficients of `mhealth_sum`, `age`, `educ`, and `inc10` are statistically significant in this model.
+In terms of model accuracy, the multiple variable model is better than the previous basic model, but it's still not very satisfying in consideration of PRE.
+
+
+```{r}
+mental_health_black <- mental_health %>%
+  data_grid(mhealth_sum, black, .model=multi_logistic_model) %>%
+  add_predictions(multi_logistic_model) %>%
+  mutate(prob = logit_to_prob(pred))
+
+ggplot(mental_health_black, aes(x = mhealth_sum, y = prob, color = ifelse(black == 1, "Black", "Others"))) +
+  geom_smooth() +
+  labs(title = "The relationship between black and voter turnout",
+       x = "Mental health",
+       y = "Probability of voter turnout") +
+  guides(color = guide_legend(''))
+```
+
+The above plot shows black people may have a higher probability of voter turnout, approximately 0.05, than the others accross all mental health levels.
+
+
+
+# Part 2
+## Estimate a regression model
+
+The three components:  
+* Probability distribution (random component): the Poisson distribution
+* Linear predictor: including `r names(gss2006)[2:15]`.  
+* Link function: log function
+
+Estimate the model and report your results:
+```{r Part 2 regression model, echo=FALSE}
+tv_model <- glm(tvhours ~ . , data=gss2006, family=poisson())
+summary(tv_model)
+```
+
+
+From the above regression summary we can see that the coefficients of `educ`, `hrsrelax`, and `black` are statistically significant.
