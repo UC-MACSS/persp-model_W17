@@ -1,0 +1,270 @@
+---
+title: "PS6"
+author: "Yuqing Zhang"
+date: "2/18/2017"
+
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(forcats)
+library(ggplot2)
+library(pROC)
+set.seed(1234)
+
+```
+
+# Modeling voter turnout
+## Describe the data
+
+```{r mental describe}
+mental_health<-read.csv('mental_health.csv')
+
+```
+
+## Including Plots
+
+```{r voter turnout, echo=FALSE}
+ggplot(mental_health, aes(vote96, fill = ifelse(vote96 == 1, 'Vote', 'Did not Vote')))+
+  geom_histogram(binwidth = 0.5) +
+  labs(title = "Histogram for Voter Turnout",
+       x = "Voter Turnout",
+       y = "Frequency count of individuals")+
+guides(fill = guide_legend(title = ''))
+
+uncond_prob = 100 * round((sum(mental_health$vote96,na.rm=TRUE)/length(mental_health$vote96)),2)
+    
+```
+
+1. The unconditional probability of a given individual turning out to vote is: `r uncond_prob`%
+
+```{r scatterplot,echo=FALSE}
+
+ggplot(mental_health, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(main = "Scatterplot of mental health and voter turnout",
+       x = "mental_health",
+       y = "voter turnout")
+```
+2. The graph tells us that the worse one person's mental condition is, the less likely he or she is going to vote. The problem with the linear line is that the only possible values for  voter turnout are 0 and 1. Yet the linear regression model gives us predicted values such as .75 and .25.
+
+## Basic Model
+```{r glm}
+vote_mental <- glm(vote96 ~ mhealth_sum, data = mental_health, family = binomial)
+summary(vote_mental)
+```
+1.The relationship between mental health and voter turnout is statistically significant because p-value is almost 0. The coefficient is -.14348, which means increasing by 1 on the mental health scale, decreases the likelihood of voting by almost `r (1-100*round(exp(-.14348),2))`. It indicates the relationship is substantive.
+
+2.
+```{r log_odds}
+tidy(vote_mental)
+log_odds <- vote_mental$coefficients[2]
+```
+For every one-unit increase in mental_health score, we expect the log-odds of voter turnout to decrease by ```{r param}log_odds```
+
+```{r log_odds graph,echo=FALSE}
+#mental_health_score <- mental_health %>%
+ # data_grid(mhealth_sum)
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+mental_health_score <- mental_health %>%
+  add_predictions(vote_mental) 
+
+ggplot(mental_health_score,aes(mhealth_sum, pred)) +
+  geom_line(color = "blue", size = 1) +
+  labs(
+       x = "Mental health score",
+       y = "Log-odds of Voter Turnout")
+```
+
+
+```{r odds}
+mental_health_score <- mental_health %>%
+  add_predictions(vote_mental) %>%
+  # predicted values are in the log-odds form - convert to probabilities
+  mutate(prob = logit2prob(pred))
+prob2odds <- function(x){
+  x / (1 - x)
+}
+mental_health_score <- mental_health_score %>%
+  mutate(odds = prob2odds(prob))
+```
+
+3. 
+```{r exp}
+exp_odds = exp(log_odds)
+```
+
+
+The odds ratio associated with a one unit increase in mhealth_sum is `r exp_odds`
+
+```{r odds_graph,echo=FALSE}
+ggplot(mental_health_score, aes(mhealth_sum, odds)) +
+  geom_line(color = "blue", size = 1) +
+  labs(x = "Mental Health Score",
+       y = "Odds of Voter Turnout")
+```
+
+4.a 
+```{r}
+prob = logit2prob(log_odds)
+```
+
+A one-unit increase in mental health index is associated with `r prob` decrease in probability of voting on average. 
+
+```{r prob_graph,echo=FALSE}
+
+ggplot(mental_health_score, aes(mhealth_sum, prob)) +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(title = "Relationship between mental health and voting",
+       y = "Predicted probability of voting")
+```
+4.b
+```{r first difference}
+fd_1_2 = logit2prob(2) - logit2prob(1)
+fd_5_6 = logit2prob(6) - logit2prob(5)
+```
+The first difference for an increase in the mental health index from 1 to 2 is: `r fd_1_2`.
+The first difference for an increase in the mental health index from 5 to 6 is: `r fd_5_6`.
+
+5. 
+```{r accr}
+mh_accuracy <- mental_health %>%
+  add_predictions(vote_mental) %>%
+  mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > .5))
+
+accr_rate = mean(mh_accuracy$vote96 == mh_accuracy$pred, na.rm = TRUE)
+```
+
+```{r PRE}
+# create a function to calculate the modal value of a vector
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+pre = PRE(vote_mental)
+```
+
+```{r auc}
+mh_accuracy <- mental_health %>%
+  add_predictions(vote_mental) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+auc_x <- auc(mh_accuracy$vote96, mh_accuracy$prob)
+
+```
+The accuracy rate is: `r round(100 * accr_rate, 2)`% and the proportional reduction in error is: `r round(100 * pre, 2)`%. The AUC is `r auc_x`.
+
+
+#Multiple variable model
+##1. Three components 
+
+a) A random component specifying the conditional distribution of the response variable, Yi, given the values of the predictor variables in the model. Each individual vote turnout is either 0(not vote) or 1(vote), so each one is a bernoulli trial. Thus the response variable vote96, ,which is a collection of each individual vote turnout, is distributed as a binomial random variable.
+
+b) The linear predictor is:
+$$vote96_{i} = \beta_{0} + \beta_{1}mhealth\_sum_{i} + \beta_{2}age_{i} + \beta_{3}educ_{i} + \beta_{4}black_{i} + \beta_{5}female_{i} + \beta_{6}married_{i} + \beta_{7}inc10_{i}$$
+c) The link function is
+$$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
+
+
+##2,3 Estimate the model and report your results.
+```{r all predictors}
+vote_all <- glm(vote96 ~ ., data = mental_health,
+                         family = binomial)
+vote_all_grid <- mental_health %>%
+  #data_grid(.) %>%
+  add_predictions(vote_all) %>%
+  mutate(pred = logit2prob(pred))
+
+summary(vote_all)
+```
+
+The results table shows that four predictors are statistically significant. Mental health score and  coefficient is -0.089102, meaning that for every one-unit increase in mental_health score, we expect the log-odds of voter turnout to decrease by 0.089102; age and coefficient is 0.042534 for age, meaning that for every one-unit increase in mental_health score, we expect the log-odds of voter turnout to increase by0.042534; education and coefficient is 0.228686,meaning that for every one-unit increase in education, we expect the log-odds of voter turnout to increase by 0.228686; income and coefficient is 0.069614,meaning that for every one-unit increase in income, we expect the log-odds of voter turnout to increase by 0.069614. 
+
+
+```{r all predictors_estimate}
+mh_accuracy_all <- mental_health %>%
+  add_predictions(vote_all) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+accr_rate_all = mean(mh_accuracy_all$vote96 == mh_accuracy_all$pred, na.rm = TRUE)
+auc_all <- auc(mh_accuracy_all$vote96, mh_accuracy_all$prob)
+pre_all <- PRE(vote_all)
+```
+
+The accuracy rate,`r round(100 * accr_rate_all, 2)`%, proportional reduction in error (PRE),`r round(100 * pre_all, 2)`% and area under the curve (AUC),`r auc_all` of the current model indicate that the model is better than the "simple" logistic regression model. Nonetheless, even with more predictors, the current logistic regression model shows a rather poor performance. 
+
+
+#Estimate a regression model
+## 1. Three components
+a) The response variable tvhours is distributed as a poisson random variable.
+$$Pr(tvhours = k|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+b) The linear predictor is:
+$$tvhours_{i} = \beta_{0} + \beta_{1}age + \beta_{2}childs + \beta_{3}educ + \beta_{4}female + \beta_{5}grass + \beta_{6}hrsrelax + \beta_{7}black + \beta_{8}social_connect + \beta_{9}voted04 + \beta_{10}xmovie + \beta_{11}zodiac + \beta_{12}dem + \beta_{13}rep + \beta_{14}ind$$
+c) The link function is
+$$\mu_{i} = \ln(tvhours_{i})$$
+## 2,3 Estimate the model and report your results.
+In this  model, the number of hours watching TV per day is the response variable. I chose to estimate these predictors: age, number of children, education, social_connect. 
+```{r tv consumption}
+tv_consumption<-read.csv('gss2006.csv')
+tv_pred <- glm(tvhours ~ age+childs+educ+hrsrelax, data = tv_consumption,
+                         family = 'poisson')
+tv_pred_grid <- tv_consumption %>%
+  #data_grid(.) %>%
+  add_predictions(tv_pred) %>%
+  mutate(pred = logit2prob(pred))
+
+summary(tv_pred)
+```
+At the p<.001 level,the results table shows that of the four predictors I chose, two of them are statistically significant. Education and coefficient is -0.0429390, meaning that for every one-unit increase in education, we expect the log-odds of hours of watching tv to decrease by 0.0429390; education and coefficient is 0.228686,meaning that for every one-unit increase in education, we expect the log-odds of voter turnout to increase by 0.228686; hours of relaxing and coefficient is 0.0417919,meaning that for every one-unit increase in social_connect, we expect the log-odds of hours of watching tv to increase by 0.0417919. 
+
+This model pretty makes sense. More educated one person is, less time they spend on watching tv. This may because of the fact that instead of 'wasting time on watching tv',they have more of other things to do.The relationship between hours of relax make sense too. As hours of relax increases, number of hours watching television also increases.
+
+```{r}
+tv_accuracy <- tv_consumption %>%
+  add_predictions(tv_pred) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+accr_rate_tv = mean(tv_accuracy$tvhours == tv_accuracy$pred, na.rm = TRUE)
+auc_tv <- auc(tv_accuracy$tvhours, tv_accuracy$prob)
+pre_tv <- PRE(tv_pred)
+```
+
+The accuracy rate,`r round(100 * accr_rate_tv, 2)`%, proportional reduction in error (PRE),`r round(100 * pre_tv, 2)`% and area under the curve (AUC),`r auc_tv` of the current model indicate that the model is not a very good model.
+
+```{r}
+tv_pred_quasi <- glm(tvhours ~ age+childs+educ+hrsrelax, data = tv_consumption,
+                         family = 'quasipoisson')
+summary(tv_pred_quasi)
+```
+I used quasipoisson model to see if the model is under or over-dispersion. From the table summary above, dispersion parameter for quasipoisson family is 1.2794,higher than 1, which indicates that the model is over-dispersed (the true variance of the distribution is greater than its mean).
