@@ -17,3 +17,8 @@ Demonstration scripts for MACS 30100
 # Generalized linear models
 
 * [Statistical learning: generalized linear models](http://cfss.uchicago.edu/persp005_glm.html)
+
+# Resampling methods
+
+* [Statistical learning: resampling methods](http://cfss.uchicago.edu/persp006_resampling.html)
+* [Slides for resampling methods](http://cfss.uchicago.edu/extras/persp_resampling_slides.html)
