@@ -193,7 +193,7 @@ $(document).ready(function () {
 <li>My model of interest is the relationship between voter turnout and <code>mental health</code>, <code>age</code>, and <code>education</code>. First, <code>mental health</code> is used because it is statistically significant in the basic model. Depression may reduce political participation by increasing individuals’ feelings of hopelessness. Second, oder people may be more likely to participate in elections, because they tend to have more time and income. So I take <code>age</code> into consideration. Third, individuals with more years of <code>education</code> may be more interested in political participation. So it is also included in my model of interest.
 <ol style="list-style-type: decimal">
 <li>The probability distribution is Bernoulli distribution.</li>
-<li>The linear predictor is: <span class="math display">\[vote96_{i}=\beta_{0}+\beta{1}*mhealth\_sum+\beta_{2}*age+\beta_{3}*educ+\beta_{4}*black+\beta_{5}*female+\beta_{6}*married+\beta_{7}*inc10\]</span>.</li>
+<li>The linear predictor is: <span class="math display">\[vote96_{i}=\beta_{0}+\beta{1}*mhealth\_sum_i+\beta_{2}*age_i+\beta_{3}*educ_i+\beta_{4}*blac_ik+\beta_{5}*female_i+\beta_{6}*married_i+\beta_{7}*inc10_i\]</span>.</li>
 <li>The link function is: <span class="math display">\[Y{i}=e^{vote96_{i}}/(1+e^{vote96_{i}})\]</span>.</li>
 </ol></li>
 <li>The result of estimated model is:</li>
