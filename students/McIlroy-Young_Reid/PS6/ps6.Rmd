@@ -37,7 +37,7 @@ ggplot(data, aes(mhealth_sum, vote96)) +
   scale_y_continuous(limits = c(0, 1))
 ```
 
-The plot tells us that having a low mental heath score (where low means healthier) is associated more highly with voting. Unfortunately since for each score there are only 3 possible values which is much to small a range, for a linear fit to work well since it assumes the range and domain are both intervals over $\mathbb{R}$.
+The plot tells us that having a low mental heath score (where low means healthier) is associated more highly with voting. Unfortunately, since for each score there are only 3 possible values (of which the model uses 2). This is much to small of a range for a linear fit to work well, linear models assume the range and domain are both intervals over $\mathbb{R}$ and often extrapolate to all of $\mathbb{R}$ which in this case would lead to silly results, such as people with inhumanly high mental health voting multiple times.
 
 # Basic Model
 
@@ -46,7 +46,7 @@ svLogit = glm(vote96 ~ mhealth_sum, data = data, family = binomial)
 summary(svLogit)
 ```
 
-The p-value for the mental health score's effect on voting is quite low at $3 * 10^{-13}$ which means it is statistically significant. The value is has is $-.14$ which when exponentiated gives `r exp(-.14)` $~ .8$ which is the ratio of change in voting likelihood caused by an increase in 1 on the mental health scale. This means increasing by 1 on the health scale, decreases the likelihood of voting by almost $20%$ Which indicates the relationship is substantive.
+The p-value for the mental health score's effect on voting is quite low at $3 * 10^{-13}$ which means it is statistically significant. The value is has is $-.14$ which when exponentiated gives `r exp(-.14)` $~ .15$ which is the ratio of change in voting likelihood caused by an increase in 1 on the mental health scale. This means increasing by 1 on the health scale, decreases the likelihood of voting by almost $15%$ Which indicates the relationship is substantive.
 
 ``` {r, Q 1.2.2}
 #From notes
@@ -141,27 +141,58 @@ pre <- PRE(svLogit)
 auc_val <- auc(vote96_accuracy$vote96, vote96_accuracy$pred)
 ```
 
-The accuracy rate is `r ac`, the PRE is `r pre` and the AUC is `r auc_val` for this model. These indicate that the model is better than random guessing but not by a large amount (`r auc_val - .5` to be exact).
+The accuracy rate is `r ac`, the PRE is `r pre` and the AUC is `r auc_val` for this model. These indicate that the model is better than random guessing, but not by a large amount (`r auc_val - .5` to be exact). We could make some trade offs between sensitivity and specificity, but even at best the model is note good.
 
 # Multivariate Model
 
-For the model used below
+First we will look to find which variables are significant
 
-+ The probability distribution is a single Bernoulli trial $Prob(vote96 == 1) = p(1 - p)$
-+ The linear predictor is $g(\mu) = \beta_0 + \beta_1 mhealth\_sum + \beta_2 age + \beta_3 educ + \beta_4 black + \beta_5 female + \beta_6 married + \beta_7 inc10$
-+ The link function is $p = \frac{e^{\eta}}{1 + e^{\eta}}$
-
-
-``` {r, Q 1.3.2}
+``` {r, Q 1.3.2a}
 mvLogit <- glm(vote96 ~ . , data = data, family = binomial)
 
 summary(mvLogit)
 ```
 
+`mhealth_sum`, `age`, `educ` all have p-values below $.1$, so we will use them for the model below
+
++ The probability distribution is a single Bernoulli trial $Prob(vote96 == y_i | p_i) = p_i^{y_i}(1-p_i)^{(1-y_i)}$
++ The linear predictor is $g(p_i) = \eta_i = \beta_0 + \beta_1 mhealth\_sum + \beta_2 age + \beta_3 educ$
++ The link function is $p_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$
+
+``` {r, Q 1.3.2b}
+mvLogit <- glm(vote96 ~ mhealth_sum + age + educ , data = data, family = binomial)
+
+summary(mvLogit)
+```
+
+Nicely enough all three variables are still highly statistically significant after the others were removed, which indicates they are all important. If they are all substantively significant is less clear. The change in probability induced by an increase in `educ` is large at $1.30$  and people can differ by multiple years. But the other two are less clear `mhealth_sum` has a much smaller effect than before, an increase by one only changes the voting probability by $.9$ instead of $.86$ we saw before and since the effects are multiplicative and not linear this decrease is larger than just $.04$. `age` has an even smaller effect but the possible range is much larger, looking at the change an increase by $10$ will induce shows a probability change of $1.57$ which is substantial. I believe that all three of these variables are both statistically and substantively significant. 
+
+
+# TV consumption
+
+We will first look at a model with all the variables
 
 ``` {r Q 2.1.1}
 targetFile <- "data/gss2006.csv"
 data <- na.omit(read.csv(targetFile))
 
 tvLogit <- glm(tvhours ~ . , data = data, family = poisson)
+
+summary(tvLogit)
 ```
+
+The three with low p-values are `hrsrelax`, `black` and with a much higher value `educ`. So lets use these three for our model.
+
+
++ The probability distribution of the number of hours watched (`tvhours`) is Poisson, i.e. $p(Y_i == k | \mu) = \frac{\mu^k e^{-\mu}}{k !}$
++ The linear predictor is $\eta = \beta_0 + \beta_1 hrsrelax + \beta_2 black + \beta_3 educ$
++ The link function is $log(\mu) = \eta_i$
+
+
+``` {r Q 2.1.2}
+tvLogit <- glm(tvhours ~  hrsrelax + black + educ , data = data, family = poisson)
+
+summary(tvLogit)
+```
+
+We now have all three variables being highly significant, p-values all less than $.01$ with `black` having the largest impact for a change of 1 (prob increases by `r exp(0.440052)`). Neither of these results are surprising reducing the number of variables means we could be experience overdispersion and the predicted p-values are too low, while `black` being significant is in part due to it being a binary variable and thus the variability given across the ranges of `educ` and `hrsrelax` must be confined to a unit change.

@@ -167,7 +167,7 @@ summary(svLogit)</code></pre>
 ## AIC: 1620.7
 ## 
 ## Number of Fisher Scoring iterations: 4</code></pre>
-<p>The p-value for the mental health score’s effect on voting is quite low at <span class="math inline">\(3 * 10^{-13}\)</span> which means it is statistically significant. The value is has is <span class="math inline">\(-.14\)</span> which when exponentiated gives 0.8693582 <span class="math inline">\(~ .8\)</span> which is the ratio of change in voting likelihood caused by an increase in 1 on the mental health scale. This means increasing by 1 on the health scale, decreases the likelihood of voting by almost <span class="math inline">\(20%\)</span> Which indicates the relationship is substantive.</p>
+<p>The p-value for the mental health score’s effect on voting is quite low at <span class="math inline">\(3 * 10^{-13}\)</span> which means it is statistically significant. The value is has is <span class="math inline">\(-.14\)</span> which when exponentiated gives 0.8693582 <span class="math inline">\(~ .15\)</span> which is the ratio of change in voting likelihood caused by an increase in 1 on the mental health scale. This means increasing by 1 on the health scale, decreases the likelihood of voting by almost <span class="math inline">\(15%\)</span> Which indicates the relationship is substantive.</p>
 <pre class="r"><code># From notes
 logit2prob &lt;- function(x) {
     exp(x)/(1 + exp(x))
@@ -238,16 +238,11 @@ ac &lt;- mean(vote96_accuracy$vote96 == vote96_accuracy$pred, na.rm = TRUE)
 pre &lt;- PRE(svLogit)
 
 auc_val &lt;- auc(vote96_accuracy$vote96, vote96_accuracy$pred)</code></pre>
-<p>The accuracy rate is 0.677761, the PRE is 0.0161663 and the AUC is 0.5400676 for this model. These indicate that the model is better than random guessing but not by a large amount (0.0400676 to be exact).</p>
+<p>The accuracy rate is 0.677761, the PRE is 0.0161663 and the AUC is 0.5400676 for this model. These indicate that the model is better than random guessing, but not by a large amount (0.0400676 to be exact). We could make some trade offs between sensitivity and specificity, but even at best the model is note good.</p>
 </div>
 <div id="multivariate-model" class="section level1">
 <h1>Multivariate Model</h1>
-<p>For the model used below</p>
-<ul>
-<li>The probability distribution is a single Bernoulli trial <span class="math inline">\(Prob(vote96 == 1) = p(1 - p)\)</span></li>
-<li>The linear predictor is <span class="math inline">\(g(\mu) = \beta_0 + \beta_1 mhealth\_sum + \beta_2 age + \beta_3 educ + \beta_4 black + \beta_5 female + \beta_6 married + \beta_7 inc10\)</span></li>
-<li>The link function is <span class="math inline">\(p = \frac{e^{\eta}}{1 + e^{\eta}}\)</span></li>
-</ul>
+<p>First we will look to find which variables are significant</p>
 <pre class="r"><code>mvLogit &lt;- glm(vote96 ~ ., data = data, family = binomial)
 
 summary(mvLogit)</code></pre>
@@ -280,10 +275,132 @@ summary(mvLogit)</code></pre>
 ## AIC: 1257.8
 ## 
 ## Number of Fisher Scoring iterations: 4</code></pre>
+<p><code>mhealth_sum</code>, <code>age</code>, <code>educ</code> all have p-values below <span class="math inline">\(.1\)</span>, so we will use them for the model below</p>
+<ul>
+<li>The probability distribution is a single Bernoulli trial <span class="math inline">\(Prob(vote96 == y_i | p_i) = p_i^{y_i}(1-p_i)^{(1-y_i)}\)</span></li>
+<li>The linear predictor is <span class="math inline">\(g(p_i) = \eta_i = \beta_0 + \beta_1 mhealth\_sum + \beta_2 age + \beta_3 educ\)</span></li>
+<li>The link function is <span class="math inline">\(p_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}\)</span></li>
+</ul>
+<pre class="r"><code>mvLogit &lt;- glm(vote96 ~ mhealth_sum + age + educ, data = data, family = binomial)
+
+summary(mvLogit)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = vote96 ~ mhealth_sum + age + educ, family = binomial, 
+##     data = data)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.5656  -1.0438   0.5401   0.8486   2.1761  
+## 
+## Coefficients:
+##              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept) -4.374658   0.462552  -9.458  &lt; 2e-16 ***
+## mhealth_sum -0.098538   0.021392  -4.606  4.1e-06 ***
+## age          0.044942   0.004451  10.097  &lt; 2e-16 ***
+## educ         0.260462   0.026533   9.817  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 1663.8  on 1316  degrees of freedom
+## Residual deviance: 1420.4  on 1313  degrees of freedom
+##   (1515 observations deleted due to missingness)
+## AIC: 1428.4
+## 
+## Number of Fisher Scoring iterations: 4</code></pre>
+<p>Nicely enough all three variables are still highly statistically significant after the others were removed, which indicates they are all important. If they are all substantively significant is less clear. The change in probability induced by an increase in <code>educ</code> is large at <span class="math inline">\(1.30\)</span> and people can differ by multiple years. But the other two are less clear <code>mhealth_sum</code> has a much smaller effect than before, an increase by one only changes the voting probability by <span class="math inline">\(.9\)</span> instead of <span class="math inline">\(.86\)</span> we saw before and since the effects are multiplicative and not linear this decrease is larger than just <span class="math inline">\(.04\)</span>. <code>age</code> has an even smaller effect but the possible range is much larger, looking at the change an increase by <span class="math inline">\(10\)</span> will induce shows a probability change of <span class="math inline">\(1.57\)</span> which is substantial. I believe that all three of these variables are both statistically and substantively significant.</p>
+</div>
+<div id="tv-consumption" class="section level1">
+<h1>TV consumption</h1>
+<p>We will fisrt look at a model with all the variables</p>
 <pre class="r"><code>targetFile &lt;- &quot;data/gss2006.csv&quot;
 data &lt;- na.omit(read.csv(targetFile))
 
-tvLogit &lt;- glm(tvhours ~ ., data = data, family = poisson)</code></pre>
+tvLogit &lt;- glm(tvhours ~ ., data = data, family = poisson)
+
+summary(tvLogit)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = tvhours ~ ., family = poisson, data = data)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -3.1120  -0.6741  -0.1144   0.4224   4.9257  
+## 
+## Coefficients: (1 not defined because of singularities)
+##                     Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)        1.0795865  0.2419794   4.461 8.14e-06 ***
+## age                0.0016522  0.0028397   0.582   0.5607    
+## childs            -0.0003896  0.0238729  -0.016   0.9870    
+## educ              -0.0292174  0.0126351  -2.312   0.0208 *  
+## female             0.0457000  0.0652987   0.700   0.4840    
+## grass             -0.1002726  0.0686146  -1.461   0.1439    
+## hrsrelax           0.0468472  0.0102790   4.558 5.18e-06 ***
+## black              0.4657924  0.0841629   5.534 3.12e-08 ***
+## social_connect     0.0437349  0.0407999   1.072   0.2837    
+## voted04           -0.0994787  0.0785680  -1.266   0.2055    
+## xmovie             0.0708408  0.0773420   0.916   0.3597    
+## zodiacAries       -0.1011364  0.1508248  -0.671   0.5025    
+## zodiacCancer       0.0267776  0.1451557   0.184   0.8536    
+## zodiacCapricorn   -0.2155760  0.1657034  -1.301   0.1933    
+## zodiacGemini       0.0285895  0.1481143   0.193   0.8469    
+## zodiacLeo         -0.1515676  0.1553215  -0.976   0.3291    
+## zodiacLibra       -0.0392537  0.1379102  -0.285   0.7759    
+## zodiacNaN         -0.2985240  0.2126126  -1.404   0.1603    
+## zodiacPisces      -0.1446731  0.1649895  -0.877   0.3806    
+## zodiacSagittarius -0.2177846  0.1577638  -1.380   0.1674    
+## zodiacScorpio      0.0225911  0.1538460   0.147   0.8833    
+## zodiacTaurus      -0.1273891  0.1644799  -0.774   0.4386    
+## zodiacVirgo       -0.1240442  0.1564495  -0.793   0.4279    
+## dem                0.0103276  0.0917055   0.113   0.9103    
+## rep                0.0148615  0.0927662   0.160   0.8727    
+## ind                       NA         NA      NA       NA    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for poisson family taken to be 1)
+## 
+##     Null deviance: 527.72  on 440  degrees of freedom
+## Residual deviance: 429.42  on 416  degrees of freedom
+## AIC: 1600.4
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<p>The three with low p-valeus are <code>hrsrelax</code>, <code>black</code> and with a much higher value <code>educ</code>. So lets use these three for our model.</p>
+<ul>
+<li>The probability distribution is a Poisson distrution, i.e. <span class="math inline">\(p(Y_i == k | \mu) = \frac{\mu^k e^{-\mu}}{k !}\)</span></li>
+<li>The linear predictor is <span class="math inline">\(\eta = \beta_0 + \beta_1 hrsrelax + \beta_2 black + \beta_3 educ\)</span></li>
+<li>The link function is <span class="math inline">\(log(\mu) = \eta_i\)</span></li>
+</ul>
+<pre class="r"><code>tvLogit &lt;- glm(tvhours ~ hrsrelax + black + educ, data = data, family = poisson)
+
+summary(tvLogit)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = tvhours ~ hrsrelax + black + educ, family = poisson, 
+##     data = data)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.9678  -0.7200  -0.1363   0.4511   5.5468  
+## 
+## Coefficients:
+##              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)  1.154578   0.165344   6.983 2.89e-12 ***
+## hrsrelax     0.046868   0.009447   4.961 7.00e-07 ***
+## black        0.440052   0.072114   6.102 1.05e-09 ***
+## educ        -0.038361   0.011103  -3.455  0.00055 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for poisson family taken to be 1)
+## 
+##     Null deviance: 527.72  on 440  degrees of freedom
+## Residual deviance: 445.51  on 437  degrees of freedom
+## AIC: 1574.5
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
 </div>
 
 
