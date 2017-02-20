@@ -243,6 +243,6 @@ consumption <- glm(tvhours ~ age + educ + black, family = "poisson", data = gss)
 summary(consumption)
 ```
 
-3. This model is statistically significant, since the parameters for the intercept, `age`, `educ` and `black` are statistically significant. According to the 
+3. This model is statistically significant, since the parameters for the intercept, `age`, `educ` and `black` are statistically significant on the level of 0.001. Among these predictors, only `educ` has a negative relationship with `TV consumption`. Hoding other variables equal, this means one year of increase in education would lead to decrease in the hours of `TV consumption`. Both of the other variables `age` and `black` has positive relationships with `TV consumption`. Holding other variables equal, one year of increase in `age` woule on average lead to increase in `TV consumption`. And holding other variables equal, African American would on average has greater `TV consumption`.
 
 
