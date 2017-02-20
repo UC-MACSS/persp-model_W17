@@ -200,7 +200,7 @@ tnr.cm.5 = sum(cm.5_voted_depression$byClass[2])
 threshold_x = seq(0, 1, by = .001) %>%
               map_df(threshold_compare, df, logit_voted_depression)
 
-auc_x_voted_depression <- auc(df$vote96, voted_depression_pred$prob)
+auc_x_voted_depression <- auc(voted_depression_pred$vote96, voted_depression_pred$prob)
 ```
 
 Using a threshold value of .5, we estimate the accuracy rate of the logistic model at 0.677761.
@@ -463,8 +463,6 @@ summary(poisson_tv)
     ## AIC: 4178.4
     ## 
     ## Number of Fisher Scoring iterations: 5
-
-1.  Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-counts, predicted event counts, and first differences - choose what makes sense to you and provides the most value to the reader. Is the model over or under-dispersed? Use graphs and tables as necessary to support your conclusions.
 
 We find that hours of relaxation is statistically significant at the p&lt;.001 level; it has a coefficient of 0.0415226, which means that an increase of one hour in relaxation time for a low-connected respondent will result in a 0.0415226-fold increase in the mean number of television hours consumed. This effect is statistically significant, but does not seem substantively significant.
 

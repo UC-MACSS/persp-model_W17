@@ -265,7 +265,7 @@ tnr.cm.5 = sum(cm.5_voted_depression$byClass[2])
 threshold_x = seq(0, 1, by = .001) %>%
               map_df(threshold_compare, df, logit_voted_depression)
 
-auc_x_voted_depression <- auc(df$vote96, voted_depression_pred$prob)
+auc_x_voted_depression <- auc(voted_depression_pred$vote96, voted_depression_pred$prob)
 ```
 
 Using a threshold value of .5, we estimate the accuracy rate of the logistic model at `r ar`.
