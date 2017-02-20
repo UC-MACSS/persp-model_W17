@@ -233,9 +233,9 @@ gss %>%
 ###Multivariate Poisson Regression Model of Hours of TV Watched 
 Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr$(TVhours_i=k|\mu)$ = $(\mu^ke^{-\mu})$ / ${k!}$ .
 
-In our model of predicting number of hours of TV watched per day, we include the following additional variables:  
-1. `age` - Age (in years)  
-2. `childs` - Number of children  
+In our model of predicting number of hours of TV watched per day, we include the following additional variables:  <br>
+1. `age` - Age (in years)  <br>
+2. `childs` - Number of children  <br>
 3. `educ` - Highest year of formal schooling completed  
 4. `female` - 1 if female, 0 if male  
 5. `hrsrelax` - Hours per day respondent has to relax  
