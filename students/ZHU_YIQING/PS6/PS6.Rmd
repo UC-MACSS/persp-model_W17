@@ -349,5 +349,12 @@ ggplot(tvhours_pred, aes(x = hrsrelax, y = pred, color = social_connect)) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
+In order to test for under- or over-dispersion, we estimate a quasipoisson model with the same variables:
 
+```{r}
+quasipoisson_tv <- glm(tvhours ~ hrsrelax + social_connect,  data = gss_nona, family = quasipoisson)
+summary(quasipoisson_tv)
+tidy(quasipoisson_tv)
+```
 
+The dispersion parameter for the quasipoisson distriubution is 1.350436, which indicates that the model is over-dispersed.
