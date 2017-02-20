@@ -21,7 +21,9 @@ health %>%
                    labels = c("Did not vote", "Voted"))
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-1-1.png) Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-1-1.png) The unconditional probability of a given respondent voting in the election is 0.6755365.
+
+#### Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
 
 ``` r
 health %>%
@@ -37,7 +39,7 @@ health %>%
 
 ### Basic model (3 points)
 
-Estimate a logistic regression model of the relationship between mental health and voter turnout.
+#### Estimate a logistic regression model of the relationship between mental health and voter turnout.
 
 *v**o**t**e*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*h**e**a**l**t**h*<sub>*i*</sub>
 
@@ -81,6 +83,11 @@ For every one-unit increase in an individual's mental health (where 0 is an indi
 #### Generate a graph of the relationship between mental health and the log-odds of voter turnout.
 
 ``` r
+#defining some functions 
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
 prob2odds <- function(x){
   x / (1 - x)
 }
@@ -89,13 +96,14 @@ prob2logodds <- function(x){
   log(prob2odds(x))
 }
 
-health <- health %>%
+health_vals <- health %>%
   filter(!is.na(mhealth_sum) & mhealth_sum > 0) %>%
   add_predictions(m_voter) %>% 
-  mutate(logodds = prob2logodds(pred), 
-         odds = prob2odds(pred)) 
+  mutate(prob = logit2prob(pred), 
+         logodds = prob2logodds(prob), 
+         odds = prob2odds(prob)) 
 
-health %>% 
+health_vals %>% 
   ggplot(aes(x = mhealth_sum, y = logodds)) + 
   geom_line() + 
   labs(x = "Mental Health Index", 
@@ -115,7 +123,7 @@ exp(-0.114)
     ## [1] 0.892258
 
 ``` r
-health %>% 
+health_vals %>% 
   ggplot(aes(x = mhealth_sum, y = odds)) + 
   geom_line() + 
   labs(x = "Mental Health Index", 
@@ -131,7 +139,7 @@ The first difference for an increase in the mental health index from 1 to 2 is -
 The first difference for an increase in the mental health index from 5 to 6 is -0.0348.
 
 ``` r
-health %>% 
+health_vals %>% 
   ggplot(aes(x = mhealth_sum, y = pred)) + 
   geom_line() + 
   labs(x = "Mental Health Index", 
@@ -157,7 +165,7 @@ cat("First Difference from an increase in mental health index = ", probability(5
 
 #### Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
 
-It is a decent model, it results in an improvement of
+It is a decent model, it results in an improvement of 16.1% from the baseline model. The accuracy rate in predicting voter turnout is 66.8%. The proportional reduction in error is 16.1% and the AUC of the model is 0.668. The confusion matrix can be found below.
 
 ``` r
 logit2prob <- function(x){
@@ -236,81 +244,156 @@ confusionMatrix(mh_accuracy$pred2, mh_accuracy$vote96)
 
 ### Multiple variable model (3 points)
 
-Our GLM of voter turnout consists of three components:
-
-Firstly, we assume our outcome variable, voter turnout, is drawn from the binomial distribution with probability *π*, given the values of the predicator variables in the model. *π* is the probability that, for any observation *i*, *Y* will take on the particular value *Y*<sub>*i*</sub>.
-In our model, *Y*<sub>*i*</sub> takes on the expected value of 1 with probability *π* and 0 with probability 1 − *π*, so *π*<sub>*i*</sub> is the conditional probability of sampling a 1 in this group.
+Firstly, we assume our outcome variable, voter turnout, is drawn from the binomial distribution with probability *π*, given the values of the predicator variables in the model. In our model, *Y*<sub>*i*</sub> takes on the expected value of 1 with probability *π* and 0 with probability 1 − *π*, so *π*<sub>*i*</sub> is the conditional probability of sampling a 1 in this group.
 
 Pr(*Y*<sub>*i*</sub> = *y*<sub>*i*</sub>|*π*) = *π*<sub>*i*</sub><sup>*y*<sub>*i*</sub></sup> (1 − *π*<sub>*i*</sub>)<sup>1 − *y*<sub>*i*</sub></sup>
 
-``` r
-health %>% 
-  filter(!is.na(vote96)) %>%
-  ggplot() + 
-  geom_histogram(aes(x = vote96, 
-                     y = ..density..), 
-                 fill = "deepskyblue1", 
-                 na.rm = TRUE) + 
-  labs(x = "Voter Turnout") + 
-  scale_x_continuous(breaks = c(0,1), 
-                   labels = c("Did not vote", "Voted")) #fix density
-```
-
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-8-1.png)
-
 Secondly, since the probability of voter turnout may systematically vary to given known predictors, we incorporate that into the model with a linear predictor. The linear predictor is:
-*g*(*π*<sub>*i*</sub>)≡*ρ*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*h**e**a**l**t**h*<sub>*i*</sub> + *β*<sub>2</sub>*a**g**e*<sub>*i*</sub> + *β*<sub>3</sub>*e**d**u**c*<sub>*i*</sub> + *β*<sub>4</sub>*b**l**a**c**k*<sub>*i*</sub> + *β*<sub>5</sub>*f**e**m**a**l**e*<sub>*i*</sub> + *β*<sub>6</sub>*m**a**r**r**i**e**d*<sub>*i*</sub> + *β*<sub>7</sub>*i**n**c**o**m**e*<sub>*i*</sub> + *ϵ*<sub>*i*</sub>
+*g*(*π*<sub>*i*</sub>)≡*ρ*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*h**e**a**l**t**h*<sub>*i*</sub> + *β*<sub>2</sub>*a**g**e*<sub>*i*</sub> + *β*<sub>3</sub>*e**d**u**c*<sub>*i*</sub> + *β*<sub>4</sub>*b**l**a**c**k*<sub>*i*</sub> + *β*<sub>5</sub>*m**a**r**r**i**e**d*<sub>*i*</sub> + *β*<sub>6</sub>*i**n**c**o**m**e*<sub>*i*</sub>
 
 Thirdly, we use a logit link function to constrain the linear predictor to the \[0,1\] range. A link function, *g*(*π*<sub>*i*</sub>) = *e*<sup>*ρ*<sub>*i*</sub></sup> / (1 + *e*<sup>*ρ*<sub>*i*</sub></sup>), transforms the expectation of the vector turnout to the linear predictor.
 
+The results of the estimated multivariate logistic regression can be found below:
+
 ``` r
-voter <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = health, family = binomial)
+health <- health %>% 
+  na.omit()
+
+voter <- glm(vote96 ~ mhealth_sum + age + educ + black + married + inc10, data = health, family = binomial)
 
 summary(voter)
 ```
 
     ## 
     ## Call:
-    ## glm(formula = vote96 ~ mhealth_sum + age + educ + black + female + 
-    ##     married + inc10, family = binomial, data = health)
+    ## glm(formula = vote96 ~ mhealth_sum + age + educ + black + married + 
+    ##     inc10, family = binomial, data = health)
     ## 
     ## Deviance Residuals: 
     ##     Min       1Q   Median       3Q      Max  
-    ## -2.4657  -1.0406   0.5544   0.8893   2.0390  
+    ## -2.4874  -1.0223   0.5169   0.8401   2.0791  
     ## 
     ## Coefficients:
     ##              Estimate Std. Error z value Pr(>|z|)    
-    ## (Intercept) -3.918136   0.559168  -7.007 2.43e-12 ***
-    ## mhealth_sum -0.103186   0.027633  -3.734 0.000188 ***
-    ## age          0.040388   0.005378   7.510 5.90e-14 ***
-    ## educ         0.211969   0.032250   6.573 4.94e-11 ***
-    ## black        0.140554   0.220730   0.637 0.524276    
-    ## female       0.053360   0.157010   0.340 0.733971    
-    ## married      0.484264   0.173003   2.799 0.005124 ** 
-    ## inc10        0.043238   0.029856   1.448 0.147550    
+    ## (Intercept) -4.310342   0.505521  -8.527  < 2e-16 ***
+    ## mhealth_sum -0.089026   0.023635  -3.767 0.000165 ***
+    ## age          0.042493   0.004802   8.849  < 2e-16 ***
+    ## educ         0.228503   0.029492   7.748 9.33e-15 ***
+    ## black        0.272160   0.202472   1.344 0.178890    
+    ## married      0.297030   0.153152   1.939 0.052447 .  
+    ## inc10        0.069892   0.026438   2.644 0.008203 ** 
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
     ## (Dispersion parameter for binomial family taken to be 1)
     ## 
-    ##     Null deviance: 1146.29  on 884  degrees of freedom
-    ## Residual deviance:  977.89  on 877  degrees of freedom
-    ##   (178 observations deleted due to missingness)
-    ## AIC: 993.89
+    ##     Null deviance: 1468.3  on 1164  degrees of freedom
+    ## Residual deviance: 1241.8  on 1158  degrees of freedom
+    ## AIC: 1255.8
     ## 
     ## Number of Fisher Scoring iterations: 4
 
-Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-odds, odds, predicted probabilities, and first differences - choose what makes sense to you and provides the most value to the reader. Use graphs and tables as necessary to support your conclusions.
+From the regression results, we can identify that the mental health, age, education level and income are statistically significant in affecting voter turnout at a 1% significance level. For the ease of interpreting the coefficients, we exponentiate the estimated coefficients to interpret them as odd ratios.
 
-In this multivariate logistic regression model, the response variable is the binary voter turnout variable where 1 means the respondent voted and 0 means the respondent did not vote. The predictors include the mental health index, age, education, race (Black or not), gender (female or not), marital status (married or not), and family income (in $10,000s). The regression results indicate that four of the coefficients are statistically significant; these coefficients are, respectively, -0.089102 for the mental health index, 0.042534 for age, 0.228686 for education and 0.069614 for income. These coefficients are given in terms of log-odds.
+``` r
+coeff_1 <- exp(coef(voter))
+coeff_1[3]
+```
 
-In terms of odds, hold other variables constant, a unit increase in the mental health index leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 0.9147523. Likewise, holding other variables constant, one year increase in age leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.043452. Again, holding other variables constant, one year increase in the number of years of formal education leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.256947. Finally, holding other variables constant, a unit increase in income leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.072094. In terms of predicted probabilities, these values correspond to, respectively, a multiplicative factor of 0.4777392 for each unit increase in the mental health index holding other variables constant, 0.510632 for age, 0.5569236 for educaiton, and 0.5173964 for income.
+    ##      age 
+    ## 1.043409
+
+For a one unit increase in the mental health index (more depressed), the odds of voting (versus not voting) changes by a factor of 0.9148215, given that the rest of the variables remain unchanged.
+
+``` r
+#add predictions and create factor variables 
+health1 <- health %>%
+  data_grid(mhealth_sum, age, educ, black, married, inc10) %>%
+  add_predictions(voter) %>%
+  mutate(prob = logit2prob(pred), 
+         odds = prob2odds(prob)) %>%
+  mutate(inc_lvl = cut(inc10, 
+                       breaks = 4, 
+                       labels = c("Low income", "Low-middle income", "Middle-high income", "High income"))) %>% 
+  mutate(educ_lvl = cut(educ, breaks = c(-0.99, 12, 20.1),
+                        labels = c("High School or Lower", "Tertiary Education"))) 
+
+health1 %>% 
+  group_by(mhealth_sum) %>% 
+  summarize(mean_odds = mean(odds)) %>% 
+  ggplot() + 
+  geom_line(aes(x = mhealth_sum, y = mean_odds)) + 
+  labs(x = "Mental health index", 
+       y = "Odds") + 
+  ggtitle("Relationship between odds of voting and mental health index")
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-10-1.png)
+
+For a year increase in age, the odds of voting (versus not voting) changes by a factor of 1.0434091, given that the rest of the variables remain unchanged. The graph below evidences the increase in odds of voting as individuals become older, given the rest of the variables remain unchanged.
+
+``` r
+health1 %>% 
+  group_by(age) %>% 
+  summarize(mean_odds = mean(odds)) %>% 
+  ggplot() + 
+  geom_line(aes(x = age, y = mean_odds)) + 
+  labs(x = "Age", 
+       y = "Odds") + 
+  ggtitle("Relationship between odds of voting and age")
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-11-1.png)
+
+For a year increase in maximum years of education, the odds of voting (versus not voting) changes by a factor of 1.256717, given that the rest of the variables remain unchanged. We differentiate individuals who have attained tertiary education from individuals who did not, and showed that the odds of voting are much higher for individuals who have attended tertiary education, when compared with individuals who have not.
+
+``` r
+health1 %>%
+  group_by(educ_lvl, mhealth_sum) %>%
+  mutate(mean_odds  = mean(odds)) %>%
+  ggplot(aes(x = mhealth_sum, y = mean_odds)) +
+  geom_line(aes(color = factor(educ_lvl)), size = 1.3) + 
+  labs(x = "Mental Health Index", 
+       y = "Odds") + 
+  scale_color_discrete(name = "Education Level") + 
+  ggtitle("Relationship between mental health and odds of voting by education level")
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-12-1.png)
+
+For a unit ($10,000) increase in family income, the odds of voting (versus not voting) changes by a factor of 1.0723923, given that the rest of the variables remain unchanged. We categorized family income by the quantile ranges, where bottom 25%, 25-50%, 50-75%, 75-100% percentile are low-income, low-middle income, high-middle income, and high income respectively. The graph shows the increase in odds to vote as family income increases.
+
+``` r
+health1 %>%
+  group_by(inc_lvl, mhealth_sum) %>%
+  mutate(mean_odds  = mean(odds)) %>%
+  ggplot(aes(x = mhealth_sum, y = mean_odds)) +
+  geom_line(aes(color = factor(inc_lvl)), size = 1.3) + 
+  labs(x = "Mental Health Index", 
+       y = "Odds") + 
+  scale_color_discrete(name = "Family Income") +
+  ggtitle("Relationship between mental health and odds of voting by family income level")
+```
+
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-13-1.png)
+
+``` r
+health_acc <- health %>% 
+  add_predictions(voter) %>% 
+  mutate(pred = logit2prob(pred), 
+         pred = as.numeric(pred > .5))
+
+mean(health_acc$vote96 == health_acc$pred)
+```
+
+    ## [1] 0.7236052
 
 Part 2: Modelling TV Consumption
 --------------------------------
 
 ``` r
-gss <- read.csv("./data/gss2006.csv")
+gss <- read.csv("./data/gss2006.csv") %>% 
+  na.omit()
 ```
 
 ### Describe the data
@@ -319,7 +402,6 @@ gss <- read.csv("./data/gss2006.csv")
 
 ``` r
 gss %>% 
-  filter(!is.na(tvhours)) %>%
   ggplot() + 
   geom_histogram(aes(x = tvhours), fill = "deepskyblue1", binwidth=2) + 
   labs(x = "Number of hours of TV watched per day", 
@@ -327,7 +409,7 @@ gss %>%
        title = "Histogram of TV hours watched per day") 
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-11-1.png)
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-15-1.png)
 
 ### Multivariate Poisson Regression Model of Hours of TV Watched
 
@@ -347,7 +429,7 @@ In our model of predicting number of hours of TV watched per day, we include the
 Thus, the linear predictor of our model is:
 
 *η*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*a**g**e* + *β*<sub>2</sub>*c**h**i**l**d**r**e**n* + *β*<sub>3</sub>*e**d**u**c* + *β*<sub>4</sub>*f**e**m**a**l**e* + *β*<sub>5</sub>*h**r**s**r**e**l**a**x* + *β*<sub>6</sub>*b**l**a**c**k*
-+*β*<sub>7</sub>*s**o**c**i**a**l*<sub>*c*</sub>*o**n**n**e**c**t* + *β*<sub>8</sub>*v**o**t**e**d*04 + *β*<sub>9</sub>*x**m**o**v**i**e* + *ϵ*<sub>*i*</sub>
++*β*<sub>7</sub>*s**o**c**i**a**l*<sub>*c*</sub>*o**n**n**e**c**t* + *β*<sub>8</sub>*v**o**t**e**d*04 + *β*<sub>9</sub>*x**m**o**v**i**e*
 
 The link function for the poisson distribution is:
 *μ*<sub>*i*</sub> = log(*η*<sub>*i*</sub>)
@@ -355,41 +437,40 @@ The link function for the poisson distribution is:
 The results of the estimated multivariate poisson model is as follows:
 
 ``` r
-tv_hours <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = poisson)
+tv_hours <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = "poisson")
 summary(tv_hours)
 ```
 
     ## 
     ## Call:
     ## glm(formula = tvhours ~ age + childs + educ + female + hrsrelax + 
-    ##     black + social_connect + voted04 + xmovie, family = poisson, 
+    ##     black + social_connect + voted04 + xmovie, family = "poisson", 
     ##     data = gss)
     ## 
     ## Deviance Residuals: 
     ##     Min       1Q   Median       3Q      Max  
-    ## -2.9656  -0.7125  -0.0833   0.4486   5.3006  
+    ## -2.9524  -0.7159  -0.0933   0.4483   5.2854  
     ## 
     ## Coefficients:
     ##                 Estimate Std. Error z value Pr(>|z|)    
-    ## (Intercept)     1.001794   0.197884   5.063 4.14e-07 ***
-    ## age             0.001022   0.002668   0.383   0.7016    
-    ## childs         -0.005058   0.022149  -0.228   0.8194    
-    ## educ           -0.027138   0.011410  -2.378   0.0174 *  
-    ## female          0.012445   0.060887   0.204   0.8380    
-    ## hrsrelax        0.046949   0.009637   4.872 1.11e-06 ***
-    ## black           0.434400   0.069766   6.227 4.77e-10 ***
-    ## social_connect  0.031811   0.037713   0.844   0.3989    
-    ## voted04        -0.124845   0.070469  -1.772   0.0765 .  
-    ## xmovie          0.095053   0.068068   1.396   0.1626    
+    ## (Intercept)     1.009725   0.211292   4.779 1.76e-06 ***
+    ## age             0.001446   0.002803   0.516  0.60591    
+    ## childs         -0.004569   0.023648  -0.193  0.84680    
+    ## educ           -0.031671   0.012192  -2.598  0.00938 ** 
+    ## female          0.025798   0.064436   0.400  0.68888    
+    ## hrsrelax        0.046429   0.009889   4.695 2.66e-06 ***
+    ## black           0.435420   0.075115   5.797 6.76e-09 ***
+    ## social_connect  0.044182   0.039929   1.107  0.26850    
+    ## voted04        -0.101066   0.076072  -1.329  0.18399    
+    ## xmovie          0.090070   0.072260   1.246  0.21259    
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
     ## (Dispersion parameter for poisson family taken to be 1)
     ## 
-    ##     Null deviance: 578.52  on 487  degrees of freedom
-    ## Residual deviance: 480.02  on 478  degrees of freedom
-    ##   (4022 observations deleted due to missingness)
-    ## AIC: 1749.4
+    ##     Null deviance: 527.72  on 440  degrees of freedom
+    ## Residual deviance: 440.64  on 431  degrees of freedom
+    ## AIC: 1581.6
     ## 
     ## Number of Fisher Scoring iterations: 5
 
@@ -400,19 +481,18 @@ exp(coef(tv_hours))
 ```
 
     ##    (Intercept)            age         childs           educ         female 
-    ##      2.7231633      1.0010229      0.9949548      0.9732266      1.0125227 
+    ##      2.7448471      1.0014471      0.9954415      0.9688250      1.0261341 
     ##       hrsrelax          black social_connect        voted04         xmovie 
-    ##      1.0480684      1.5440365      1.0323226      0.8826336      1.0997168
+    ##      1.0475241      1.5456117      1.0451722      0.9038732      1.0942512
 
 #### Education and Ethnicity
 
-For a one year increase in maximum years of schooling, the number of TV hours watched per day is expected to decrease by 0.973, given the rest of the variables in the model are held constant. The decline in hours of TV watched per day as maximum education years increase can also be shown in by the overall decreasing trend in the line graphs below. This trend is also valid across black and non-black ethnicities
+For a one year increase in maximum years of schooling, the number of TV hours watched per day is expected to decrease by a factor of 0.973, given the rest of the variables in the model are held constant. The decline in hours of TV watched per day as maximum education years increase can also be shown in by the overall decreasing trend in the line graphs below. This trend is also valid across black and non-black ethnicities
 
-Furthermore, a black individual is, on average, expected to watch 1.54 more hours of TV per day than a non-black individual, given that the rest of the variables in the model are held constant. The differential between hours of TV watched by an average black and non-black individual can be visualized with the disparity between the blue and red lines.
+Furthermore, a black individual is, on average, expected to change by a factor of 1.54 more hours of TV per day than a non-black individual, given that the rest of the variables in the model are held constant. The differential between hours of TV watched by an average black and non-black individual can be visualized with the disparity between the blue and red lines.
 
 ``` r
 gss %>%
-  na.omit() %>%
   add_predictions(tv_hours) %>%
   group_by(educ, black) %>% 
   summarize(pred = mean(exp(pred))) %>%
@@ -425,25 +505,26 @@ gss %>%
                      labels = c("Non-black", "Black"))
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-14-1.png)
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-18-1.png)
 
 #### Taste and Preferences
 
-Unsurprisingly, according to the regression results, individuals who devote more time to relaxation per day are more likely to watch more hours of television. For an hour increase in hours the respondent has to relax, the number of TV hours watched per day is expected to increase by 1.048, given the rest of the variables in the model are held constant.
+Unsurprisingly, according to the regression results, individuals who devote more time to relaxation per day are more likely to watch more hours of television. For an hour increase in hours the respondent has to relax, the number of TV hours watched per day is expected to increase by a factor of 1.048, given the rest of the variables in the model are held constant.
 
 ``` r
 gss %>%
-  na.omit() %>%
+  data_grid(age, childs, educ, female, hrsrelax, black, social_connect, voted04, xmovie) %>%
   add_predictions(tv_hours) %>%
-  group_by(hrsrelax) %>% 
-  summarize(pred = mean(exp(pred))) %>%
+  mutate(pred = exp(pred)) %>%
+  #group_by(hrsrelax) %>% 
+  #summarize(pred = mean(exp(pred))) %>%
   ggplot(aes(x = hrsrelax, y = pred)) +
-  geom_line() +
+  geom_point() +
   labs(y = "Predicted Number of Hours of TV watched per day", 
        x = "Hours per day Respondent has to Relax")
 ```
 
-![](voter_turnout_files/figure-markdown_github/unnamed-chunk-15-1.png)
+![](voter_turnout_files/figure-markdown_github/unnamed-chunk-19-1.png)
 
 #### Over or under-dispersion
 
@@ -462,28 +543,27 @@ summary(tv_disp)
     ## 
     ## Deviance Residuals: 
     ##     Min       1Q   Median       3Q      Max  
-    ## -2.9656  -0.7125  -0.0833   0.4486   5.3006  
+    ## -2.9524  -0.7159  -0.0933   0.4483   5.2854  
     ## 
     ## Coefficients:
     ##                 Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept)     1.001794   0.206888   4.842 1.74e-06 ***
-    ## age             0.001022   0.002789   0.366   0.7142    
-    ## childs         -0.005058   0.023157  -0.218   0.8272    
-    ## educ           -0.027138   0.011929  -2.275   0.0234 *  
-    ## female          0.012445   0.063657   0.196   0.8451    
-    ## hrsrelax        0.046949   0.010075   4.660 4.11e-06 ***
-    ## black           0.434400   0.072940   5.956 5.03e-09 ***
-    ## social_connect  0.031811   0.039429   0.807   0.4202    
-    ## voted04        -0.124845   0.073675  -1.695   0.0908 .  
-    ## xmovie          0.095053   0.071165   1.336   0.1823    
+    ## (Intercept)     1.009725   0.223230   4.523 7.88e-06 ***
+    ## age             0.001446   0.002961   0.488   0.6256    
+    ## childs         -0.004569   0.024984  -0.183   0.8550    
+    ## educ           -0.031671   0.012880  -2.459   0.0143 *  
+    ## female          0.025798   0.068077   0.379   0.7049    
+    ## hrsrelax        0.046429   0.010447   4.444 1.12e-05 ***
+    ## black           0.435420   0.079359   5.487 7.00e-08 ***
+    ## social_connect  0.044182   0.042185   1.047   0.2955    
+    ## voted04        -0.101066   0.080370  -1.258   0.2092    
+    ## xmovie          0.090070   0.076343   1.180   0.2387    
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## (Dispersion parameter for quasipoisson family taken to be 1.093068)
+    ## (Dispersion parameter for quasipoisson family taken to be 1.116193)
     ## 
-    ##     Null deviance: 578.52  on 487  degrees of freedom
-    ## Residual deviance: 480.02  on 478  degrees of freedom
-    ##   (4022 observations deleted due to missingness)
+    ##     Null deviance: 527.72  on 440  degrees of freedom
+    ## Residual deviance: 440.64  on 431  degrees of freedom
     ## AIC: NA
     ## 
     ## Number of Fisher Scoring iterations: 5
