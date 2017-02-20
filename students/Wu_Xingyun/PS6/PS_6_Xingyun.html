@@ -237,8 +237,8 @@ The graph below plots the relationship between `mental health` and `voter turnou
 <li>My model of interest is the relationship between <code>TV consumption</code>, and <code>age</code>, <code>education</code> and <code>social connectedness</code>. Firstly, older people may have more spare time to watch TV, so <code>age</code> is used in this model. Secondly, people with more years of education may spend more time in reading instead of watching TV, which is why <code>education</code> is included. Thirdly, people of different races may have different culture, thus prefer different types of entertainment. So I also include the variable <code>black</code> into my model.
 <ol style="list-style-type: decimal">
 <li>The probability distribution is Poisson distribution.</li>
-<li>The linear predictor is: <span class="math display">\[Pr(tvhours = k|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}\]</span></li>
-<li>The link function is: <span class="math display">\[g(vote96_i) = \log(tvhours_{i})\]</span></li>
+<li>The linear predictor is: <span class="math display">\[\eta_i=\beta_0+\beta_1*age_i+\beta_2*education_i+\beta_3*social_connect_i\]</span></li>
+<li>The link function is: <span class="math display">\[log(\mu_i) = \eta_i\]</span></li>
 </ol></li>
 <li>The results of my model of interes is shown as below.</li>
 </ol>
