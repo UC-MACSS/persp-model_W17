@@ -245,12 +245,13 @@ In our model of predicting number of hours of TV watched per day, we include the
 9. `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise   
 
 Thus, the linear predictor of our model is:  
+
 $$\eta_{i} = \beta_{0} + \beta_{1}age + \beta_{2}children + \beta_{3}educ + \beta_{4}female + \beta_{5}hrsrelax + \beta_{6}black$$ $$+ \beta_{7}social_connect + \beta_{8}voted04 + \beta_{9}xmovie + \epsilon_i$$
 
 The link function for the poisson distribution is:  
 $$\mu_{i} = \log(\eta_{i})$$
 
-The results of the estimated multivariate poisson model is as follows:
+The results of the estimated multivariate poisson model is as follows:  
 ```{r}
 tv_hours <- glm(tvhours ~ age + childs + educ + female + hrsrelax + black + social_connect + voted04 + xmovie, data = gss, family = poisson)
 summary(tv_hours)

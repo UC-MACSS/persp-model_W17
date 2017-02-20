@@ -333,7 +333,10 @@ gss %>%
 
 Firstly, we assume our outcome variable, number of hours of TV watched, is drawn from a poisson distribution, where Pr(*T**V**h**o**u**r**s*<sub>*i*</sub> = *k*|*μ*) = (*μ*<sup>*k*</sup>*e*<sup>−*μ*</sup>) / *k*! .
 
-In our model of predicting number of hours of TV watched per day, we include the following additional variables: <br> 1. `age` - Age (in years) <br> 1. `childs` - Number of children <br> 3. `educ` - Highest year of formal schooling completed
+In our model of predicting number of hours of TV watched per day, we include the following additional variables:
+1. `age` - Age (in years)
+2. `childs` - Number of children
+3. `educ` - Highest year of formal schooling completed
 4. `female` - 1 if female, 0 if male
 5. `hrsrelax` - Hours per day respondent has to relax
 6. `black` - 1 if respondent is black, 0 otherwise
@@ -342,6 +345,7 @@ In our model of predicting number of hours of TV watched per day, we include the
 9. `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise
 
 Thus, the linear predictor of our model is:
+
 *η*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*a**g**e* + *β*<sub>2</sub>*c**h**i**l**d**r**e**n* + *β*<sub>3</sub>*e**d**u**c* + *β*<sub>4</sub>*f**e**m**a**l**e* + *β*<sub>5</sub>*h**r**s**r**e**l**a**x* + *β*<sub>6</sub>*b**l**a**c**k*
 +*β*<sub>7</sub>*s**o**c**i**a**l*<sub>*c*</sub>*o**n**n**e**c**t* + *β*<sub>8</sub>*v**o**t**e**d*04 + *β*<sub>9</sub>*x**m**o**v**i**e* + *ϵ*<sub>*i*</sub>
 
