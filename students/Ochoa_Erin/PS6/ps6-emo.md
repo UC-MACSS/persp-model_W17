@@ -8,23 +8,10 @@ Erin M. Ochoa
     -   [Estimating a basic logistic model](#estimating-a-basic-logistic-model)
     -   [Multiple variable model](#multiple-variable-model)
 -   [Part 2: Modeling television consumption](#part-2-modeling-television-consumption)
-    -   [Estimate a regression model (3 points)](#estimate-a-regression-model-3-points)
--   [Submission instructions](#submission-instructions)
-    -   [If you use R](#if-you-use-r)
+    -   [Estimate a regression model](#estimate-a-regression-model)
 
 Part 1: Modeling voter turnout
 ==============================
-
-The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
-
--   `vote96` - 1 if the respondent voted in the 1996 presidential election, 0 otherwise
--   `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)[1]
--   `age` - age of the respondent
--   `educ` - Number of years of formal education completed by the respondent
--   `black` - 1 if the respondent is black, 0 otherwise
--   `female` - 1 if the respondent is female, 0 if male
--   `married` - 1 if the respondent is currently married, 0 otherwise
--   `inc10` - Family income, in $10,000s
 
 We begin by reading in the data. Because it does not make sense to consider respondents for whom either voting behavior or depression index score is missing, we subset the data to include only those respondents with valid responses in both variables. We also add a factor-type variable to describe voting; this will decrease the time necessary to construct plots.
 
@@ -61,6 +48,17 @@ Estimating a basic logistic model
 First, we define the functions necessary in this section:
 
 ``` r
+PRE = function(model){
+  y = model$y
+  y.hat = round(model$fitted.values)
+  
+  E1 = sum(y != median(y))
+  E2 = sum(y != y.hat)
+  
+  PRE = (E1 - E2) / E1
+  return(PRE)
+}
+
 logit2prob = function(x){
   exp(x) / (1 + exp(x))
 }
@@ -182,11 +180,6 @@ ar = mean(voted_depression_accuracy$vote96 == voted_depression_accuracy$pred, na
 
 uc = median(df$vote96)
 
-e1 = sum(df$vote96 != uc)
-e2 = sum(voted_depression_accuracy$pred != uc, na.rm = TRUE)
-
-pre = (e1 - e2) / e1
-
 cm.5_voted_depression <- confusionMatrix(voted_depression_accuracy$pred, voted_depression_accuracy$vote96,
                          dnn = c("Prediction", "Actual"), positive = '1')
 
@@ -214,11 +207,11 @@ Using a threshold value of .5, we estimate the accuracy rate of the logistic mod
 
 We find that the useless classifier for this data predicts that all voters will vote; because the voter variable is dichotomous, we find this by simply taking the median of the distribution: 1.
 
-With the useless classifier (which predicts all respondents will vote), we find that the proportional reduction in error is 0.7344111. This means that the model based only on depression index scores provides an improvement in the proportional reduction in error of 73.4411085% over the useless-classifier model.
+With the useless classifier (which predicts all respondents will vote), we find that the proportional reduction in error is 0.0161663. This means that the model based only on depression index scores provides an improvement in the proportional reduction in error of 1.6166282% over the useless-classifier model.
 
-The AUC score for this model is 0.6243087.
+The AUC for this model is 0.6243087.
 
-This model's performance is mediocre, but we temper that by considerin that it uses only one predictor. With a moderately high proportional reduction in error based on the 50% threshold as well as moderate accuracy rate and AUC, the model performs surprisingly well given the single predictor, depression index score, on which it is based. We expect to improve the model by including additional predictors.
+This model's performance is poor, but we temper that by considering that it uses only one predictor. We expect to improve the model by including additional predictors.
 
 For good measure we plot the accuracy, sensitivity, and specificy rates for thresholds between 0 and 1:
 
@@ -230,7 +223,7 @@ We also plot the ROC curve:
 
 ![](ps6-emo_files/figure-markdown_github/roc_plot-1.png)
 
-We can see that the ROC curve falls above the graph's diagonal, which means that the model performs better than simply guessing. The area under the curve is 0.6243087, implying that model performance is weak.
+We can see that the ROC curve falls above the graph's diagonal, which means that the model performs better than simply guessing, but not by much. The area under the curve is 0.6243087, implying that model performance is poor. Given the moderate AUC (0.6243087) but very low PRE (0.0161663), we conclude that this model is weak.
 
 Multiple variable model
 -----------------------
@@ -370,11 +363,6 @@ ar_mv = mean(voted_mv_accuracy$vote96 == voted_mv_accuracy$pred, na.rm = TRUE)
 
 uc_mv = median(voted_mv_accuracy$vote96)
 
-e1_mv = sum(voted_mv_accuracy$vote96 != uc_mv)
-e2_mv = sum(voted_mv_accuracy$pred != uc_mv, na.rm = TRUE)
-
-pre_mv = (e1_mv - e2_mv) / e1_mv
-
 cm.5_mv = confusionMatrix(voted_mv_accuracy$pred, voted_mv_accuracy$vote96,
                          dnn = c("Prediction", "Actual"), positive = '1')
 
@@ -399,7 +387,7 @@ threshold_x_mv = seq(0, 1, by = .001) %>%
 auc_x_voted_mv = auc(voted_mv_accuracy$vote96, voted_mv_accuracy$pred)
 ```
 
-The multivariate model has a proportional error reduction of 48.5488127% over the useless-classifier model. This is not as high an improvement as we saw with the bivariate model.
+The multivariate model has a proportional error reduction of `PRE(logit_voted_mv) * 100`% over the useless-classifier model. This is a greater reduction than we saw with the bivariate model.
 
 ![](ps6-emo_files/figure-markdown_github/amv_r_vs_threshold_plot-1.png)
 
@@ -422,27 +410,16 @@ df2 = df2[(!is.na(df2$tvhours) & !is.na(df2$hrsrelax) & !is.na(df2$social_connec
 df2$social_connect = factor(df2$social_connect, labels = c("Low", "Medium", "High"))
 ```
 
-In this part of the problem set, you are going to derive and estimate a series of models to explain and predict TV consumption, or the number of hours of TV watched per day. As this is an event count, you will use Poisson regression to model the response variable. `gss2006.csv` contains a subset of the 2006 survey which contains many variables you can use to construct a model.
+We have chosen to investigate the effect of relaxation hours and social connectedness on television consumption. We expect that relaxation hours will have a positive effect on television consumption, while social connectedness will have a negative effect.
 
--   `tvhours` - The number of hours of TV watched per day
--   `age` - Age (in years)
--   `childs` - Number of children
--   `educ` - Highest year of formal schooling completed
--   `female` - 1 if female, 0 if male
--   `grass` - 1 if respondent thinks marijuana should be legalized, 0 otherwise
--   `hrsrelax` - Hours per day respondent has to relax
--   `black` - 1 if respondent is black, 0 otherwise
--   `social_connect` - Ordinal scale of social connectedness, with values low-moderate-high (0-1-2)
--   `voted04` - 1 if respondent voted in the 2004 presidential election, 0 otherwise
--   `xmovie` - 1 if respondent saw an X-rated movie in the last year, 0 otherwise
--   `zodiac` - Respondent's [astrological sign](https://en.wikipedia.org/wiki/Astrological_sign)
-
-Estimate a regression model (3 points)
---------------------------------------
+Estimate a regression model
+---------------------------
 
 Using the other variables in the dataset, derive and estimate a multiple variable Poisson regression model of hours of TV watched.
 
-1.  Write out the three components of the GLM for your specific model of interest. This includes the —Probability distribution (random component): Because we are creating a model of the number of hours of television that respondents watch, we use a Poisson distribution:
+1.  We define the three components of the GLM for the model of interest:
+
+—Probability distribution (random component): Because we are creating a model of the number of hours of television that respondents watch, we use a Poisson distribution:
 
 ![](./eq5.png)
 
@@ -454,13 +431,58 @@ Using the other variables in the dataset, derive and estimate a multiple variabl
 
 ![](./eq7.png)
 
-1.  Estimate the model and report your results.
-
 We estimate a Poisson model to explain television consumption with leisure time and social connectedness:
 
 ``` r
-poisson_tv <- glm(tvhours ~ hrsrelax + social_connect, family = "quasipoisson", data = df2)
+poisson_tv <- glm(tvhours ~ hrsrelax + social_connect, family = "poisson", data = df2)
 summary(poisson_tv)
+```
+
+    ## 
+    ## Call:
+    ## glm(formula = tvhours ~ hrsrelax + social_connect, family = "poisson", 
+    ##     data = df2)
+    ## 
+    ## Deviance Residuals: 
+    ##     Min       1Q   Median       3Q      Max  
+    ## -2.8981  -0.9040  -0.2332   0.4077   6.4822  
+    ## 
+    ## Coefficients:
+    ##                      Estimate Std. Error z value Pr(>|z|)    
+    ## (Intercept)          0.702974   0.038316  18.347  < 2e-16 ***
+    ## hrsrelax             0.041523   0.006137   6.766 1.32e-11 ***
+    ## social_connectMedium 0.067613   0.044401   1.523    0.128    
+    ## social_connectHigh   0.066088   0.048398   1.366    0.172    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for poisson family taken to be 1)
+    ## 
+    ##     Null deviance: 1346.9  on 1119  degrees of freedom
+    ## Residual deviance: 1301.0  on 1116  degrees of freedom
+    ## AIC: 4178.4
+    ## 
+    ## Number of Fisher Scoring iterations: 5
+
+1.  Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-counts, predicted event counts, and first differences - choose what makes sense to you and provides the most value to the reader. Is the model over or under-dispersed? Use graphs and tables as necessary to support your conclusions.
+
+We find that hours of relaxation is statistically significant at the p&lt;.001 level; it has a coefficient of 0.0415226, which means that an increase of one hour in relaxation time for a low-connected respondent will result in a 0.0415226-fold increase in the mean number of television hours consumed. This effect is statistically significant, but does not seem substantively significant.
+
+Contrary to our earlier expectation, social connectedness is not statistically significant.
+
+![](ps6-emo_files/figure-markdown_github/poisson_log_count_plot-1.png)
+
+The predicted log-count of television hours increases linearly with hours of relaxation. Additionally, respondents with medium and high social connectedness have the same predicted log-count of television consumption, which is in all cases higher than the predictions for low-connected respondents.
+
+![](ps6-emo_files/figure-markdown_github/poisson_tv_predicted_count_plot-1.png)
+
+We can see that the predicted count of television hours increases with hours of relaxation. Additionally, and somewhat counter to what we expected, respondents with medium and high social connectedness have higher television consumption than respondents with low connectedness. This suggests that television watching occurs more frequently as a social event than it does as an individual activity.
+
+In order to test for under- or over-dispersion, we estimate a quasipoisson model with the same variables:
+
+``` r
+quasipoisson_tv <- glm(tvhours ~ hrsrelax + social_connect, family = "quasipoisson", data = df2)
+summary(quasipoisson_tv)
 ```
 
     ## 
@@ -489,41 +511,4 @@ summary(poisson_tv)
     ## 
     ## Number of Fisher Scoring iterations: 5
 
-``` r
-df2 %>%
-  data_grid(hrsrelax, social_connect) %>%
-  add_predictions(poisson_tv) %>%
-  ggplot(aes(hrsrelax, pred, color=social_connect)) +
-  geom_line(size = 1.5) +
-  labs(x = "Hours of Relaxation",
-       y = "Predicted log-count of television hours")
-```
-
-![](ps6-emo_files/figure-markdown_github/poisson_log_count_plot-1.png)
-
-``` r
-df2 %>%
-  data_grid(hrsrelax, social_connect) %>%
-  add_predictions(poisson_tv) %>%
-  mutate(pred = exp(pred)) %>%
-  ggplot(aes(hrsrelax, pred, color=social_connect)) +
-  geom_line(size=1.5) +
-  labs(x = "Hours of Relaxation",
-       y = "Predicted count of television hours")
-```
-
-![](ps6-emo_files/figure-markdown_github/poisson_tv_predicted_count_plot-1.png)
-
-1.  Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-counts, predicted event counts, and first differences - choose what makes sense to you and provides the most value to the reader. Is the model over or under-dispersed? Use graphs and tables as necessary to support your conclusions.
-
-Submission instructions
-=======================
-
-Assignment submission will work the same as earlier assignments. Submit your work as a pull request before the start of class on Monday. Store it in the same locations as you've been using. However the format of your submission should follow the procedures outlined below.
-
-If you use R
-------------
-
-Submit your assignment as a single [R Markdown document](http://rmarkdown.rstudio.com/). R Markdown is similar to Juptyer Notebooks and compiles all your code, output, and written analysis in a single reproducible file.
-
-[1] The variable is an index which combines responses to four different questions: "In the past 30 days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.
+The dispersion parameter for the quasipoisson distriubution is 1.347905; this indicates that the model is over-dispersed (the true variance of the distribution is greater than its mean) and that therefore the Poisson distribution is not the most appropriate random component for the model.
