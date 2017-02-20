@@ -8,18 +8,12 @@ output: html_document
 ``` {r, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, warning = FALSE)
 
-library(ggplot2)
-library(tidyverse)
 library(tidyverse)
 library(modelr)
-library(broom)
-library(forcats)
-library(tidyverse)
-library(modelr)
-library(broom)
-library(forcats)
 library(pROC)
 ```
+
+# Description 
 
 ``` {r, Q 1.1.1}
 targetFile <- "data/mental_health.csv"
@@ -30,12 +24,12 @@ qplot(vote96, data=data, geom="histogram", main = "Voter turnout", binwidth = 1,
 
 probVote <- sum(data$vote96, na.rm=TRUE) / length(data$vote96)
 
-sprintf("%.2f", probVote)
+
 ```
 
+The probability of turning out out vote (assuming `NA`s did not vote) is `r sprintf("%.2f", probVote)`.
 
 ``` {r, Q 1.1.2}
-
 ggplot(data, aes(mhealth_sum, vote96)) +
   geom_point() +
   geom_smooth(method = lm) +
@@ -43,10 +37,16 @@ ggplot(data, aes(mhealth_sum, vote96)) +
   scale_y_continuous(limits = c(0, 1))
 ```
 
+The plot tells us that having a low mental heath score (where low means healthier) is associated more highly with voting. Unfortunately since for each score there are only 3 possible values which is much to small a range, for a linear fit to work well since it assumes the range and domain are both intervals over $\mathbb{R}$.
+
+# Basic Model
+
 ``` {r, Q 1.2.1}
 svLogit = glm(vote96 ~ mhealth_sum, data = data, family = binomial)
 summary(svLogit)
 ```
+
+The p-value for the mental health score's effect on voting is quite low at $3 * 10^{-13}$ which means it is statistically significant. The value is has is $-.14$ which when exponentiated gives `r exp(-.14)` $~ .8$ which is the ratio of change in voting likelihood caused by an increase in 1 on the mental health scale. This means increasing by 1 on the health scale, decreases the likelihood of voting by almost $20%$ Which indicates the relationship is substantive.
 
 ``` {r, Q 1.2.2}
 #From notes
@@ -75,6 +75,7 @@ ggplot(vote96_pred, aes(mhealth_sum, pred)) +
     y = "Log-odds of voting")
 ```
 
+Nice linear relationship, the slope is `r svLogit$coefficients[2]` which is also the $\beta_1$ discussed above.
 
 ``` {r, Q 1.2.3}
 ggplot(vote96_pred, aes(mhealth_sum, odds)) +
@@ -84,6 +85,8 @@ ggplot(vote96_pred, aes(mhealth_sum, odds)) +
     x = "Mental Health rating",
     y = "Odds of voting")
 ```
+
+This plot shows the odds increasing by a factor of $e^{\beta_1}$ for each increase in mental health score, leading to the inverse curve.
 
 ``` {r, Q 1.2.4}
 ggplot(vote96_pred, aes(mhealth_sum, prob)) +
@@ -103,6 +106,11 @@ diff56 <- grid[7,] - grid[6,]
 diff56 <- diff56$prob
 ```
 
+The plot shows that the probability decrease from increasing score is nearly linear.
+
+There is a change of `r diff12` probability of voting from going from 1 to 2.
+
+There is a change of `r diff56` probability of voting from going from 5 to 5.
 
 ``` {r, Q 1.2.5}
 #From notes
@@ -132,6 +140,17 @@ pre <- PRE(svLogit)
 
 auc_val <- auc(vote96_accuracy$vote96, vote96_accuracy$pred)
 ```
+
+The accuracy rate is `r ac`, the PRE is `r pre` and the AUC is `r auc_val` for this model. These indicate that the model is better than random guessing but not by a large amount (`r auc_val - .5` to be exact).
+
+# Multivariate Model
+
+For the model used below
+
++ The probability distribution is a single Bernoulli trial $Prob(vote96 == 1) = p(1 - p)$
++ The linear predictor is $g(\mu) = \beta_0 + \beta_1 mhealth\_sum + \beta_2 age + \beta_3 educ + \beta_4 black + \beta_5 female + \beta_6 married + \beta_7 inc10$
++ The link function is $p = \frac{e^{\eta}}{1 + e^{\eta}}$
+
 
 ``` {r, Q 1.3.2}
 mvLogit <- glm(vote96 ~ . , data = data, family = binomial)
