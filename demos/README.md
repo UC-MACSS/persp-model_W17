@@ -22,3 +22,8 @@ Demonstration scripts for MACS 30100
 
 * [Statistical learning: resampling methods](http://cfss.uchicago.edu/persp006_resampling.html)
 * [Slides for resampling methods](http://cfss.uchicago.edu/extras/persp_resampling_slides.html)
+
+# Non-linearity in linear models
+
+* [Statistical learning: moving beyond linearity](http://cfss.uchicago.edu/persp007_nonlinear.html)
+* [Slides for non-linearity](http://cfss.uchicago.edu/extras/persp_nonlinear_slides.html)
