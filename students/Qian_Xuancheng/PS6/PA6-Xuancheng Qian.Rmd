@@ -1,0 +1,315 @@
+---
+title: "Problem set 6#Xuancheng Qian"
+author: "Xuancheng Qian"
+date: "2/20/2017"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+```
+
+```{r library}
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+library(pander)
+library(xtable)
+library(stargazer)
+library(memisc)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(pROC)
+```
+
+```{r dataset}
+#import data set
+df_mental = read.csv('data/mental_health.csv')
+df_gss = read.csv('data/gss2006.csv')
+#str(df_mental)
+
+
+```
+
+# Part 1: Modeling voter turnout
+##  Describe the data (1 point)
+1. Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels. What is the unconditional probability of a given individual turning out to vote?
+1. Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line. What information does this tell us? What is problematic about this linear smoothing line?
+
+```{r data_mental-hist, echo=FALSE}
+ggplot(df_mental, mapping =aes(vote96, fill = ifelse(vote96 == 1, 'Voted', 'Did not Vote'))) +
+  geom_bar( width = 0.8) + 
+  labs(title = "Distribution of voter turnout in 1996 presidential election ",
+       x = "Observed voter turnout",
+       y = "Frequency count of individuals")+
+   scale_x_continuous(breaks = NULL) +
+  guides(fill = guide_legend(title = ''))
+
+par =round(100 * sum(na.omit(df_mental$vote96))/length(df_mental$vote96), 2)
+
+df_mental = df_mental[!is.na(df_mental$vote96) & !is.na(df_mental$mhealth_sum),]
+
+
+ggplot(df_mental, mapping = aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(title = "Distribution of voter turnout in 1996 presidential election ",
+       x = "Voter turnout",
+       y = "Observed voter turnout")
+```
+
+* For the histogram plot, we remove 219 observations with missing values in voter turnout. And the unconditional probability of a given individual turning out to vote is 62.96%.  
+
+* From the scatterplot, we can see that in general, there exists a negative relationship between mental health and observed voter turnout. Higher mental health value (worse mental health) would decrease respondent's willingness to vote. Our voting turnout is binary (voted or not), however, this linear line indicates the response is continuous which did not explain the relationship between mental health and voter turnout well.
+
+
+## Basic model (3 points)
+
+Estimate a logistic regression model of the relationship between mental health and voter turnout.
+
+```{r basic model, echo=FALSE}
+
+mental_logit = glm(vote96 ~ mhealth_sum, data = df_mental, family = binomial())
+# summary(mental_logit)
+coeff_mental = mental_logit$coefficients[2]
+# stargazer( mental_logit, title="Logistic Regression Results", align=TRUE, type='latex')
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds <- function(x){
+  x / (1 - x)
+}
+
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+grid <- df_mental%>%
+  add_predictions(mental_logit) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+```
+
+
+```{r logit model, results='asis'}
+stargazer( mental_logit, title="Logistic Regression Results", header = FALSE, type='latex',no.space = TRUE)
+
+```
+
+
+* The relationship between mental health and voter turnout is statistically significant as p-value is very small, which is 3.13e-13. The coefficient of mental health is `r coeff_mental` , which indicates that in general, the odds ratio associated with one unit increase in mental health is `r exp(coeff_mental)`, which is 14.347% decrease in the odds of voting and this indicates that relationship is substantively significant in negative directions.
+
+
+```{r mental log-odds plot, echo=FALSE}
+ggplot(grid, aes(x = mhealth_sum))+
+  geom_line(aes(y = logodds))+
+  labs(title = "Log-odds of voting vs. mental health in 1996 presidential election",
+       x = "Mental health",
+       y = "Log-odds of voter turnout")
+```
+
+* One unit increase in mental health (worse mental health) would lead to `r -coeff_mental` decrease by average in the log-odds of voting decision.
+
+
+```{r mental odds plot, echo=FALSE}
+ggplot(grid, aes(x = mhealth_sum))+
+  geom_line(aes(y = odds))+
+  labs(title = "Odds of voting vs. mental health in 1996 presidential election",
+       x = "Mental health",
+       y = "Odds of voter turnout")
+```
+
+* One unit increase in mental health (worse mental health) would lead to 14.347% decrease by average in the odds of voting decision.
+
+```{r mental prob plot, echo=FALSE}
+ggplot(grid, aes(x = mhealth_sum))+
+  geom_line(aes(y = prob))+
+  labs(title = "Probability of voting vs. mental health in 1996 presidential election",
+       x = "Mental health",
+       y = "Probability of voter turnout")
+
+grid_1 <- tibble(mhealth_sum = 0:16) %>%
+  add_predictions(mental_logit) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+df_21 = grid_1[3,]$prob - grid_1[2,]$prob
+df_65 = grid_1[7,]$prob - grid_1[6,]$prob
+```
+
+* One unit increase in mental health (worse mental health) would lead to 0.464 change by average in the probability of voting decision.
+The first difference for an increase in the mental health index from 1 to 2 is `r df_21`, so the probability of voting would decrease by `r round(-100*df_21, 2)`% when the mental health increase from 1 to 2. The first difference for an increase in the mental health index from 5 to 6 is `r df_65`, so the probability of voting would decrease by `r round(-100*df_65, 2)`% when the  mental health increase from 5 to 6.
+
+```{r Accuracy rate-PRE-AUC, echo=FALSE}
+
+grid_2 <- df_mental%>%
+  add_predictions(mental_logit) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(pred = as.numeric(pred > .5))
+
+PRE <- function(model){
+  y <- model$y
+  y.hat = round(model$fitted.values)
+  e1 = sum(y != median(y))
+  e2 = sum(y != y.hat)
+  PRE = (e1 - e2) / e1
+  return(PRE)
+}
+
+acc_rate <- mean(grid_2$pred == grid_2$vote96 , na.rm = TRUE)
+
+pre_mental <- PRE(mental_logit)
+
+auc_mental = auc(grid_2$vote96,grid_2$prob)
+```
+
+The accuracy rate is 67.78%, the proportional reduction in error (PRE) is 1.62%, and the AUC for this model is 62.43%. The model is not a good model. The proportional reduction in error says that this model only reduces 1.62%, which is very small, and the AUC is very close to the performance of random condition.
+
+## Multiple variable model (3 points)
+
+* The probability distribution is Bernoulli distribution.
+$$Pr(\sum_{i=1}^{n}vote96_i = k|p) = \binom{n}{k}p^k(1-p)^{n-k}$$
+* The linear predictor:
+$$vote96_{i} = \beta_{0} + \beta_{1}mhealth_sum + \beta_{2}age + \beta_{3}educ + \beta_{4}black + \beta_{5}female + \beta_{6}married + \beta_{7}inc10$$
+* The link function:
+$$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
+
+```{r full model, echo=FALSE}
+mental_logit_all = glm(vote96 ~., data = df_mental, family = binomial())
+# summary(mental_logit_all)
+# stargazer( mental_logit_all, title="Logistic Regression Results", align=TRUE,type='latex')
+
+grid_3 <- df_mental %>%
+  na.omit() %>%
+  add_predictions(mental_logit_all) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(pred = as.numeric(prob > 0.5))
+
+acc_rate <- mean(grid_3$vote96 == grid_3$pred, na.rm = TRUE)
+
+pre_mental <- PRE(mental_logit_all)
+
+auc_mental = auc(grid_3$vote96,grid_3$prob)
+
+grid_4 <- tibble(mhealth_sum = 0:16,age=25,educ=12,black=1,female=1,married=0,inc10=5) %>%
+  add_predictions(mental_logit_all) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+df_21 = grid_4[3,]$prob - grid_4[2,]$prob
+df_65 = grid_4[7,]$prob - grid_4[6,]$prob
+
+```
+
+```{r multiple logit model, results='asis'}
+stargazer(mental_logit_all,title="Multiple Logistic Regression Results", header = FALSE, type='latex',no.space = TRUE)
+
+```
+
+* In this multiple variable logistic regression model, the response variable is observed voter turnout, which is binary (voted or did not vote). The predictors include mental health index, age, education, race, gender, marital status and family income.The regression results indicate that four of the coefficients are statistically significant; these coefficients are, respectively, -0.089102 for the mental health index, 0.042534 for age, 0.228686 for education and 0.069614 for income. 
+
+The coefficient of mental health index is -0.089102, which means one unit increase in mental health (worse mental health), there would be ` r 0.089102 ` decrease by average in the log-odds of voting, and `r exp(-0.089102)` decrease by average in odds of voting.
+The coefficient of age is 0.042534, which means one unit increase in age, there wouold be `r exp(0.042534)` increase by average in odds of voting.
+The coefficient of education is 0.228686, which means one unit increase in education level, there would be `r exp(0.228686)` increase by average in odds of voting.
+The coefficient of income is 0.069614, which means one unit increase in income there would be `r exp(-0.089102)` increase by average in odds of voting.
+
+The accuracy rate is `r round(100*acc_rate, 2)`%, the proportional reduction in error (PRE) is `r round(100*pre_mental, 2)`%, and the AUC for this model is `r round(100*auc_mental[1], 2)`%. The model is not a good model. The proportional reduction in error says that this model only reduces 14.8%, which is very small, and the AUC is very close to the performance of random condition.
+
+We can also compare the first difference in mental health index with previous model. To fix other predictors, I will use 25-year-old black female with 12 years of education, single, and income of \$50,000. 
+The first difference for an increase in the mental health index from 1 to 2 is `r df_21`, so the probability of voting would decrease by `r round(-100*df_21, 2)`% when the mental health increase from 1 to 2. The first difference for an increase in the mental health index from 5 to 6 is `r df_65`, so the probability of voting would decrease by `r round(-100*df_65, 2)`% when the  mental health increase from 5 to 6.
+
+```{r multiple plot, echo=FALSE}
+
+grid_5 <- df_mental %>%
+  data_grid (mhealth_sum,educ, .model = mental_logit_all)%>%
+  add_predictions(mental_logit_all) %>%
+  mutate(prob = logit2prob(pred))
+
+ggplot(grid_5, aes(x = mhealth_sum, y=prob, color = ifelse(educ > 12, "College", "No college")))+
+  geom_smooth()+
+  labs(title = "Probability of voting vs. mental health in 1996 presidential election",
+       x = "Mental health",
+       y = "Log-odds of voter turnout")+
+  guides(color = guide_legend(''))
+
+```
+
+# Part 2: Modeling TV consumption
+* The probability distribution is Poisson distribution ($y_i$ indicate the TV hours)
+$$Pr(Y_i = y_i | \mu) = \frac{\mu^{y_i}e^{-\mu}}{{y_i}!}$$
+* The linear predictor:
+$$\eta_{i} = \beta_{0} + \beta_{1}age + \beta_{2}childs + \beta_{3}educ + \beta_{4}female + \beta_{5}grass + \beta_{6}hrsrelax + \beta_{7}black$$
+* The link function 
+$$\eta_i= \log(\mu_{i})$$
+
+
+```{r gss model, echo=FALSE}
+df_gss = na.omit(df_gss)
+gss_poisson = glm(tvhours ~ age+childs+educ+female+grass+hrsrelax+black, data = df_gss, family = poisson())
+# summary(gss_poisson)
+# stargazer(gss_poisson, title="Poisson Regression Results", align=TRUE,type='latex')
+
+grid_6 <- df_gss %>%
+  na.omit() %>%
+  add_predictions(gss_poisson)
+
+```
+
+```{r poisson model, results='asis'}
+stargazer(gss_poisson,title="Poisson Regression Results", header = FALSE, type='latex',no.space = TRUE)
+
+dp <- sum(residuals(gss_poisson,type="pearson")^2)/gss_poisson$df.res
+# summary(gss_poisson,dispersion = dp)
+
+```
+In this Poisson regression model, the response variable is the number of TV hours per day. The predictors include age, number of children, education, gender, opinion on legalizing marijuana, hours to relex, and race. The regression results shows that there are three predictors education, hours to relax and race are statistically significant under $\alpha=0.001$.
+
+The coefficient of education is -0.0393047, which means that one unit increase in education would lead to 0.9614577-fold change in the number of hours of watching TV by average.
+The coefficient of hours to relax is 0.0471133, which means one unit increase in hours to relax would lead to 1.048241-fold change in the number of hours of watching TV by average.
+The coefficient of race is 0.4495892, which being black would lead to 1.567668-fold change in the number of hours of watching TV by average.
+
+```{r plot, echo=FALSE}
+plot(predict(gss_poisson),residuals(gss_poisson), xlab ="Fitted",ylab = "Residuals")
+
+```
+
+Then we also look at the residual vs. fitted plot and we see clear evidence of nonconstant variance, we could estimate a dispersion parameter, which is 1.113, indicating that original model is overdispersion and we could adjust our model summary by using quasi-poisson.
+
+```{r quasipoisson, results='asis'}
+gss_quasi = glm(tvhours ~ age+childs+educ+female+grass+hrsrelax+black, data = df_gss, family='quasipoisson')
+
+stargazer(gss_quasi,title="Quasipoisson Regression Results", header = FALSE, type='latex',no.space = TRUE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
