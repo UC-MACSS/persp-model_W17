@@ -1,0 +1,304 @@
+---
+title: "MACSS 30100 PS#6"
+author: "Alice Mee Seon Chung"
+date: "2/18/2017"
+output:
+  pdf_document: 
+  latex_engine: lualatex
+---
+# MACSS PS#6  Alice Mee Seon Chung
+
+# Describe the data 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(pROC)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE)
+
+```
+```{r histogram, include=FALSE}
+mental <- read.csv('mental_health.csv', header=TRUE)
+```
+
+```{r}
+ggplot(mental, aes(vote96, fill = ifelse(vote96 == 1, 'Vote', 'Did not Vote')))+
+  geom_histogram(binwidth = 1) +
+  labs(title = "Voter turnout in 1996",
+       x = "Vote status",
+       y = "The number of people")+
+guides(fill = guide_legend(title = ''))
+```
+
+```{r}
+ggplot(mental, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = lm) + 
+  labs(title = "Mental health and Observed voter turnout",
+       x = "Mental health index",
+       y = "Vote status(0:Not voted, 1: Voted)")
+```
+
+```{r include=FALSE}
+voted <- filter(mental, vote96 == 1) 
+uncondi_prob = 100 * (nrow(voted)  /length(mental$vote96))
+```
+
+1. The unconditional probability of a given individual turning out to vote is 62.95904%. 
+
+2. The scatter plot and the linear smoothing line tell us that if a person had higher mental health index, which means in the severe depressed mood, it is likely that the person did not vote in 1996. The problems of the smooth linear line above is that it draws the response variables between the number 0 and 1, that is, it assumes the response variable is continous variables. But the response variables, vote96 ,are descrete variables (1: voted, 0: not voted). So when we interprete the smooth linear line, we can read the trend of the line, but the response variables can not be intepreted as discrete vote status. 
+
+# Basic model
+```{r basic model}
+basic_mental <- glm(vote96 ~ mhealth_sum, family = "binomial", data = mental)
+summary(basic_mental)
+```
+1. There is a statistically significant relationship between mental and voter turnout because its p-value is 3.13e-13 which is very close to zero, so it means that it is statisticaly significant.
+
+```{r include=FALSE}
+prob2odds <- function(x){
+  x / (1 - x)
+}
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+mental %>%
+  dplyr::select(vote96, mhealth_sum) %>%
+  add_predictions(basic_mental, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))%>%
+  na.omit() %>%
+  {.} -> logit_mental
+```
+2. 
+```{r}
+basic_logodd <- glm(logit ~ mhealth_sum, data = logit_mental)
+summary(basic_logodd)
+
+ggplot(aes(mhealth_sum), data = logit_mental) + 
+  geom_line(aes(y = logit)) + 
+  labs(title = "Log odds of voter turnout and mental health ", 
+       x = "Mental health index",
+       y = "Log odds of voting")
+```
+The coefficient of mental health index is -0.14348. It means that a one-unit increase in mental health index is associated with a 0.14348 decrease in the log-odds of voting.
+
+3.
+```{r}
+ggplot(aes(mhealth_sum), data = logit_mental) + 
+  geom_line(aes(y = odds)) + 
+  labs(title = "Odds of voter turnout and mental health ", 
+       x = "Mental health index",
+       y = "Odds of voting")
+odds = exp(0.14348)
+```
+A one-unit increase in mental health index is associated with 1.154284 decrease in odds of voting on average.
+
+4.
+```{r}
+ggplot(aes(mhealth_sum), data = logit_mental) + 
+  geom_line(aes(y = prob)) + 
+  labs(title = "Probability of voter turnout and mental health ", 
+       x = "Mental health index",
+       y = "Probability of voting")
+
+diff_table<- data_grid(mental,mhealth_sum) %>%
+  add_predictions(basic_mental, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  {.} -> table_diff
+diff12 = table_diff[3,]$prob - table_diff[2,]$prob
+diff56 = table_diff[7,]$prob - table_diff[6,]$prob
+prob = logit2prob(0.14348)
+```
+A one-unit increase in mental health index is associated with 0.5358 decrease in probability of voting on average.
+The first difference for an increase in the mental health index from 1 to 2
+is -0.0291782 and the difference for an increase in the mental health index from 5 to 6 is -0.0347782.
+
+5. 
+```{r include=FALSE}
+accuracy<-logit_mental %>%
+  #na.omit() %>%
+  add_predictions(basic_mental) %>%
+  mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > .5))
+
+mean(accuracy$vote96 == accuracy$pred, na.rm = TRUE)
+```
+```{r include=FALSE}
+# function to calculate PRE for a logistic regression model
+PRE = function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)}
+
+PRE(basic_mental)
+accuracy
+auc_score = auc(accuracy$vote96, accuracy$prob)
+auc_score
+```
+
+With the threshold of .5, the accuracy rate is 67.78% and proportional reduction in error (PRE) is 1.62%, and the AUC for this model is 0.5401. 
+I do not consider this model to be a good model. The proportional reduction in error is 1.62% and it means the statistical model reduced 1.62% of the prediction error. So it means it does not help in predicting. Moreover the AUC score is 0.6243 so it is 0.1243 higher than the 0.5 so it is hardly can tell as better classifier. 
+
+# Multiple variable model
+
+Among given 7 variables in the dataset, I choose 5 varaibles which are mental health index, age, education, married and income. I assume that mental health index affects on voting. Individuals with depression are less likely to participate in election than those without symptoms of depression. Also age affects on voting because older Americans, who typically have more time and higher incomes available to participate in politics, are more likely to participate in votings than younger Americans. In addition, education affects on voting because individuals with more years of education, who are generally more interested in politics, are more likely to participate in voting than individuals with fewer years of education. Also marriage affects on voting because 
+marriage gives rise to a new and shared set of social and economic circumstances to individuals. Lastly, income level affects on voting and the assumption is based on the assumption of age. 
+
+1. The random component of the probability distribution for vote96 is binomial distribution. Each of $vote96_{i}$ is distributed as a binomial random variable. 
+  $$Pr(\sum_{i=1}^{n}vote96_i = k|p) = \binom{n}{k}p^k(1-p)^{n-k}$$
+  
+The linear predictor is
+$$vote96_{i} = \beta_{0} + \beta_{1}mhealth\_sum + \beta_{2}age + \beta_{3}educ + \beta_{4}married + \beta_{5}inc10 $$
+
+The link function is
+$$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
+```{r}
+logit_all <- glm(vote96 ~ ., family = binomial, data = mental)
+null = glm(vote96 ~1,family = binomial, data = mental)
+best_all <- step(logit_all, trace = 0)
+summary(best_all)
+```
+$\beta_0$ of intercept in the multiple variable model is -4.200133, standard error is 0.497962 and p-value is less than 2e-16. $\beta_1$ for mental index sum is -0.088332,standard error is 0.023603 and p-value is 0.000182 $\beta_2$ for age is 0.042113, standard error is 0.004814 and p-value is less than 2e-16. $\beta_3$ for education is 0.225271, standard error is 0.029376 and p-value is 1.74e-14.$\beta_4$ for married is 0.293856, standard error is 0.153009 and p-value is 0.054793. $\beta_5$ for income is 0.066239, standard error is 0.026207 and and p-value is 0.011487.
+
+3. 
+```{r include = FALSE}
+mental %>%
+  add_predictions(best_all, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))%>%
+  na.omit() %>%
+  {.} -> all_table
+
+accuracy_all<-all_table %>%
+  #na.omit() %>%
+  add_predictions(best_all) %>%
+  mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > .5))
+
+mean(accuracy_all$vote96 == accuracy_all$pred, na.rm = TRUE)
+
+acc_rate_all <- mean(accuracy_all$vote96 == accuracy_all$pred, na.rm = TRUE)
+PRE(best_all)
+
+auc_score_all = auc(accuracy_all$vote96, accuracy_all$prob)
+accuracy_all
+auc_score_all
+```
+With the threshold of .5, the accuracy rate is 72.02% and proportional reduction in error (PRE) is 13.76%, and the AUC for this model is 0.7589. Comparing with above one-variable model, this multiple variable model fits the data well. 
+
+$\beta_1$ for mental index sum is -0.088332 and it means one-unit increase in mental health index is associated with 0.088332 decrease in log-odds of voting on average. $\beta_2$ for age is 0.042113, and it means one-unit increase in mental health index is associated with 0.042113 increase in log-odds of voting on average. $\beta_3$ for education is 0.225271 and it means one-unit increase in mental health index is associated with 0.225271 increase in log-odds of voting on average.$\beta_4$ for married is 0.293856 and it means one-unit increase in mental health index is associated with 0.293856 increase in log-odds of voting on average. $\beta_5$ for income is 0.066239 and it means one-unit increase in mental health index is associated with 0.066239 increase in log-odds of voting on average. Except married variables, each p-value of mental health index, age, education, and income are all less then 0.05 so it is statistically significant. 
+
+```{r}
+grid <- mental %>%
+  data_grid(mhealth_sum, educ, age, .model=best_all) %>%
+  add_predictions(best_all) %>%
+  mutate(prob = logit2prob(pred))
+
+ggplot(grid, aes(x = mhealth_sum, y = prob, 
+                 color = ifelse(educ > 12, "High education", "Low education"))) +
+  geom_smooth() +
+  labs(title = "Probability of voting and mental health",
+       x = "Mental health index",
+       y = "Probability of voting") +
+  guides(color = guide_legend(''))
+```
+To see the relationshup between mental health index and probability of voting, I divide data into 2 groups, according to their education level and I set the criteria as 12 years because over 12 years means people get into college so I can assume that people had high education. From the above graph, we can tell as mental helth status gets severe, the probability of voting is decreasing. Morever, high education level people have higher probability of voting than the low education level people. 
+
+
+# Part 2: Modeling tv consumption
+Among given 11 variables in the dataset, I choose 4 varaibles which are education, grass, hrsrelax and black. I assume that education, grass, hrsrelax, race(black) affects on the number of hours of TV watched per day. I used step function to select best model. 
+
+1. The random component of the probability distribution for tvhours is poisson distribution. Each of tvhours is distributed as a poisson random variable. 
+  $$P(tvhours_{i} = k|\mu) = \frac{\mu^{k}e^{-\mu}}{k!}$$
+  
+The linear predictor is
+$$tvhours_{i} = \beta_{0} +\beta_{1}educ + \beta_{2}grass + \beta_{3}hrsrelax + \beta_{4}black $$
+
+The link function for Poisson districution is log function,
+$$\mu_{i} = \ln(tvhours_{i})$$
+```{r }
+gss2006 <- read.csv('gss2006.csv', header=TRUE)
+gss2006<- na.omit(gss2006)
+
+gss_logit_all <- glm(tvhours ~ ., family = poisson, data = gss2006)
+null = glm(tvhours ~1,family = poisson, data = gss2006 )
+best_gss <- step(gss_logit_all, trace = 0)
+
+summary(best_gss)
+```
+$\beta_0$ of intercept in the model is 1.224882, standard error is 0.169479 and p-value is 4.93e-13. $\beta_1$ for education is -0.038969, standard error is 0.011063 and p-value is 0.000428. $\beta_2$ for grass is -0.107870, standard error is 0.061855 and p-value is 0.081174. $\beta_3$ for hrsrelax is 0.046632, standard error is 0.009462 and p-value is 8.29e-07.$\beta_4$ for black is 0.450638, standard error is 0.072396 and p-value is 4.83e-10. 
+
+```{r include=FALSE}
+gss2006 %>%
+  na.omit() %>%
+  add_predictions(best_gss, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))%>%
+  {.} -> all_table_gss
+
+accuracy_all_gss<-all_table_gss %>%
+  #na.omit() %>%
+  add_predictions(best_gss) %>%
+  mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > .5))
+
+mean(accuracy_all_gss$tvhours == accuracy_all_gss$pred, na.rm = TRUE)
+
+acc_rate_all <- mean(accuracy_all_gss$tvhours == accuracy_all_gss$pred, na.rm = TRUE)
+e2_all <- 1 - acc_rate_all
+e1_all <- 1 - mean(accuracy_all_gss[['tvhours']] == 1)
+pre_all <- (e1_all - e2_all) / e1_all
+pre_all
+
+auc_score_all_gss = auc(accuracy_all_gss$tvhours, accuracy_all_gss$prob)
+auc_score_all_gss
+
+```
+
+With the threshold of .5, the accuracy rate is 22.68% and proportional reduction in error (PRE) is 0%, and the AUC for this model is 0.5488. 
+$\beta_1$ for education is -0.038969 and it means one-unit increase in mental health index is associated with 0.038969 decrease in log-count of hours of TV watched per day on average. $\beta_2$ for grass is -0.107870, and it means one-unit increase in mental health index is associated with 0.107870 decrease in log-count of hours of TV watched per day on average. $\beta_3$ for hrsrelax is 0.046632 and it means one-unit increase in mental health index is associated with 0.046632 increase in log-count of hours of TV watched per day on average.$\beta_4$ for black is 0.450638 and it means one-unit increase in mental health index is associated with 0.450638 increase in log-count of hours of TV watched per day on average. 
+
+```{r}
+gss2006 %>%
+  data_grid(hrsrelax, black, grass, .model = best_gss) %>%
+  add_predictions(best_gss, var = 'logit') %>%
+  mutate(count = exp(logit), group = paste(ifelse(grass, 'Support legalizing Marijuana', "Don't support legalizing Marijuana"), '+', ifelse(black, "Black", "Non Black"))) %>%
+  {.} -> grid_gss
+
+ggplot(grid_gss, aes(x = hrsrelax, y = count, color = group)) +
+  geom_line() +
+  labs(title = 'Effect of hours of relaxing per day on \n predicted hours of TV watched per day',
+    x = 'Hours of relaxing per day', y = 'Predicted hours of TV watched per day') +
+  guides(color = guide_legend('')) 
+```
+I will focus on one of 4 variables which is not a binary and has small p-value, hrsrelax. To see the relationshup between hours of relaxing per day and predicted hours of TV watched per day, I divide data into 4 groups, according to their race is black or non black and their opinions about legalizing marijuana and draw 4 seperate lines. From the above graph, we can tell hours of relaxing per day has positive effect on the hours of TV watched per day. To be more specific, race(black) has higher positive effect on the hours of TV watched per day since two graphs of two race(black) groups are above than two non-black groups.That is black people tend to spend more time on watching TV per day. Also when we categorized by opinions on legalizing marijuana, the graphs of two opposition on marijuana groups are both higher than two supporting groups when the race is same. 
+
+```{r}
+quasipoisson_gss <- glm(tvhours ~ educ + grass + hrsrelax + black, family = "quasipoisson", data = gss2006)
+summary(quasipoisson_gss)
+```
+To test for under- or over-dispersion, I used quasipoisson model. From the summary, dispersion parameter for quasipoisson family is 1.106342. Since the parameter is greater than 1, the conditional variance of tvhours increases more rapidly than its mean, so we can say it is overdispersion. 

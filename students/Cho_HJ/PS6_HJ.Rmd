@@ -1,0 +1,245 @@
+---
+title: "Perspectives on Computational Modeling PS6"
+author: "HyungJin Cho"
+date: "February 20, 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+# < Chunk Options >
+knitr::opts_chunk$set(echo = TRUE)
+
+# < Import Pacakges >
+library(tidyverse)
+library(modelr)
+library(knitr)
+library(pROC)
+
+# < Import Data >
+setwd("~/Desktop")
+DATA_1 = read_csv('mental_health.csv')
+DATA_2 = read_csv('gss2006.csv')
+```
+
+# Part 1: Modeling voter turnout
+
+## I.Describe the data
+#### I.1.(a)Plot a histogram of voter turnout. Make sure to give the graph a title and proper $x$ and $y$-axis labels.
+
+```{r I.1.(a)Histogram, echo=FALSE, warning=FALSE}
+# < Factoring a Variable >
+DATA_1$VOTE = factor(DATA_1$vote96, levels = c(0, 1), labels = c("No", "Yes"))
+
+# <Histogram>
+  ggplot(data=DATA_1[!is.na(DATA_1$VOTE), ], mapping=aes(x=VOTE, y = (..count..)/sum(..count..))) +
+    geom_histogram(stat="count") +
+    scale_y_continuous(labels = scales::percent) +
+    labs(title = "Histogram of Voter Turnout",
+         x = 'Vote Status',
+         y = 'Voter Turnout')
+```
+
+#### I.1.(b)What is the unconditional probability of a given individual turning out to vote?
+
+```{r I.1.(b)Probability, echo=FALSE, warning=FALSE}
+# <Unconditional Probability>
+PROB_V = DATA_1 %>%
+  group_by(vote96) %>%
+  filter(vote96!='NA') %>%
+  count() %>%
+  mutate('unconditional probability of a given individual turning out to vote' = n/sum(n)) %>%
+  select(-n)
+
+kable(PROB_V)
+
+```
+
+#### I.2.(a)Generate a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line.
+
+```{r I.2.(a)Scatterplot & Linear Smoothing Line, echo=FALSE, warning=FALSE}
+# <Scatterplot & Linear Smoothing Line>
+ggplot(data=DATA_1, mapping=aes(x=mhealth_sum, y=vote96)) +
+  geom_jitter(height=0.05) +
+  geom_smooth(method=lm) + 
+  scale_y_continuous(breaks=c(0, 1), labels = c("No", "Yes")) + 
+  labs(title="Voting in 1996 versus Mental Health Index",
+       x="Mental Health Index",
+       y="Vote Status")
+```
+
+#### I.2.(b)What information does this tell us? What is problematic about this linear smoothing line?
+The scatterplot and the linear smoothing line indicates that lower value of the mental health index is associated with voting, which means an individual with lower depressed mood tends to vote.
+The problem of this linear smoothing line is the vote status is treated as continuous variable instead of categorical variable.
+
+## II.Basic model
+#### II>1.Is the relationship between mental health and voter turnout statistically and/or substantively significant?
+
+```{r II.1.Significance, echo=FALSE, warning=FALSE}
+# <Model>
+FIT_1 = glm(vote96 ~ mhealth_sum, data=DATA_1, family=binomial())
+summary(FIT_1)
+
+PARAM_0 = FIT_1$coefficients[[1]]
+PARAM_1 = FIT_1$coefficients[[2]]
+
+PROB_0 = exp(PARAM_1)/(1+exp(PARAM_1))
+
+# <Function> 
+logit2prob = function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds = function(x){
+  x / (1 - x)
+}
+
+prob2logodds = function(x){
+  log(prob2odds(x))
+}
+
+# <Data>
+DATA_1A = DATA_1 %>%
+  add_predictions(FIT_1) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+```
+
+The relationship between mental health and voter turnout is statistically significant (p-value=`r coef(summary(FIT_1))[2,4]` < .001).
+The relationship between mental health and voter turnout appears substantively significant. The coefficient (`r PARAM_1`) suggests the log-odds and the exponentiated coefficient (`r exp(PARAM_1)`) indicates the odds along with the probability (`r PROB_0`).
+
+
+#### II.2.Interpret the estimated parameter for mental health in terms of log-odds. Generate a graph of the relationship between mental health and the log-odds of voter turnout.
+
+```{r II.2.Log-odds Plot, echo=FALSE, warning=FALSE}
+# <Log-odds Plot>
+ggplot(data=DATA_1A, mapping=aes(x=mhealth_sum, y=logodds)) +
+  geom_line() +
+  labs(title = "Log-odds of Voter Turout for Mental Health",
+       x = "Mental Health",
+       y = "Log-odds of Voter Turnout")
+
+```
+
+The estimated parameter for mental health in terms of log-odds is `r PARAM_1`. The change in log-odds by a unit increase in mental health is `r PARAM_1`. The graph shows linear relationship. 
+
+#### II.3.Interpret the estimated parameter for mental health in terms of odds. Generate a graph of the relationship between mental health and the odds of voter turnout.
+
+```{r II.3.Odds Plot, echo=FALSE, warning=FALSE}
+# <Odds Plot>
+ggplot(data=DATA_1A, mapping=aes(x=mhealth_sum, y=odds)) +
+  geom_line() +
+  labs(title = "Odds of Voter Turout for Mental Health",
+       x = "Mental Health",
+       y = "Odds of Voter Turnout")
+
+```
+
+The estimated parameter for mental health in terms of odds is `r exp(PARAM_1)`. The change in odds by a unit increase in mental health is `r exp(PARAM_1)`.
+
+#### II.4.Interpret the estimated parameter for mental health in terms of probabilities. Generate a graph of the relationship between mental health and the probability of voter turnout. What is the first difference for an increase in the mental health index from 1 to 2? What about for 5 to 6?
+
+```{r II.4.Probability Plot, echo=FALSE, warning=FALSE}
+# <Probability Plot>
+ggplot(data=DATA_1A, mapping=aes(x=mhealth_sum)) +
+  geom_line(mapping=aes(y=prob)) +
+  geom_jitter(mapping=aes(y=vote96), height=0.05)
+  labs(title = "Probability of Voter Turout for Mental Health",
+       x = "Mental Health",
+       y = "Probability of Voter Turnout")
+
+# <Probability>
+PROB_1 = exp(PARAM_0 + (1 * PARAM_1)) / (1 + exp(PARAM_0 + (1 * PARAM_1)))
+PROB_2 = exp(PARAM_0 + (2 * PARAM_1)) / (1 + exp(PARAM_0 + (2 * PARAM_1)))
+PROB_5 = exp(PARAM_0 + (5 * PARAM_1)) / (1 + exp(PARAM_0 + (5 * PARAM_1)))
+PROB_6 = exp(PARAM_0 + (6 * PARAM_1)) / (1 + exp(PARAM_0 + (6 * PARAM_1)))
+
+```
+
+The estimated parameter for mental health in terms of probabilities is `r PROB_0`. The  difference for an increase in the mental health index from 1 to 2 is `r PROB_1-PROB_2`. The  difference for an increase in the mental health index from 5 to 6 is `r PROB_5-PROB_6`.
+
+#### II.5.Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
+
+```{r II.5.Accuracy & PRE, echo=FALSE, warning=FALSE}
+# <Accuracy>
+DATA_1B = DATA_1 %>%
+  add_predictions(FIT_1) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+ACC = mean(DATA_1B$vote96 == DATA_1B$pred, na.rm=TRUE)
+ACC
+
+# <PRE>
+FUNC_PRE = function(MODEL){
+  y = MODEL$y
+  y.hat = round(MODEL$fitted.values)
+  E1 = sum(y != median(y))
+  E2 = sum(y != y.hat)
+  PRE = (E1 - E2) / E1
+  return(PRE)
+}
+
+PRE = FUNC_PRE(FIT_1)
+
+# <AUC>
+AUC = auc(DATA_1B$vote96, DATA_1B$prob)
+
+AUC = AUC[[1]]
+```
+
+The accuracy rate is `r ACC`, the proportional reduction in error (PRE) is `r PRE`, and the area under the curve (AUC) is `r AUC`. This is not a good model because the accuracy rate only better than the baseline rate by `r PRE` proportional reduction in error and the area under the curve is only larger than the random guess by `r AUC-0.5`.
+
+## III.Multiple variable model
+#### III.1.Write out the three components of the GLM for your specific model of interest. This includes the Probability distribution (random component), Linear predictor, Link function.
+The random component of the probability distribution:
+  The Bernoulli distribution. $$Pr(\sum_{i=1}^{n}vote96_i = k|p) = \binom{n}{k}p^k(1-p)^{n-k}$$
+Linear predictor:
+  $$vote96_{i} = \beta_{0} + \beta_{1} X_{1,i} + \beta_{2} X_{2,i} + \beta_{3} X_{3,i} + \beta_{4} X_{4,i} + \beta_{5} X_{5,i} + \beta_{6} X_{6,i} + \beta_{7} X_{7,i}$$
+  $X_1$=mhealth_sum, $X_2$=age, $X_3$=educ, $X_4$=blakc, $X_5$=female, $X_6$=married, $X_7$=inc10.  
+Link function:
+  Logit function. $$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
+
+#### III.2.Estimate the model and report your results.
+```{r III.2.Mutiple Variable Model, echo=FALSE, warning=FALSE}
+DATA_1 = read_csv('mental_health.csv')
+
+# <Model>
+FIT_2 = glm(vote96 ~ ., data=DATA_1, family=binomial())
+summary(FIT_2)
+
+```
+
+The estimatation of this multivariate logistric regression model shows the results that 4 factors are statistically significant: mental health index, age, education, and income.
+
+#### III.3.Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-odds, odds, predicted probabilities, and first differences - choose what makes sense to you and provides the most value to the reader. Use graphs and tables as necessary to support your conclusions.
+
+In terms of log-odds, coeeficients of mental health index (-0.089102), age (0.042534), education (0.228686), and income (0.069614) are found to be statistically significant. In respect to odds, multiplicative factor of health index (0.9147523), age (1.043452), education (1.256947), and income (1.072094) are found. In regard to probabilities, predicted probabilities are associated with health index (0.4777392), age (0.510632), education (0.5569236), and income (0.5173964)
+
+# Part 2: Modeling tv consumption
+## IIII.Estimate a regression model
+#### IIII.1.Write out the three components of the GLM for your specific model of interest. This includes the Probability distribution (random component), Linear predictor, Link function.
+The random component of the probability distribution:
+  Poisson distribution. $$Pr(tvhours = k|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+Linear predictor:
+  $$tvhours_{i} = \beta_{0} + \beta_{1} X_{1,i} + \beta_{2} X_{2,i} + \beta_{3} X_{3,i} + \beta_{4} X_{4,i} + \beta_{5} X_{5,i} + \beta_{6} X_{6,i} + \beta_{7} X_{7,i}$$
+  $$+ \beta_{8} X_{8,i} + \beta_{9} X_{9,i} + \beta_{10} X_{10,i} + \beta_{11} X_{11,i} + \beta_{12} X_{12,i} + \beta_{13} X_{13,i} + \beta_{14} X_{14,i}$$
+  $\eta_i$=tvhours_{i}, $X_1$=age, $X_2$=childs, $X_3$=educ, $X_4$=female, $X_5$=grass, $X_6$=hrsrelax, and $X_7$=black, $X_8$=social_connect, $X_9$=voted04, $X_10$=xmovie, $X_11$=zodiac, $X_12$=dem, $X_13$=rep, $X_14$=ind.  
+Link function:
+  Log function. $$g(tvhours_{i}) = \log(tvhours_{i})$$
+
+#### IIII.2.Estimate the model and report your results.
+```{r IIII.2.Model, echo=FALSE, warning=FALSE}
+# <Model>
+FIT_3 = glm(tvhours ~ ., data=DATA_2, family=poisson())
+summary(FIT_3)
+```
+
+The estimatation of this model shows the results that 3 factors are statistically significant: education, relax hours, and race.
+
+
+#### IIII.3.Interpret the results in paragraph format. This should include a discussion of your results as if you were reviewing them with fellow computational social scientists. Discuss the results using any or all of log-counts, predicted event counts, and first differences - choose what makes sense to you and provides the most value to the reader. Is the model over or under-dispersed? Use graphs and tables as necessary to support your conclusions.
+In terms of log-odds, coeeficients of education (-0.0292174), relax hours (0.0468472), and race (0.4657924) are found to be statistically significant. In respect to odds, multiplicative factor of education (0.9712053), relax hours (1.047962), and race (1.593276) are found. In regard to probabilities, predicted probabilities are associated with education (0.4926962), relax hours (0.5117097), and race (0.6143874)
+```{r}
+

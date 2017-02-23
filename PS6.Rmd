@@ -1,0 +1,217 @@
+---
+title: "PS6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Describe the data
+
+1. The unconditional probability of a given individual turning out to vote is 0.6824
+
+2. The smoothing line shows predicted values of voter turnout, indicating positive correlation between mental health and observed voter turnout. There is a problem with this smoothing line. In reality, the only possible values for vote96 are 0 and 1. Yet the linear regression model gives us predicted values between 0 and 1
+
+## Basic model
+
+1. The relationship is statistically significant with a p-value less than 0.001, but not enough substantively significant. The Residual deviance is a measure of the lack of fit of this model taken as a whole, whereas the Null deviance is such a measure for a reduced model that only includes the intercept. Given the loss of 1 degree of freedom, we found the residual deviance has only decreased from 1672.1 to 1616.7, comparing to the null deviance. So it is not enough substantively significant.
+
+2. The estimated parameter for mental health -0.14348 is the change of voting in log odds against not voting when mental health index increases by one unit.
+
+3. The odds of voter voting against not voting decreases by -14.348 percent when mental health index increases by one unit.
+
+4. We can observed the parameter as -0.14348, but it is hard to judge the probability based on this number becaused the changes in probability depends on the initial value of mental health index. The first difference for an increase in the mental health index from 1 to 2 is -0.02917824, and -0.03477821 for an increase in the mental health index from 5 to 6.
+5. The accuracy rate for this model is 0.6778, prediction error reduction is 1.62%, and AUC is 0.6243. No, I don't consider it to be a good model. It only reduces 1.62% of the prediction error.
+
+## Multiple variable model
+
+1. Our probability distribution here belongs to Bernoulli distribution, Pr$(Y_i = y_i | \pi)$ = $\pi_i^{y_i}$ $(1 - \pi_i)^{1-y_i}$
+Our linear predictors include age, educ, married, and inc10.
+Our link function is $\pi_i$ $=$ $e^{\eta_i}$ / (1 + $e^{\eta_i}$), a logit function.
+
+2. The model I estimated is a good fit from its statistics. Please see the summary for its statistics.
+
+3. From the model, we can tell there is a satistically significant relationship between response and predictors. All four variables are significant with three of them very significnat, indicating the p-values all less than 0.05, with the p-values for age, educ and inc10 less than 0.001. The parameters show a positvie relationship between response and predictors. 
+
+From the substantive significance, the model shows great improvement in fitness, as the residual deviance has decreased even more from 2868 to 2521, based on the 4 degrees loss in degrees of freedom. 
+
+To see things even deeper, I graph the relationship between age, marital status, and voter turnout. The first graph is about the relationship between age, marital status and log-odds of voter turnout. When the age increases among the sample, the log-odds show upward tendency which when people get older, they have more energy to participate in the politics. But I also found that when the people is not marrid, this relationship was slightly shifted downards, perhaps that the not marrid people do not care much about the politics.
+
+In the graph Predicted probability of voter turnout, the relationship is basically the same as log odds. But when the not marrid people gets older, the gap was relieved may be the effect of more energy slightly overcomes the difference with or without a family.
+
+## Part 2: Modeling tv consumption 
+
+1. Our probability distribution belongs to the Poisson distribution, Pr$(Y_i = y_i | \mu)$ = $\mu^{y_i}$ $e^{-\mu}$ / $y_i!$
+Linear predictors include educ, hrsrelax, and black status.
+Link function is $\mu_i$ $=$ ln($\eta_i$), a log form function.
+
+2. I ran two regressions for this dataset, and found only the variables of educ, hrsrelax, and black status could be seen as very ssignificant. My model consists of only these predictors. The p-value for these variables are all less than 0.001, which proves its very significant relationship between the response and predictors. Of the three predictors, only the education has a negative effect on the response.
+
+From the substantive significance, the model shows great improvement in fitness, as the residual deviance has decreased from 1229.2 to 1062.5 , based on the 3 degrees loss in degrees of freedom. That is a very good fit for our regression.
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+library(knitr)
+library(pander)
+library(pROC)
+
+mh <- read_csv("data/mental_health.csv") 
+
+# 1.1 Histogram
+ggplot(mh, mapping = aes(x = vote96)) +
+  geom_histogram() +
+  labs(title = "Distribution of voter turnout in 1996 presidential election",
+       x = "Voter turnout(1 for voted, 0 otherwise)",
+       y = "Frequency counts of voter sample")
+summary(mh)
+
+# unconditional probability of a given individual turning out to vote 0.6824
+
+
+# 1.2 Scatterplot
+ggplot(mh, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Mental health index",
+       y = "Voter turnout(1 for voted, 0 otherwise)")
+
+# The smoothing line shows predicted values of voter turnout, indicating positive 
+# correlation between mental health and observed voter turnout.
+
+# There is a problem with this smoothing line. In reality, the only possible values for vote96 are 0 and 1. 
+# Yet the linear regression model gives us predicted values between 0 and 1
+
+# 2. Basic model
+vote_reg <- glm(vote96 ~ mhealth_sum, data = mh, family = binomial)
+summary(vote_reg)
+
+# Functions
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds <- function(x){
+  x / (1 - x)
+}
+
+# generate predicted values
+vote_mh_pred <- mh %>%
+  add_predictions(vote_reg) %>%
+  # predicted values are in the log-odds form - convert to probabilities
+  mutate(prob = logit2prob(pred))
+
+vote_mh_pred <- vote_mh_pred %>%
+  mutate(odds = prob2odds(prob))
+
+# 2.1 The relationship is statistically significant with a p-value less than 0.001, but not enough substantively significant
+# The Residual deviance is a measure of the lack of fit of this model
+# taken as a whole, whereas the Null deviance is such a measure for a reduced model 
+# that only includes the intercept. Given the loss of 1 degree of freedom, we found the residual
+# deviance has only decreased from 1672.1 to 1616.7, comparing to the null deviance. So it is not enough substantively significant.
+
+# 2.2 Log odds
+ggplot(vote_mh_pred, aes(mhealth_sum, pred)) +
+  geom_line(color = "blue", size = 1) +
+  labs(x = "Mental health index",
+       y = "Log-odds of voting")
+
+# The estimated parameter for mental health -0.14348 is the change of voting in log odds against not voting when 
+# mental health index increases by one unit.
+
+# 2.3 Odds
+ggplot(vote_mh_pred, aes(mhealth_sum, odds)) +
+  geom_line(color = "blue", size = 1) +
+  labs(x = "Mental health index",
+       y = "Odds of voting")
+# The odds of voter voting against not voting decreases by -14.348 percent when mental health index increases by one unit.
+
+
+# 2.4 Prob
+ggplot(vote_mh_pred, aes(mhealth_sum, prob)) +
+  geom_line(color = "blue", size = 1) +
+  labs(x = "Mental health index",
+       y = "Probability of voting")
+
+# First difference
+pred_data <- augment(vote_reg, newdata = data_frame(mhealth_sum = c(1, 2, 5, 6))) %>%
+  mutate(prob = exp(.fitted) / (1 + exp(.fitted)))
+
+di1 = (filter(pred_data, mhealth_sum == 2))$prob - (filter(pred_data, mhealth_sum == 1))$prob
+di2 = (filter(pred_data, mhealth_sum == 6))$prob - (filter(pred_data, mhealth_sum == 5))$prob
+di1
+di2
+
+# We can observed the parameter as -0.14348, but it is hard to judge the probability based on this number 
+# becaused the changes in probability depends on the initial value of mental health index.
+# The first difference for an increase in the mental health index from 1 to 2 is -0.02917824,
+# and -0.03477821 for an increase in the mental health index from 5 to 6.
+
+# 2.5 Calculation
+
+# Accuracy
+vote_mh_pred <- vote_mh_pred %>% 
+  mutate(pred_vote = as.numeric(prob > .5))
+accuracy <- mean(vote_mh_pred$vote96 == vote_mh_pred$pred_vote, na.rm = TRUE)
+
+# PRE
+PRE <- function(real, pred){
+  # calculate the errors
+  E1 <- sum(real != median(real, na.rm = TRUE), na.rm = TRUE)
+  E2 <- sum(real != pred, na.rm = TRUE)
+  # calculate the PRE
+  PRE = (E1 - E2) / E1
+  return(PRE)
+}
+pre = PRE(vote_mh_pred$vote96, vote_mh_pred$pred_vote)
+
+#AUC
+auc_1 <- auc(vote_mh_pred$vote96, vote_mh_pred$prob)
+
+# The accuracy rate for this model is 0.6778. The prediction error reduction is 1.62%. The AUC is 0.6243. 
+# No, I don't consider it to be a good model. It only reduces 1.62% of the prediction error.
+
+# 3.1 Multiple variable model
+
+# Regression
+reg2 <- glm(vote96 ~ age + educ + married + inc10, data = mh, family = binomial)
+summary(reg2)
+
+reg2_data <- mh %>%
+  data_grid(age, educ, married, inc10 = seq(0, max(15), by = 1)) %>%
+  add_predictions(reg2) %>%
+  mutate(prob = exp(pred) / (1 + exp(pred)))
+
+reg2_mm <- reg2_data %>%
+  data_grid(age, married, educ = median(educ, na.rm = TRUE), inc10 = median(inc10, na.rm = TRUE)) %>%
+  add_predictions(reg2) %>%
+  mutate(prob = exp(pred) / (1 + exp(pred)))
+
+ggplot(reg2_mm, aes(age, pred, group = factor(married), color = factor(married))) +
+  geom_line() +
+  scale_color_discrete(name = "Marital status (married = 1)") +
+  labs(title = "Log-odds of voter turnout with age and marital status",
+       x = "Age",
+       y = "Log-odds of voter turnout")
+
+ggplot(reg2_mm, aes(age, prob, group = factor(married), color = factor(married))) +
+  geom_line() +
+  scale_color_discrete(name = "Marital status (married = 1)") +
+  labs(title = "Probability of voter turnout with age and marital status",
+       x = "Age",
+       y = "Probability of voter turnout")
+# 3
+tv <- read_csv("data/gss2006.csv")
+reg3 <- glm(tvhours ~ educ + hrsrelax + black, data=tv, family=poisson)
+summary(reg3)
+```
+
+
+
+
+

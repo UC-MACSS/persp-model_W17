@@ -1,0 +1,324 @@
+---
+title: "PS #6: Generalized linear models"
+author: "Esha Banerjee"
+date: Feb 20, 2017
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE)
+```
+
+
+```{r Loading packages}
+library (rmarkdown)
+library(tidyverse)
+library(broom)
+library(modelr)
+library (knitr)
+library(pROC)
+```
+
+```{r Loading Data}
+gss = read.csv('gss2006.csv')
+mental_health = read.csv('mental_health.csv')
+
+```
+
+
+
+#Describing Data
+```{r Describing Data}
+
+
+cleaned_mental_health <-mental_health %>%
+  drop_na(vote96)
+cleaned_mental_health1 <- cleaned_mental_health %>%
+  drop_na(mhealth_sum)
+
+voter_turnout <- mutate(cleaned_mental_health, voting_status = cut(cleaned_mental_health$vote96, 
+  c(-1,0,1),labels = c("Didn't Vote", "Voted")))
+
+cleaned_plot2 <- voter_turnout %>%
+  drop_na(mhealth_sum)
+```
+
+
+If we omit the NA values from the dataset, the voter turnout can be plotted as:
+```{r}
+
+ggplot(data = voter_turnout, mapping = aes(x= voting_status)) +
+  geom_bar(fill = "orange") + labs(title = "Voter Turnout in 1996 Presidential Election", x = "Voting Status", y = "Number of People") + theme_minimal() + coord_flip()
+
+result <- round(sum(cleaned_mental_health$vote96, na.rm = TRUE) /length(cleaned_mental_health$vote96), 2)
+result
+
+```
+
+The unconditional probability of a given individual turning out to vote is 0.68.
+
+
+If we retain the NA values in the dataset, the voter turnout can be plotted as:
+
+```{r}
+mental_health %>%
+  group_by(vote96) %>%
+  count() %>%
+  ggplot(aes(x=as.character(vote96), y=n/sum(n))) +
+  geom_bar(stat='identity', colour = "orange", fill = "orange") +
+  labs(title = "Voter Turnout in 1996 Presidential Election",
+       subtitle = '0 = Did not vote, 1 = Voted, NA = Missing values',
+       x = 'Observed voter turnout',
+       y = 'Fraction of voters in each category') + theme_minimal()
+
+result1 <- round(sum(mental_health$vote96, na.rm = TRUE) / length(mental_health$vote96), 2)
+result1
+```
+The unconditional probability of a given individual turning out to vote, if we retain the NA values (which is quite illogical) is 0.63.
+
+Scatterplot of the relationship between mental health and observed voter turnout with an overlaid linear smoothing line:
+```{r Scatter plot}
+ggplot(cleaned_plot2, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = lm) + 
+  scale_y_continuous(breaks = c(0,1),labels = c("Didn't Vote", "Voted")) +
+  labs(title = "Voting in 1996 versus Mental Health Score",
+       y = "Voting Status",
+       x = "Mental Health Score (higher = worse mental health)") + theme_minimal()
+
+```
+
+
+The scatterplot with the smoothening line shows that there is a negative correlation between mental health score & voter turnout i.e. respondents with higher mental health scores tend to avoid voting. The problem with such a line is that since voter turnout is dichotomous—a respondent either votes (1) or doesn't (0), with no other possile outcomes in between, the line does not mean convey any meaningful information in this context. 
+
+We can alternately try a density plot:
+
+```{r Density Plot}
+ggplot(cleaned_plot2, aes(x=mhealth_sum)) + geom_density(aes(group=voting_status, colour=voting_status, fill=voting_status), alpha=0.1) +
+  labs(title = "Voting in 1996 versus Mental Health Score",
+       y = "Density",
+       x = "Mental Health Score (higher = worse mental health)") + theme_minimal() 
+```
+
+
+# Basic model
+```{r Making model & defining functions}
+logit.mental_vote <- glm(vote96 ~ mhealth_sum, data = cleaned_mental_health1, family = binomial)
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds <- function(x){
+  x / (1 - x)
+}
+
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+mental_vote_pred <- cleaned_mental_health1 %>%
+  add_predictions(logit.mental_vote) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+```
+
+
+```{r}
+tidy(logit.mental_vote)
+```
+1. The relationship between mental health and voter turnout is statistically significant even at a significance level of 0.001 with a low p-value of 3.134e-13.It is substantive as evidenced from the coefficient of -0.1435 which implies that a unit increase on the mental health scale, decreases the likelihood of voting by almost $14%$.
+
+2. For a unit increase in mental health score, we expect the log-odds of voting to decrease by 0.1435. The graph of the relationship between mental health and the log-odds of voter turnout is plotted below:
+
+```{r}
+ggplot(mental_vote_pred, aes(x = mhealth_sum)) +
+  geom_line(aes(y = logodds), color = "blue", size = 1) +
+  labs(title = "Log-odds of voter turnout vs mental health score",
+       x = "Mental health score (higher = worse mental health)",
+       y = "Log-odds of voter turnout") + theme_minimal()
+```
+
+
+3. Exponentiating the coefficient gives us the odds of voting for a unit increase in the value of mental health score. The odds value is 0.8663, which means that the odds that voter turnout is 1 change by a factor of 0.8663. 
+
+
+```{r}
+ggplot(mental_vote_pred, aes(x = mhealth_sum)) +
+  geom_line(aes(y = odds), color = "blue", size = 1) +
+  labs(title = "Odds of voter turnout vs mental health score",
+       x = "Mental health score (higher = worse mental health)",
+       y = "Odds of voter turnout") + theme_minimal()
+
+```
+
+
+
+4. With unit increase in mental health score, the probability of voting decreases by 0.4641914.
+```{r}
+
+ggplot(mental_vote_pred, aes(x = mhealth_sum)) + 
+  geom_line(aes(y = prob), color = "blue", size = 1) +
+  labs(title = "Probability of voter turout vs mental health scores",
+       x = "Mental health score (higher = worse mental health)",
+       y = "Probability of voter turnout") + theme_minimal()
+
+diff_grid <- tibble(mhealth_sum = 0:16) %>%
+  add_predictions(logit.mental_vote, var = 'logit') %>%
+  mutate(prob = logit2prob(logit))
+diff_grid
+diff_12 <- diff_grid[3,]$prob - diff_grid[2,]$prob
+diff_12
+diff_56 <- diff_grid[7,]$prob - diff_grid[6,]$prob
+diff_56
+
+```
+
+The first difference for an increase in the mental health score from 1 to 2 is -0.02918; for 5 to 6, it is -0.03478.
+
+
+```{r}
+
+accuracy <- cleaned_mental_health1 %>%
+  add_predictions(logit.mental_vote) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+accuracy_rate <- 100*mean(accuracy$vote96 == accuracy$pred, na.rm = TRUE)
+accuracy_rate
+
+
+
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+
+  # calculate the proportional reduction in error
+  PRE <- 100*(E1 - E2) / E1
+  return(PRE)
+}
+
+PRE(logit.mental_vote)
+auc <- auc(accuracy$vote96, accuracy$prob)
+auc
+
+```
+At a threshold of 0.5, the accuracy rate is 67.78, the proportional reduction in error is 1.612 and the area under the curve is 0.6243. 67.8% of the predictions based on mental health score only were correct. Whether this is good or bad depends on the baseline. The proportional reduction in error is 1.612% which is not significant. The AUC which is 0.6243 is hardly superior to the random guess, which would have the AUC of 0.5.
+
+# Multiple variable model
+
+1.
+Probability distribution (random component): Since we are using a logistic regression, we assume that the outcome (1 or 0 for the vote96 column corresponding to voted or did not vote) is a Bernoulli trial and thus the sum of all outcomes will be distributed as a binomial variable. 
+$$Pr(\sum_{i=1}^{n}vote96_i = y|p) = \binom{n}{y}p^y(1-p)^{n-y}$$
+Linear predictor: For my model where I am considering the variables age and education in addition to the mental health score, the linear predictor is: $$vote96_i = \beta_{0} + \beta_{1}mhealthsum + \beta_{2}age + \beta_{3}educ$$
+
+
+Link function: $$g(vote96_i) = \frac{e^{vote96_i}}{1 + e^{vote96_i}}$$
+
+
+```{r}
+cleaned <- cleaned_mental_health1 %>%
+  drop_na(educ)
+logit_voted_mv = glm(vote96 ~ mhealth_sum + age + educ, family = binomial, data= cleaned)
+summary(logit_voted_mv)
+tidy(logit_voted_mv)
+
+```
+Looking at the p-values, all the variables: mental health score, age, education are significant even at 0.001 levels, with the coefficient for each being -0.0985, 0.0449 and 0.2604 respectively. This implies that with an increase in age and number of years of education, the tendency to vote increases. Only mental health score has a negative correlation as seen previously. Each of the co-efficients are the log-odds and are difficult to interpret generally,  we convert them to the odds ratio and probablity values in tuples, mental health : (0.9062, 0.4754), age :(1.0459, 0.5112), education : (1.2974, 0.5647). This means that years of education has a very strong effect, even more than mental health and age in influencing whether a person votes or not. Increasing education by a year increases probability of voting by 0.56. It is substantive as evidenced from the coefficient of 0.2604 which implies that a unit increase on the mental health scale, increases the likelihood of voting by almost $26%$. Age though significant is not substantive, as a unit increase causes likelihood of voting to increase only by 4 %. The corresponding value for mental health is only 9%, i.e. increase in mental health score by 1, decreases likelihood of voting by 9%.
+
+
+
+```{r}
+cleaned_plot3 <- voter_turnout %>%
+  drop_na(mhealth_sum)
+cleaned_again <- cleaned_plot3 %>%
+  drop_na(educ)
+
+mvm <- cleaned_again %>%
+  add_predictions(logit_voted_mv) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+
+ggplot(mvm, aes(x=educ)) + geom_density(aes(group=voting_status, colour=voting_status, fill=voting_status), alpha=0.1) +
+  labs(title = "Voting in 1996 versus Years of Education",
+       y = "Density",
+       x = "Years of Education") + theme_minimal()
+
+ggplot(mvm, aes(x=age)) + geom_density(aes(group=voting_status, colour=voting_status, fill=voting_status), alpha=0.1) +
+  labs(title = "Voting in 1996 versus Age",
+       y = "Density",
+       x = "Age") + theme_minimal()
+
+dang <- cleaned_again %>%
+  data_grid(mhealth_sum, educ, .model=logit_voted_mv) %>%
+  add_predictions(logit_voted_mv) %>%
+  mutate(prob = logit2prob(pred))
+
+dang1 <- cleaned_again %>%
+  data_grid(mhealth_sum, age, .model=logit_voted_mv) %>%
+  add_predictions(logit_voted_mv) %>%
+  mutate(prob = logit2prob(pred))
+
+ggplot(dang, aes(x = mhealth_sum, y = prob, color = ifelse(educ > 12, "College", "No college"))) +
+  geom_smooth() +
+  labs(title = "Probability of voter turout for different mental health states at different education levels",
+       x = "Mental health",
+       y = "Probability of voter turnout") + theme_minimal() +
+  guides(color = guide_legend(''))
+
+
+
+ggplot(dang1, aes(x = mhealth_sum, y = prob, color = ifelse(age > 37.3, "Above Median", "Below Median Age"))) +
+  geom_smooth() +
+  labs(title = "Probability of voter turout for different mental health states across age",
+       x = "Mental health",
+       y = "Probability of voter turnout") + theme_minimal() +
+  guides(color = guide_legend(''))
+
+```
+The plots show that higher-educated individuals who are above the median age are more likely to vote.
+
+# Modeling TV consumption
+
+1. The three components of the Poisson regression:
+
+Probability distribution (random component): the Poisson distribution, Pr$(Y_i = y_i | \mu)$ = $\mu^{y_i}$ $e^{-\mu}$ / $y_i!$
+
+Linear predictor: $$tvhours_i = \beta_{0} + \beta_{1}educ + \beta_{2}hrsrelax + \beta_{3}social.connect$$
+
+Link function: the log function, $\mu_i$ $=$ ln($tvhours_i$)
+
+
+
+```{r}
+
+gss = gss[(!is.na(gss$tvhours) & !is.na(gss$educ) & !is.na(gss$hrsrelax) & !is.na(gss$social_connect)), ]
+tv <- glm(tvhours ~ educ + hrsrelax + social_connect, family = "poisson", data = gss)
+summary(tv)
+tidy(tv)
+```
+In this Poisson regression model, the response variable is the number of hours of TV watching per day. The predictors I chose are: education, hours of relaxation, and social connect. The regression result illustrates that two of the three predictors are statistically significant at 0.001 significance level, namely education and hours of relaxation. Social connectedness which might seem intuitively significant does not end up playing a major role. The coefficients of the significant variables are -0.0458 for education, 0.0406 for hours of relaxation. Each of these coefficients indicates the extent of a change in the log-count of the respondent's Tv-watching hours, to which a unit increase in the given predictor will lead on average when other variables are held constant.
+
+So increase in an hour of relaxation, increases likelihood of hours watching TV by 4 %, increase of education by a year, decreases likelihood of hours watching TV by 4%. The results though significant do not seem substantive.
+
+```{r}
+tv1 <- glm(tvhours ~ educ + hrsrelax + social_connect, family = "quasipoisson", data = gss)
+summary(tv1)
+```
+
+The dispersion parameter for the quasipoisson distriubution is 1.171343; this indicates that the model is over-dispersed and that therefore the Poisson distribution is not the most appropriate random component for the model.
