@@ -4,8 +4,8 @@ MACS 30100 - Perspectives on Computational Modeling
 **Due Monday February 27th at 11:30am**
 
 -   [Part 1: Sexy Joe Biden (redux) \[4 points\]](#part-1-sexy-joe-biden-redux-4-points)
--   [Part 2: Wage \[3 points\]](#part-2-wage-3-points)
--   [Part 3: College \[3 points\]](#part-3-college-3-points)
+-   [Part 2: College (bivariate) \[3 points\]](#part-2-college-bivariate-3-points)
+-   [Part 3: College (GAM) \[3 points\]](#part-3-college-gam-3-points)
 -   [Submission instructions](#submission-instructions)
     -   [If you use R](#if-you-use-r)
     -   [If you use Python](#if-you-use-python)
@@ -50,46 +50,31 @@ where *Y* is the Joe Biden feeling thermometer, *X*<sub>1</sub> is age, *X*<sub>
 6.  Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained.
 7.  Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (*n* = 1000).
 
-Part 2: Wage \[3 points\]
-=========================
+Part 2: College (bivariate) \[3 points\]
+========================================
 
-The `Wage` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains detailed information on wages and other information for a group of 3000 workers in the Mid-Atlantic region.
+The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
 
--   `year` - Year that wage information was recorded
--   `age` - Age of worker
--   `sex` - Gender
--   `maritl` - A factor with five levels:
-    1.  Never married
-    2.  Married
-    3.  Widowed
-    4.  Divorced
-    5.  Separated
--   `race` - A factor with four levels:
-    1.  White
-    2.  Black
-    3.  Asian
-    4.  Other
--   `education` - A factor with five levels:
-    1.  &lt; HS Grad
-    2.  HS Grad
-    3.  Some College
-    4.  College Grad
-    5.  Advanced degree
--   `region` - Region of the country (mid-atlantic only).
--   `jobclass` - A factor with two levels indicating type of job:
-    1.  Industrial
-    2.  Information
--   `health` - A factor with two levels indicating health level of worker:
-    1.  &lt;= Good
-    2.  = Very Good
+-   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
+-   `Apps` - Number of applications received.
+-   `Accept` - Number of applications accepted.
+-   `Enroll` - Number of new students enrolled.
+-   `Top10perc` - Percent of new students from top 10% of H.S. class.
+-   `Top25perc` - Percent of new students from top 25% of H.S. class.
+-   `F.Undergrad` - Number of fulltime undergraduates.
+-   `P.Undergrad` - Number of parttime undergraduates.
+-   `Outstate` - Out-of-state tuition.
+-   `Room.Board` - Room and board costs.
+-   `Books` - Estimated book costs.
+-   `Personal` - Estimated personal spending.
+-   `PhD` - Percent of faculty with Ph.D.'s.
+-   `Terminal` - Percent of faculty with terminal degrees.
+-   `S.F.Ratio` - Student/faculty ratio.
+-   `perc.alumni` - Percent of alumni who donate.
+-   `Expend` - Instructional expenditure per student.
+-   `Grad.Rate` - Graduation rate.
 
--   `health_ins` - A factor with two levels indicating whether worker has health insurance:
-    1.  Yes
-    2.  No
--   `logwage` - Log of worker's wage.
--   `wage` - Worker's raw wage.
-
-Explore the bivariate relationships between some of the available predictors and `wage`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
+Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
 
 -   No transformation
 -   Monotonic transformation
@@ -100,14 +85,14 @@ Explore the bivariate relationships between some of the available predictors and
 
 Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
 
-Part 3: College \[3 points\]
-============================
+Part 3: College (GAM) \[3 points\]
+==================================
 
 The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
 
 -   `Outstate` - Out-of-state tuition.
 -   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
--   `Room.board` - Room and board costs.
+-   `Room.Board` - Room and board costs.
 -   `PhD` - Percent of faculty with Ph.D.'s.
 -   `perc.alumni` - Percent of alumni who donate.
 -   `Expend` - Instructional expenditure per student.
@@ -115,7 +100,7 @@ The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.fe
 
 1.  Split the data into a training set and a test set.
 2.  Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-3.  Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+3.  Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
 4.  Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
 5.  For which variables, if any, is there evidence of a non-linear relationship with the response?[3]
 
