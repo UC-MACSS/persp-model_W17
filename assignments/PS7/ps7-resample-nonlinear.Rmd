@@ -61,7 +61,7 @@ The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.fe
 * `F.Undergrad` - Number of fulltime undergraduates.
 * `P.Undergrad` - Number of parttime undergraduates.
 * `Outstate` - Out-of-state tuition.
-* `Room.board` - Room and board costs.
+* `Room.Board` - Room and board costs.
 * `Books` - Estimated book costs.
 * `Personal` - Estimated personal spending.
 * `PhD` - Percent of faculty with Ph.D.'s.
@@ -88,7 +88,7 @@ The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.fe
 
 * `Outstate` - Out-of-state tuition.
 * `Private` - A factor with levels `No` and `Yes` indicating private or public university.
-* `Room.board` - Room and board costs.
+* `Room.Board` - Room and board costs.
 * `PhD` - Percent of faculty with Ph.D.'s.
 * `perc.alumni` - Percent of alumni who donate.
 * `Expend` - Instructional expenditure per student.
