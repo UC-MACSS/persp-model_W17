@@ -1,0 +1,118 @@
+---
+title: "Problem Set 7 | MACS 301"
+author: "Julian McClellan"
+date: "February 27, 2017"
+output:
+  html_document: default
+  pdf_document:
+    latex_engine: lualatex
+---
+
+```{r setup, message = FALSE, echo = FALSE}
+library(ggplot2)
+library(tidyverse)
+library(broom)
+library(modelr)
+library(pROC)
+library(MASS)
+library(stargazer)
+library(modelr)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE)
+df.biden = read.csv('data/biden.csv')
+df.college = read.csv('data/College.csv')
+df.wage = read.csv('data/Wage.csv')
+```
+
+# Part 1: Sexy Joe Biden 
+
+### 1. Estimate the training MSE of the model using the traditional approach.
+
+```{r biden_lm}
+lm.biden.all <- lm(biden ~ ., data = df.biden)
+
+# Based off of resampling class notes
+calc_mse <- function(model, data){
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse.train_only <- calc_mse(lm.biden.all, df.biden)
+```
+The mean squared error of a linear model using all of the predictors, and calculated on all of the (training) data is `r mse.train_only`.
+
+***
+
+### 2. Estimate the test MSE of the model using the validation set approach.
+
+```{r vset_approach}
+set.seed(69)
+biden_split <- resample_partition(df.biden, c(test = .3, train = .7))
+
+lm.biden.all.train <- lm(biden ~ ., data = biden_split$train)
+
+mse.test_only <- calc_mse(lm.biden.all.train, biden_split$test)
+```
+The mean squared error of a linear model using all of the predictors, and calculated on only the test set (30% of the data) is `r round(mse.test_only, 3)`. This value is `r round(mse.test_only - mse.train_only, 3)` (`r round(100 *(mse.test_only - mse.train_only) / mse.train_only, 2)`%) larger than the MSE calculated using only the training data. We expect the two MSE's to be different
+
+***
+
+### 3. Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+
+```{r vset_approach}
+sim_biden_mse = function(n, df, method = 'vset', test = .3, train = .7, k = 10){
+  set.seed(69)
+  if(method == 'vset'){
+    mses <- replicate(n, {
+      df.split <-  resample_partition(df, c(train = train, test = test))
+      df.lm <- lm(biden ~ . , data = df.split$train)
+      mse <- calc_mse(df.lm, df.split$test)
+      })
+    } else if(method == 'kfold'){
+      mses <- replicate(n, {
+        df.kfolds <- crossv_kfold(df, k = k)
+        models.kfolds <- map(df.kfolds$train, ~ lm(biden ~ ., data = .))
+        mse.kfolds <- map2_dbl(models.kfolds, df.kfolds$test, calc_mse)
+        mse <- mean(mse.kfolds)
+      })
+    } else if (method == 'loocv'){
+      df.loocv <- crossv_kfold(df, k = nrow(na.omit(df)))
+      models.loocv <- map(df.loocv$train, ~ lm(biden ~ ., data = .))
+      mse.loocv <- map2_dbl(models.loocv, df.loocv$test, calc_mse)
+      return(mean(mse.loocv))
+    }
+  return(tibble(mse = mses))
+}
+
+sim_biden_mse(100, df.biden) %>%
+  {.} -> vset_mses
+
+vset_mses %>%
+  ggplot(aes(mse)) +
+  geom_density() +
+  labs(title = 'Test MSE density over 100 different 70/30 train/test splits of Biden Data') +
+  geom_vline(aes(color = "Test MSE Mean", xintercept = mean(vset_mses$mse)), linetype = 'dashed') +
+  geom_vline(aes(color = "All Data MSE", xintercept = mse.train_only)) +
+  scale_color_manual('', breaks = c('Test MSE Mean', 'All Data MSE'), values = c('red', 'green')) + 
+  theme(legend.position = 'bottom')
+```
+
+As we can see from the above density graph, thanks to the Central Limit Theorem (each Test MSE is independent!), the distribution of our Test MSE's is centered about the true mean of the distribution: the MSE for the whole dataset. Of course, since we have a distribution, there is some variability as to what the Test MSE actually is. If we were to select a model based on the test MSE of a certain validation set (1 train 1 test) split of the data, that model selected has a chance of differing from a model selected using the same procedure, but a different validation set split.
+
+### 4. Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+
+```{r loocv}
+mse.loocv <-  sim_biden_mse(NA, df.biden, 'loocv')
+```
+
+The estimated test MSE of the model using the LOOCV approach is: `r mse.loocv`. This is only slightly above the training MSE of the model (`r mse.train_only`) we obtained when calculated against the entire dataset.
+
+### 5. Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.
+
+```{r 10fold}
+mse.1fold <- sim_biden_mse(1, df.biden, 'kfold', k = 10)
+```
+
+The test MSE of the model using the 10-fold cross-validation approach is `r mse.1fold`.
