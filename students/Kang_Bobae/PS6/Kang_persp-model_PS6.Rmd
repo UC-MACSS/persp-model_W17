@@ -1,0 +1,311 @@
+---
+title: "Kang_persp-model_PS6"
+author: "BobaeKang"
+date: "February 20, 2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(modelr)
+library(pROC)
+library(pander)
+data1 <- read_csv('data/mental_health.csv')
+data2 <- read_csv('data/gss2006.csv')
+```
+
+# Part 1: Modeling voter turnout
+## Describe the data (1 point)
+
+Here are two histograms of the voter turnout data, one with missing values and the other witout:  
+```{r Part 1 histogram 1, echo=FALSE}
+# histogram 1
+data1 %>%
+  group_by(vote96) %>%
+  count() %>%
+  ggplot(aes(x=as.character(vote96), y=n/sum(n))) +
+  geom_bar(stat='identity') +
+  labs(title = "Observed voter turnout distribution",
+       subtitle = '0 = no, 1 = yes, NA = missing',
+       x = 'Observed voter turnout',
+       y = 'Fraction of voters in each category')
+```
+```{r Part 1 histogram 2, echo=FALSE}
+
+# histogram 2 without missing values
+data1 %>%
+  group_by(vote96) %>%
+  filter(vote96!='NA') %>%
+  count() %>%
+  ggplot(aes(x=as.character(vote96), y=n/sum(n))) +
+  geom_bar(stat='identity') +
+  labs(title = "Observed voter turnout distribution",
+       subtitle = '0 = no, 1 = yes',
+       x = 'Observed voter turnout',
+       y = 'Fraction of voters in each category')
+```
+
+The unconditional probabilities for each voter turnout category are as follows:  
+```{r Part 1 unconditional probability, echo=FALSE}
+# unconditiaonl probability (with missing values)
+prob_w_NA <- data1 %>%
+  group_by(vote96) %>%
+  count() %>%
+  mutate('probability (with missing values)' = n/sum(n)) %>%
+  select(-n)
+
+print('Unconditional probability with missing values')
+pander(prob_w_NA)
+
+# unconditional probability (without missing values)
+prob_wo_NA <- data1 %>%
+  group_by(vote96) %>%
+  filter(vote96!='NA') %>%
+  count() %>%
+  mutate('probability (without missing values)' = n/sum(n)) %>%
+  select(-n)
+
+print('Unconditional probability without missing values')
+pander(prob_wo_NA)
+```
+
+The following scattorplot with a overlaying linear smoothing line indicates a negative correlation between the voter turnout and the mental health index. The points are jittered to better ilustrate how many observations exist for each mental health index score. Without jittering, multiple observations for the given mental health index appear on the plot as if there is only a single observation.
+
+The linear model suffers from a potential problem of higher-than-one or lower-then-zero probability, because it assumes that the range of the response variable is all real numbers.  
+
+```{r Part 1 scatterplot, echo=FALSE, warning=FALSE}
+# scatterplot
+data1 %>%
+  ggplot(aes(mhealth_sum, vote96)) +
+  geom_jitter(na.rm=TRUE, height=.03, width=.3, alpha=.3) +
+  geom_smooth(method='lm') +
+  labs(title = "Observed voter turnout by the mental health index",
+       subtitle = '0 = no, 1 = yes; missing values are removed',
+       x = 'Mental health ',
+       y = 'Probability of vote turnout')
+```
+
+## Basic model (3 points)
+The relationship between mental health and voter turnout is statistically significant, as the low p-value for the coefficient (3.13e-13) suggests. Is this substantively significant? The coefficient, -0.14348, indicates the log-odds of a unit increase in the value of mental health state. Exponentiating the coefficient givese the odds of voting for a unit increase in the value of mental health state, 0.8663381. That is, the odds that voter turnout is 1 change by a multiplicative factor of 0.8663381. In the same mannter, the probability that the voter turnout = 1 change by a multiplicative factor of 0.8663381/(1 + 0.8663381) = 0.4641914, and this seems substantively significant.  
+```{r Part 1 basic model, echo=FALSE}
+fit_logistic_sim <- glm(vote96 ~ mhealth_sum, data=data1, family=binomial())
+summary(fit_logistic_sim)
+```
+
+```{r Part 1 basic model plot prep, echo=FALSE}
+# define some useful functions
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+prob2odds <- function(x){
+  x / (1 - x)
+}
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+# augment the dataset using the defined functions
+vote_mental_pred <- data1 %>%
+  add_predictions(fit_logistic_sim) %>%
+  # predicted values are in the log-odds form - convert to probabilities
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+```
+
+Here is a line plot for log-odds:  
+
+```{r Part 1 basic model log-odds plot, echo=FALSE, warning=FALSE}
+ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
+  geom_line(aes(y = logodds), color = "blue", size = 1) +
+  labs(title = "Log-odds of voter turout by the mental health index",
+       x = "Mental health",
+       y = "Log-odds of voter turnout")
+```
+
+And a line plot for odds:  
+
+```{r Part 1 basic model odds plot, echo=FALSE, warning=FALSE}
+ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
+  geom_line(aes(y = odds), color = "red", size = 1) +
+  labs(title = "Odds of voter turout by the mental health index",
+       x = "Mental health",
+       y = "Odds of voter turnout")
+
+geom_point(aes(y = vote96))
+```
+
+Finally, a line plot for probability with the jittered scattorplot for voter turnout:  
+
+```{r Part 1 basic model probabilities plot, echo=FALSE, warning=FALSE}
+ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
+#  geom_point(aes(y = vote96)) +
+  geom_jitter(aes(y=vote96), na.rm=TRUE, height=.03, width=.3, alpha=.3) +
+  geom_line(aes(y = prob), color = "green", size = 1) +
+  labs(title = "Predicted probability of voter turout by the mental health index",
+       subtitle = '0 = no, 1 = yes; missing values are removed',
+       x = "Mental health",
+       y = "Probability of voter turnout")
+```
+
+The first difference in probability for an increase in the mental health index from 1 to 2, and for 5 to 6.  
+
+```{r Part 1 basic model first difference, echo=FALSE, warning=FALSE}
+prob1 <- exp(1.1392097 + (1 * -0.1434752)) / (1 + exp(1.1392097 + (1 * -0.1434752)))
+prob2 <- exp(1.1392097 + (2 * -0.1434752)) / (1 + exp(1.1392097 + (2 * -0.1434752)))
+diff_1to2 <-  prob1 - prob2 
+
+prob5 <- exp(1.1392097 + (5 * -0.1434752)) / (1 + exp(1.1392097 + (5 * -0.1434752)))
+prob6 <- exp(1.1392097 + (6 * -0.1434752)) / (1 + exp(1.1392097 + (6 * -0.1434752)))
+diff_5to6 <- prob5 - prob6
+
+cat("The difference in probability for an increase in the mental health index from 1 to 2 is", diff_1to2)
+cat("The difference in probability for an increase in the mental health index from 5 to 6 is", diff_5to6)
+```
+
+As for the current model, the accuracy rate is 0.677761, the proportional reduction in error is 0.01616628, and the area under the curve (AUC) is 0.6243. In other words, this is not a good model. Its accuracy rate is little better than the baseline rate (only 1.6% reduction in error) and its performance is hardly superior to the random guess, which would have the AUC of 0.5.    
+
+```{r Part 1 basic model accuracy, echo=FALSE}
+accuracy <- data1 %>%
+  add_predictions(fit_logistic_sim) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+accuracy_rate <- mean(accuracy$vote96 == accuracy$pred, na.rm = TRUE)
+cat("Accuracy rate:", accuracy_rate)
+```
+
+```{r Part 1 baseic model proportioanl reduction error, echo=FALSE}
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+cat("Proportional reduction in error:", PRE(fit_logistic_sim))
+```
+
+```{r Part 1 baseic model AUC, echo=FALSE}
+auc <- auc(accuracy$vote96, accuracy$prob)
+auc
+```
+
+## Multiple variable model (3 points)
+The three components of the logistic regression:  
+* Probability distribution (random component): the Bernoulli distribution, Pr$(Y_i = y_i | \pi)$ = $\pi_i^{y_i}$ $(1 - \pi_i)^{1-y_i}$  
+* Linear predictor: $\eta_i = \beta_0 + \beta_1 X_{1,i} + \beta_2 X_{2,i} + \beta_3 X_{3,i} + \beta_4 X_{4,i} + \beta_5 X_{5,i} + \beta_6 X_{6,i} + \beta_7 X_{7,i}$,  
+  where $X_1$ is `mhealth_sum`, $X_2$ is `age`, $X_3$ is `educ`, $X_4$ is `blakc`, $X_5$ is `female`, $X_6$ is `married`, and $X_7$ is `inc10`.  
+* Link function: the logit function, $\pi_i$ $=$ $e^{\eta_i}$ / (1 + $e^{\eta_i}$)  
+
+Estimate the model and report your results.  
+
+```{r Part 1 multivariate model, echo=FALSE}
+fit_logistic_mul <- glm(vote96 ~ ., data=data1, family=binomial())
+summary(fit_logistic_mul)
+```
+In this multivariate logistric regression model, the response variable is the binary voter turnout varaible where 1 means the respondent voted  and 0 means the respondent did not vote. The predictors include the mental health index, age, education, race (Black or not), gender (female or not), marital status (married or not), and family income (in \$10,000s). The regression results indicate that four of the coefficients are statistically significant; these coefficients are, respectively, -0.089102 for the mental health index, 0.042534 for age, 0.228686 for education and 0.069614 for income. These coefficients are given in terms of log-odds.
+
+In terms of odds, hold other variables constant, a unit increase in the mental health index leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 0.9147523. Likewise, holding other variables constant, one year increase in age leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.043452. Again, holding other variables constant, one year increase in the number of years of formal education leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.256947. Finally, holding other variables constant, a unit increase in income leads to an average change in the odds of voter turnout = 1 by a multiplicative factor of 1.072094. In terms of predicted probabilities, these values correspond to, respectively, a multiplicative factor of 0.4777392 for each unit increase in the mental health index holding other variables constant, 0.510632 for age, 0.5569236 for educaiton, and 0.5173964 for income.
+
+The accuracy rate, proportional reduction in error (PRE) and area under the curve (AUC) ofthe current model indicate that the model is better than the "simple" logistic regression model. Nonetheless, even with more predictors, the current logistic regression model shows a rather poor performance. The accuracy, PRE and AUC scores of the current model are as follows:   
+```{r Part 1 multivariate model accuracy PRE AUC, echo=FALSE}
+accuracy_mul <- data1 %>%
+  add_predictions(fit_logistic_mul) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+accuracy_rate_mul <- mean(accuracy_mul$vote96 == accuracy_mul$pred, na.rm = TRUE)
+cat("Accuracy rate:", accuracy_rate_mul);
+cat("Proportional reduction in error:", PRE(fit_logistic_mul));
+cat("Area Under the Curve:", auc(accuracy_mul$vote96, accuracy_mul$prob))
+```
+
+We can also compare the current model with the previous model using the same two cases of first difference in the mental health index, 1 to 2 and 5 to 6. To hold other variables constant, I will use the case of a 30-old-year black female single with 16 years of education and income of \$50,000. In the previous model, they were 0.02917824 for 1 to 2 and 0.03477821 for 5 to 6. For the multivariate model:
+```{r Part 1 multivariate model first difference, echo=FALSE, warning=FALSE}
+prob1_mul <- exp(-4.304103 + (1 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) / (1 + exp(-4.304103 + (1 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+prob2_mul <- exp(-4.304103 + (2 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (2 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+diff_1to2_mul <- prob1_mul - prob2_mul
+
+prob5_mul <- exp(-4.304103 + (5 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (5 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+prob6_mul <- exp(-4.304103 + (6 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614) /  (1 + exp(-4.304103 + (6 * -0.089102) + 30*0.042534 + 16*0.228686 + 0.272984 + -0.016969 + 0.296915 + 5*0.069614))
+diff_5to6_mul <- prob5_mul - prob6_mul
+
+cat("The difference in predicted probability for an increase in the mental health index from 1 to 2 is", diff_1to2_mul)
+cat("The difference in predicted probability for an increase in the mental health index from 5 to 6 is", diff_5to6_mul)
+```
+
+Finally, the following plot illustrate the difference between the respondents with college education and the others. While the higher mental health index is associated with less probability of voting for both groups, the effect of higher education is remarkable.  
+```{r Part 1 multivariate model plot, echo=FALSE, warning=FALSE}
+vote_mental_pred2 <- data1 %>%
+  data_grid(mhealth_sum, educ, .model=fit_logistic_mul) %>%
+  add_predictions(fit_logistic_mul) %>%
+  # predicted values are in the log-odds form - convert to probabilities
+  mutate(prob = logit2prob(pred))
+
+ggplot(vote_mental_pred2, aes(x = mhealth_sum, y = prob, color = ifelse(educ > 12, "College", "No college"))) +
+  geom_line() +
+  geom_smooth() +
+  labs(title = "Predicted probability of voter turout",
+       subtitle = 'by metnal health index and education, contolling for other variables',
+       x = "Mental health",
+       y = "Predicted probability of voter turnout") +
+  guides(color = guide_legend(''))
+
+
+```
+
+# Part 2: Modeling tv consumption
+## Estimate a regression model (3 points)
+
+The three components of the Poisson regression:  
+* Probability distribution (random component): the Poisson distribution, Pr$(Y_i = y_i | \mu)$ = $\mu^{y_i}$ $e^{-\mu}$ / $y_i!$   
+* Linear predictor: $\eta_i = \beta_0 + \beta_1 X_{1,i} + \beta_2 X_{2,i} + \beta_3 X_{3,i} + \beta_4 X_{4,i} + \beta_5 X_{5,i} + \beta_6 X_{6,i} + \beta_7 X_{7,i}$,  
+  where $X_1$ is `age`, $X_2$ is `childs`, $X_3$ is `educ`, $X_4$ is `female`, $X_5$ is `grass`, $X_6$ is `hrsrelax`, and $X_7$ is `black`.  
+* Link function: the log function, $\mu_i$ $=$ ln($\eta_i$)
+
+Estimate the model and report your results:
+```{r Part 2 multivariate model, echo=FALSE}
+fit_poisson_mul2 <- glm(tvhours ~ .-social_connect -xmovie -zodiac -voted04 -dem -rep- ind, data=data2, family=poisson())
+summary(fit_poisson_mul2)
+```
+
+In this Poisson regression model, the response variable is the number of hours for watching TV per day. The predictors I chose include the following:  age, number of children, education, gender (1 if female), opinion on legalizing marijuana, hours to relex, and race (1 if black). The regression result illustrates that the coefficients for only three predictors are statistically significant. These coefficients are, respectively -0.0380001 for education, 0.0457914 for hours to relax and 0.4363657 for race. Each of these coefficients indicates the extent of a change in the log-count of the respondent's Tv-watching hours, to which a unit increase in the given predictor will lead on average when other variables are held constant.
+
+These cofficients also mean the following: a unit increase in edcuation is associated with a 0.9627128-fold change in the mean number of the hours of watching TV per day. Also, each additioanl hour of relaxing is associated with a 1.046856-fold change in the mean number of the hours of watching TV per day. Finally, being black is associated with a 1.547074-fold change in the mean number of the hours of watching TV per day.
+
+Finally, the following plot shows the effect of three statistically significant predictors on the hours of watching TV. The plot illustrates that while leisure and racial factors are positively correlated with the hours of watching TV, education is negatively correlated with the hours of watching TV.       
+
+```{r Part 2 multivariate model plot, echo=FALSE, warning=FALSE}
+tv_pred1 <- data2 %>%
+  data_grid(educ, hrsrelax, black, .model=fit_poisson_mul2) %>%
+  add_predictions(fit_poisson_mul2) %>%
+  # predicted counts are in the logs - convert to counts
+  mutate(count = exp(pred))
+
+ggplot(tv_pred1, aes(x = hrsrelax, y = count, color = ifelse(educ > 12, "College", "No college"))) +
+  geom_line() +
+  geom_smooth() +
+  labs(title = "Predicted hours of watching TV",
+     subtitle = 'by hours to relax, college, and race',
+     x = "Hours to relax",
+     y = "Predicted hours of watching TV") +
+  guides(color = guide_legend('')) +
+  facet_wrap(~ifelse(black==1, "black", "not black"))
+
+```

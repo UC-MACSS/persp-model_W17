@@ -1,0 +1,193 @@
+---
+title: "Problem set #6: Generalized linear models"
+author: 'Wenxi Xiao'
+date: "**Due Monday February 20th at 11:30am**"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, echo = FALSE, message = FALSE, warning = FALSE)  
+# to display the output of a code chunk but not the underlying R code: echo=FALSE.
+```
+
+```{r library}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+library(pROC)
+options(na.action = na.warn)
+set.seed(1234)
+theme_set(theme_minimal())
+```
+# Part 1: Modeling voter turnout
+## Describe the data
+```{r hist_mental_health, echo = FALSE}
+# get mental_health data:
+mental_health <- read_csv('mental_health.csv')
+# plot the histogram:
+mental_health %>% group_by(vote96) %>% count() %>% ggplot(aes(x=as.character(vote96), y=n)) + geom_bar(stat='identity') + labs(title = 'Histogram for Voter Turnout in 1996', x = 'Vote Behavior', y = 'Number of people', subtitle = '0 = did not vote, 1 = voted')
+```
+
+```{r unconditional_probability_voting_turnout, echo = FALSE}
+# The unconditional_probability with missing data 
+precent_v <- sum(mental_health$vote96, na.rm = TRUE) / length(mental_health$vote96)
+#precent_v*100
+# The unconditional_probability without missing data
+datanew <- mental_health %>% group_by(vote96) %>% filter(vote96!='NA')
+precent_v_no_na <- sum(mental_health$vote96, na.rm = TRUE) / length(datanew$vote96)
+#precent_v_no_na*100
+```
+
+1. The unconditional probability of a given individual turning out to vote excluding missing data is 62.95904%.The unconditional probability of a given individual turning out to vote including missing data is 68.23574%.
+
+1. Generating a scatterplot of the relationship between mental health and observed voter turnout and overlay a linear smoothing line:
+Since it makes no sense to include entries with missing data for `mental health index` or missing data for `voter behavior`, we need to first modify the dataset.  
+```{r data_clean, echo = FALSE}
+mental_health_no_na = mental_health[!is.na(mental_health$vote96) & !is.na(mental_health$mhealth_sum),]
+```
+
+```{r scatterplot, echo = FALSE}
+ggplot(mental_health_no_na, aes(mhealth_sum, vote96)) + geom_point() + geom_smooth(method = 'lm') + scale_y_continuous(breaks = c(0, 1)) + labs(title = "Voter Turnout vs. Mental Health", y = "Voter Turnout: 1(voted), 0(did not vote)", x = "Mental Health Index Score")
+```
+
+From the scatterplot, we can see that there is a negative correlation with `voting behavior` and `mental health index` score, which means that more depressed the voter is the less likely he or she will vote. The `voting behavior` is dichotomous that only have 2 possible values, 0 or 1, but the `mental health index` score ranges from 0 to 9, which makes the smoothed regression line here is problematic. For instance, we could have potential respondents whose `mental health index` scores are high enough that they could have a negative predicted value for voting behavior, which makes no sense in our context. Thus, linear regression model seems to be an inappropriate assumption for our data.
+
+## Basic model
+
+Estimate a logistic regression model of the relationship between mental health and voter turnout.
+```{r logistic_regression_model, echo = FALSE}
+basic_model <- glm(vote96 ~ mhealth_sum, data = mental_health_no_na, family = binomial)
+summary(basic_model)
+```
+
+1. The relationship between mental health and voter turnout is statistically significant because the p-value is 3.13e-13, which is less than 0.05 significance level. For one unit increase in `mental health index` score, we expect to see the log-odds of voting decrease by 0.14348, which means that the odds ratio associated with one unit increase in `mental health index` score is `r exp(-0.14348)`. Thus, I think the relationship between mental health and voter turnout is substantively significant.
+
+1. The estimated parameter for mental health is -0.14348. For one unit increase in `mental health index` score, we expect to see the log-odds of voting decrease by 0.14348:
+```{r basic_model_graph, echo = FALSE}
+basic_model_pred <- mental_health_no_na %>% add_predictions(basic_model)
+ggplot(basic_model_pred, aes(mhealth_sum, pred)) + geom_line(size = 1.5) + labs(title = "Log Odds of Voting in 1996 vs. Mental Health Index Score", x = "Mental Health Index Score", y = "Log Odds of Voting")
+```
+
+1. With one unit increase on `mental health index` score, we expect to see the odds of voter voting against not voting decreases by 14.348 percent(%). 
+
+```{r basic_model_odds_graph, echo = FALSE}
+basic_model_pred <- basic_model_pred %>% mutate(odds = exp(pred))
+ggplot(basic_model_pred, aes(mhealth_sum, odds)) + geom_line(szie = 1.5) + labs(title = "Odds of Voting in 1996 vs. Mental Health Index Score", x = "Mental Health Index Score", y = "Odds of Voting")
+```
+
+1. The estimated parameter for mental health in terms of probabilities cannot be interpreted without the value of the initial age, on which the first difference depends.
+
+```{r basic_model_p_graph, echo = FALSE}
+# define a function:
+logit2prob<-function(x){exp(x)/(1 + exp(x))}
+
+basic_model_pred <- basic_model_pred %>% mutate(prob = logit2prob(pred))
+ggplot(basic_model_pred, aes(mhealth_sum, prob)) + geom_line(size = 1.5) + labs(title = "Probability of Voting in 1996 vs. Mental Health Index Score", x = "Mental Health Index Score", y = "Probability of Voting")
+```
+
+```{r first_diff, echo = FALSE}
+first_diff_pred <- data.frame(mhealth_sum = c(1, 2, 5, 6))%>% add_predictions(basic_model)%>% mutate(prob = logit2prob(pred))
+
+first_diff_1_2 = first_diff_pred[2, ]$prob - first_diff_pred[1, ]$prob
+first_diff_5_6 = first_diff_pred[4, ]$prob - first_diff_pred[3, ]$prob
+first_diff_1_2
+first_diff_5_6
+```
+
+1. The first difference for an increase in the `mental health index` from 1 to 2 is -0.02917824. The first difference for an increase in the `mental health index` from 5 to 6 is -0.03477821.
+
+```{r accuracy_rate_PRE_AUC, echo = FALSE}
+accuracy <- mental_health_no_na %>% add_predictions(basic_model) %>% mutate(prob = logit2prob(pred), pred = as.numeric(prob >.5))
+mean(accuracy$pred == accuracy$vote96, na.rm = TRUE)
+
+err1 <- nrow(mental_health_no_na[mental_health_no_na$vote96 == 0,])
+err2 <- sum(accuracy$pred != accuracy$vote96)
+PRE <- (err1 - err2)/err1
+PRE
+
+AUC <- auc(accuracy$vote96, accuracy$prob)
+AUC
+```
+
+1. Using a threshold value of 0.5, the accuracy rate is estimated to be 0.677761. The proportional reduction in error (PRE) is estimated to be 1.616628%. The AUC for this model is 0.6243. I do not consider this model to be a good model because 1)the PRE is a quite small increase over that of the useless classifier, and 2) the AUC score is also a quite small increase over that of the useless classifier.
+
+## Multiple variable model
+### Three componets:
+My multiple variable logistic regression model of voter turnout has 
+
+a bernouli distributed random component: 
+
+Pr$(Y_i = y_i | \pi)$ = $\pi_i^{y_i}$ $(1 - \pi_i)^{1-y_i}$ ,
+
+a linear predictor: 
+
+$\eta_i = \beta_0 + \beta_1 mhealthsum_i + \beta_2 age_i + \beta_3 education_i + \beta_4 black_i + \beta_5 female_i + \beta_6 married_i + \beta_7 income10_i$ ,
+
+and a logit function as the link function: 
+
+$\pi_i$ $=$ $e^{\eta_i}$ / (1 + $e^{\eta_i}$).
+
+### Estimate the model and report results:
+```{r multivariate_model, echo=FALSE}
+multivariate_model <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = mental_health_no_na, family = binomial)
+summary(multivariate_model)
+```
+
+Among the all the predictors, mental health (p-value=-0.089102), age(p-value< 2e-16), education (p-value=9.65e-15), and income (p-value=0.008697) have a statistically significant relationship with voter turnout on a p<0.05 significance level. Specifically, one unit increase in the mental health score will on average decrease the odds (i.e., probability) of voting by 0.89102 percent, one year increase in age will on average increase the odds of voting by 4.2534 percent, one year increase in educatoin will on average increase the odds of voting by 22.8686 precent, and every 10 thousand dollar increase in income will on average increase the odds of voting by 6.9614 precent. I think the relationship between educatoin and voting is the most substantially significant one.
+
+```{r multivariate_model_comparison, echo=FALSE}
+mental_health_no_na <- na.omit(mental_health)
+
+accuracy <- mental_health_no_na %>% add_predictions(multivariate_model) %>% mutate(prob = logit2prob(pred), pred = as.numeric(prob >.5))
+
+err1 <- nrow(mental_health_no_na[mental_health_no_na$vote96 == 0,])
+err2 <- sum(accuracy$pred != accuracy$vote96)
+PRE <- (err1 - err2)/err1
+PRE
+```
+
+The PRE here is 14.81481%, which is a quite large increase over that of the useless classifier. Thus, this model performed better than the basic model.
+
+```{r goodness_fit, echo=FALSE}
+pchisq(multivariate_model$deviance, multivariate_model$df.residual, lower.tail = FALSE)
+```
+However, after conducting the chi-square goodness of fit test, we found that the p-value from the goodness of fit test is 0.04140208, which passed the p<0.05 significance level. We then reject the null hypothesis that the sample data are consistent with a hypothesized distribution (i.e., the model fits the data).
+
+# Part 2: Modeling tv consumption
+## Three componets:
+My multiple variable Poisson regression model of tv consumption has 
+
+a Poisson-distribution random component: 
+
+Pr$(Y_i = y_i | \mu)$ = $\mu^{y_i}$ $e^{-\mu}$ / $y_i!$ ,
+
+a linear predictor: 
+
+$\eta_i = \beta_0 + \beta_1 age_i + \beta_2 childs_i + \beta_3 education_i + \beta_4 female_i + \beta_5 grass_i + \beta_6 hrsrelax_i + \beta_7 black_i + \beta_8 socialconnect_i + \beta_9 voted04_i + \beta_{10} xmovie_i + \beta_{11} zodiac_i$  ,
+
+and a log function as the link function: 
+
+$\log(\mu_i)$ $=$ $\eta_i$.
+
+## Estimate the model and report results:
+```{r tv_model, echo=FALSE}
+tv_data <- read_csv('gss2006.csv')
+tv_model <- glm(tvhours ~ age + childs + educ + female + grass + hrsrelax + black + social_connect + voted04 + xmovie + zodiac, data = tv_data, family = poisson)
+summary(tv_model)
+```
+
+Among the all the predictors, education (p-value=0.0184), hours of relax per day (p-value=5.73e-06), and black (p-value=1.47e-09) have a statistically significant relationship with tv comsumption on a a p<0.05 significance level. Specifically, one year incrase in education will on average result in a 0.029077 unit decrease in log of hours of watching TV, one hour incrase in hours of relax per day will on average result in a 0.046556 unit increase in log of hours of watching TV, and being balck increase on average the log of hours of watching TV by 0.462000 unit. I think the relationship between black and tv watching is the most substantially significant one, which suggests that we may omitted variables such as SES as predictors in our model. 
+
+```{r goodness_fit2, echo=FALSE}
+pchisq(tv_model$deviance, tv_model$df.residual, lower.tail = FALSE)
+```
+
+After conducting the chi-square goodness of fit test, we found that the p-value from the goodness of fit test is 0.3679743, which did not passed the p<0.05 significance level. We then cannot reject the null hypothesis that the sample data are consistent with a hypothesized distribution (i.e., the model fits the data).

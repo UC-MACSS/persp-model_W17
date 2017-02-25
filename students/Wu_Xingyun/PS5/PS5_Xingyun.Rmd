@@ -3,8 +3,8 @@ title: 'Perspectives on Computational Modeling: PS#5'
 author: "Xingyun Wu"
 date: "02/12/2017"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}

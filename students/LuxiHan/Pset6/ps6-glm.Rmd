@@ -1,0 +1,317 @@
+---
+title: "Problem Set 6"
+author: "MACS 30100 - Perspectives on Computational Modeling<br> Luxi Han 10449918"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+```
+
+```{r library}
+library(memisc)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+library(pander)
+library(xtable)
+library(stargazer)
+```
+
+## Problem 1
+
+1. The following is the graph for the histogram of the variable 
+
+```{r problem 1a}
+m_health <- read_csv("data/mental_health.csv")
+health_nona <- m_health[!is.na(m_health$vote96), ]
+m_health$vote96 = as.factor(m_health$vote96)
+ggplot(m_health[!is.na(m_health$vote96),], aes(vote96, fill = vote96))+
+  geom_bar(width = .5)+
+  labs(
+    x = 'Whether Voted',
+    y = 'Frequency',
+    title = 'Frequency Histogram of Voting Behaviour'
+  )+
+  scale_fill_discrete(name = 'Vote Turnout',
+                      labels = c('Not Vote', 'Vote'))
+prob_vote = sum(health_nona$vote96 == 1)/nrow(health_nona)
+p_str = paste("The unconditional probablity a voter will vote is:" , toString(prob_vote))
+print(p_str)
+```
+
+  The unconditional probablity of voter voting is about 68.24%.
+  
+2. The following is the scatter plot and the smoothed regression line:
+
+```{r problem 1b}
+m_health <- read_csv("data/mental_health.csv")
+clean_data = m_health[!is.na(m_health$vote96) & !is.na(m_health$mhealth_sum),]
+ggplot(clean_data, aes(y = vote96, x = mhealth_sum)) + 
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  labs(
+    x = 'Mental Health Index',
+    y = 'Voting Turnout',
+    title = 'Predicted Voting Turnout (Linear Probablity Model)'
+  )
+```
+
+This graph tells us that the relationship between voter turnout and mental health is negatively correlated. 
+The reason why this graph is problematic is that: 1) voter turnout is a binary choice taking on values of either 0 or 1, while the predicted value is a strand of continous value between 0 and 1; 2) if we were to plot further down along the x axis, then we will get negative predicted voter turnout. This is unsenesible.
+
+##Problem 2
+```{r problem 2}
+voter_health <- glm(vote96 ~ mhealth_sum, data = clean_data, family = binomial)
+```
+ 1. There is indeed a significantly negative relationship between voter turnout and meantal health. The esitmated parameter is about -0.14348 which is significant on 0.001 significance level.
+ 
+```{r problem 2a, results = 'asis'}
+stargazer(voter_health, type = 'latex', title = 'Logit Regression With Single Predictor (Voter Turnout)', header = FALSE, no.space = TRUE)
+```
+ 
+ 2. When the evaluation on mental health index increases by one unit, the log odds of voter voting against not voting decreases by -0.14348. 
+ The following is the graph:
+ 
+```{r problem 2b}
+voter_health_pred <- clean_data %>%
+  add_predictions(voter_health)
+
+ggplot(voter_health_pred, aes(pred, mhealth_sum)) +
+  geom_line(size = 1)+
+  labs(
+    x = 'Mental Health Index',
+    y = 'Log Odds of Voter Turnout',
+    title = 'Predicted Log Odds of Voter Turnout'
+  )
+```
+
+3. The estimator on odds can be interpreted as percent change. When the evaluation on mental health increases by one unit, the odds of voter voting against not voting decreases by -14.348 percent(%).  
+
+```{r problem 2c}
+voter_health_pred <- voter_health_pred %>%
+  mutate(odds = exp(pred))
+
+ggplot(voter_health_pred, aes(odds, mhealth_sum)) +
+  geom_line(szie = 1)+
+  labs(
+    x = 'Mental Health Index',
+    y = 'Odds of Voter Turnout',
+    title = 'Predicted Odds of Voter Turnout'
+  )
+```
+
+4. The interpretation of the estimator from the perspective of probablity is not certain. Since the first difference typically depend on the initial age.
+
+```{r problem 2d}
+logit2prob<-function(x){
+  exp(x)/(1 + exp(x))
+}
+voter_health_pred <- voter_health_pred %>%
+  mutate(prob = logit2prob(pred))
+
+ggplot(voter_health_pred, aes(prob, mhealth_sum)) +
+  geom_line(size = 1)+
+  labs(
+    x = 'Mental Health Index',
+    y = 'Probability of Voter Turnout',
+    title = 'Predicted Probablity of Voter Turnout'
+  )
+
+fd_pred <- data.frame(mhealth_sum = c(1, 2, 5, 6))%>%
+  add_predictions(voter_health)%>%
+  mutate(prob = logit2prob(pred))
+fd1 = fd_pred[2, ]$prob - fd_pred[1, ]$prob
+fd2 = fd_pred[4, ]$prob - fd_pred[3, ]$prob
+print(paste('first difference going from 1 to 2 is ', fd1))
+print(paste('first difference going from 5 to 6 is ', fd2))
+```
+
+The first difference for an increase in the mental health index from 1 to 2 is -0.0292; from 5 to 6 is -0.0348.
+
+5. 
+```{r problem 2e}
+mental_accuracy <- clean_data%>%
+  add_predictions(voter_health)%>%
+  mutate(prob = logit2prob(pred),
+         pred = as.numeric(prob >.5))
+mean(mental_accuracy$pred == mental_accuracy$vote96, na.rm = TRUE)
+
+null_err <- nrow(clean_data[clean_data$vote96 == 0,])
+model_err <- sum(mental_accuracy$pred != mental_accuracy$vote96)
+pre <- (null_err - model_err)/null_err
+pre
+
+library(pROC)
+auc_m <- auc(mental_accuracy$vote96, mental_accuracy$prob)
+auc_m
+```
+The accuracy rate is 0.6778. The prediction error reduction is 1.62%. The AUC is 0.6243. The model doesn't really explain the binary choice of voting very well. We can see that the prediction error reduction is only around 1.6%, which is a small magnitude with a 0-100% scale.
+
+##Problem 3
+
+1. We have the following: 
+  random component is bernouli distribution: 
+  $$Pr(Y_i = y_i | \pi_i) = (\pi_i)^{y_i}(1 - \pi_i)^{1 - y_i}$$
+  Then we know $\pi_i$ is the population 'mean' we want to model; 
+  
+  linear predictor is: 
+  $$\begin{aligned}
+  \eta_i = &\beta_0 + \beta_1 mhealth_sum_i + \beta_2 age_i + \beta_3 educ_i + \\
+  &\beta_4 black_i + \beta_5 black_i + \beta_6 female_i + \beta_7 married_i + \beta_8 inc10_i
+  \end{aligned}$$
+  
+  the link function is:
+  $$\pi_i = g(\eta_i) = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$$
+  
+2. The following is the regression result:
+```{r problem 3b, results='asis'}
+multiple_vote <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = clean_data, family = binomial)
+tab <- xtable(summary(multiple_vote), digits=c(0, 2, 2, 1, 2))
+stargazer(multiple_vote, type = 'latex', title = 'Logit Regression With Multiple Variables (Voter Turnout)', header = FALSE, no.space = TRUE)
+```
+
+###3. 
+```{r problem 3c}
+clean_data <- na.omit(m_health)
+mental_accuracy <- clean_data%>%
+  add_predictions(multiple_vote)%>%
+  mutate(prob = logit2prob(pred),
+         pred = as.numeric(prob >.5))
+
+null_err <- nrow(clean_data[clean_data$vote96 == 0,])
+model_err <- sum(mental_accuracy$pred != mental_accuracy$vote96)
+pre <- (null_err - model_err)/null_err
+pre
+```
+  Overall, the preformance or prediciton power of this model improves significantly relative to the model in last question. Using prediction error reduction as a criterion, we get the result that the prediction error reduces by 14.8% compared to the baseline model where we predict one individual will always vote.  
+
+  Among all of the independent variables, the mental health index, age, education and income turn out to be significant variables. Mental health, age and education are significant on the significance level of 0.001, while income is significant on the level of 0.05. Mental health index has a negative relationship with the voter turnout. On average, one level increase in the mental health index will reduce the odds, defined by the probablity of a voter voting versus not voting, by 1 percent. On the other hand, age, education and income all have positive effect on voter turnout. Specifically, one year increase in age will increase the odds of voting by 4.2%; one year increase in years of educatoin will on average increase the odds of voting by 22.86%; and every ten thousand dollar increase in income will on average increase the odds of voting by 7.0%.  
+  
+  Marriage status is significant on the 0.1 significance level. While whether a person is african american, and gender is statistically insignificant. We plot the predicted probablity of voting against mental health index, which we divide into four groups: married african american people, married non-african american people, unmarried african american people and unmarried non-african american people. We take the mean of all of the continous variables and the median of all the discrete(categorical) varaibles to fix all other predictors fixed.
+  
+  We can see that, in this case since we don't have any interactive terms, we have both varaibles serving as a shifter of probablity. Married people and African people both have higher probablity of voting. Though we see an incrase that is almost 0.1 in probablity, we still can't jump into conclusion on whether this variable has a large effect of not. On the one hand thses variables are statistically insignificant on 0.05 level, on the other hand a 0.1 incrase in voting probablity is not a negligible effect. Serveral factors can casue this problem. The most probable one is multicolinearity with other variables. For example, marriage status can be closely correlated with age and income. 
+
+```{r problem 3 c plot}  
+mental_accuracy_pred <- clean_data%>%
+  data_grid(mhealth_sum, black, married)%>%
+  cbind(data_frame(age = mean(clean_data$age),
+                   educ = mean(clean_data$educ),
+                   female = median(clean_data$female),
+                   inc10 = mean(clean_data$inc10)
+                   ))%>%
+  add_predictions(multiple_vote)%>%
+  mutate(prob = logit2prob(pred))
+
+ggplot(mental_accuracy_pred, aes(x = mhealth_sum, y = prob))+
+  geom_line(size = 1, aes(group = interaction(black, married), color = interaction(black, married)))+
+  scale_color_discrete(name = 'Group',
+    labels = c('Single Non African American',
+                               'Single African American',
+                               'Married Non African American',
+                               'Married African American'))+
+  labs(x = 'Mental Health Index',
+       y = 'Probablity of Voting',
+       title = 'Probablity of Voting vs.Mental Health Index (Black X Marriage Stauts)')
+```
+
+##Problem 4
+
+1.  We have the following: 
+  random component is poisson distribution: 
+  $$Pr(Y_i = y_i | \mu_i) = \frac{\mu^k e^{-y_i}}{y_i!}$$
+  Then we know $\pi_i$ is the population 'mean' we want to model; 
+  
+  linear predictor is: 
+  $$\begin{aligned}
+  \eta_i = &\beta_0 + \beta_1 age_i + \beta_2 children_i + \beta_3 education_i + \beta_4 female_i + \beta_5 grass_i + \\
+  &\beta_6 hrsrelax_i + \beta_7 black_i + \beta_8 social\_connect_i + \beta_9 voted04_i + \\
+  &\beta_{10} xmovie_i + \beta_{11} zodiac_i
+  \end{aligned}
+  $$
+  
+  the link function is:
+  $$log(\mu_i) = \eta_i$$
+  This should be the right form. In class, we wrote the opposite which is wrong (in class we said $\mu$ equals to log of $\eta_i$, this is wrong). Instead the mean function(the inverse of link function) is: 
+  $$\mu_i = g(\eta_i) = e^{\eta_i}$$
+  
+
+2. The following is the regression result:
+```{r problem 4a, results='asis'}
+tv_data <- read_csv('data/gss2006.csv')
+multiple_tv <- glm(tvhours ~ age + childs + educ + female + grass + hrsrelax + black + social_connect + voted04 + xmovie + zodiac, data = tv_data, family = poisson)
+stargazer(multiple_tv, title = 'Poisson Regression of Number of Hours Wathcing TV per Day', no.space = TRUE, single.row = TRUE, header = FALSE)
+```
+
+###3.
+We first perform the goodness of fit test. Essentially, the goodness of fit test is to take the 'difference' of the predicted value using the model specified and the true value of the counts and perform a test on the difference. The difference conforms to a chisqure distribution.
+
+```{r problem4 fit}
+pchisq(multiple_tv$deviance, multiple_tv$df.residual, lower.tail = FALSE)
+```
+As we can see the p-value is approximately 0.368. Remeber the null hypothesis for the goodness of fit test is: the model fits the data (deviance equals to zero). Since this is a chisqure distribution and indeed if the statistics approaches zero, the deviance is approaching zero indicating small difference between the predicted and real value. Thus we cannot reject this null hypothesis. Judging by the p-value, this model provides a good fit of the data. 
+
+But we can take a close look at the regression table. Years of edcuation, hours of relax per day and whether people are areican american are significant in 0.005 level. Specifically, 1 year incrase in education on average cause 0.033 unit decrease in log of hours of watching TV (or 3.3% percent decrease); one hour incrase in hours of relax per day on average causes 0.046 units incrase in log of hours of watching TV (or 4.6%); holding all other constant, being an African American people on average incrase the log of hours of watching TV by 0.44. This is a farily large incrase, considering $\frac{\partial log(mu_i)}{\partial black}$ represents the precent increase.  
+
+The regression result speaks for itself. More educated one person is, less hours they watch TV. This may come as a result of having more work to do for their job or they have other ways of entertainment. Black people tend to watch more TV. This result on its surface doesn't make sense. There could be other socio-economic factors that we don't take into account, for example, income, whether in a food stamp program, or whether on a social welfare program, etc. 
+Another interesting varaible is hours of relax. As hours of relax increases, number of hours of watching television also increases. But as hours of relaxation increases, watching TV is not the only way of entertainment. My hypothesis is that after hours of relax increase to a certain amount, people invest more time to other types of entertainment. There should be a non-linear relationship between hours of wathcing TV and hours of relax. We run the following regression adding the square of hours of relax:
+
+```{r problem 4c, results='asis'}
+tv_data <- read_csv('data/gss2006.csv')
+multiple_tv <- glm(tvhours ~ age + childs + educ + female + grass + hrsrelax + I(hrsrelax^2) + black + social_connect + voted04 + xmovie + zodiac, data = tv_data, family = poisson)
+stargazer(multiple_tv, title = 'Poisson Regression of Number of Hours Wathcing TV per Day', no.space = TRUE, single.row = TRUE, header = FALSE)
+```
+
+Now we can see that the square of hours of relax is negatively significant. This suggests there is a firstly incrasing and then decreasing relationship between hours of relax and hours of watching TV. We then plot the predicted counts against hours of relax. In this case, we take all other predictors as their median value (except for zodiac, I took Aries as the predictor value)
+
+```{r problem4c plot}
+tv_pred <- tv_data[!is.na(tv_data$hrsrelax), c('hrsrelax', 'tvhours')]%>%
+  cbind(data_frame(
+  age = mean(tv_data$age, na.rm = TRUE),
+  childs = mean(tv_data$childs, na.rm = TRUE),
+  educ = mean(tv_data$educ, na.rm = TRUE),
+  female = median(tv_data$female, na.rm = TRUE),
+  grass = median(tv_data$grass, na.rm = TRUE),
+  black = median(tv_data$black, na.rm = TRUE),
+  social_connect = mean(tv_data$social_connect, na.rm = TRUE),
+  voted04 = median(tv_data$voted04, na.rm = TRUE),
+  xmovie =median(tv_data$xmovie, na.rm = TRUE),
+  zodiac = 'Aries'
+  )) %>%
+  add_predictions(multiple_tv)%>%
+  mutate(count = exp(pred))
+ggplot(tv_pred, aes(x = hrsrelax, y = count))+
+  geom_line()+
+  geom_point(aes(y = tvhours), alpha = 0.5)+
+  labs(
+    x = 'Hours of Relax',
+    y = 'Predicted Hours of Wathcing TV',
+    title = 'Predcited Hours of Watching TV vs. Hours of Relax'
+  )
+```
+
+This indeed is a hump shaped curve. Furthermore, if we get rid of the scatter plot, we have:
+
+```{r problem 4c plot 2}
+ggplot(tv_pred, aes(x = hrsrelax, y = count))+
+  geom_line()+
+  labs(
+    x = 'Hours of Relax',
+    y = 'Predicted Hours of Wathcing TV',
+    title = 'Predcited Hours of Watching TV vs. Hours of Relax (No Scatter Plot)'
+  )
+```
+
+As for other predictors, they are not significant in 0.1 level. But notice, zodiac is not related to hours of watching TV. This may be a supporting evidence that zodiac is just a relfect of random month to be born in.
