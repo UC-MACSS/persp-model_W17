@@ -162,7 +162,6 @@ joe %>%
             se.boot = sd(estimate, na.rm = TRUE)) %>%
   kable()
 ```
-```
 
 # Part 2: College (bivariate) [3 points]
 
@@ -198,6 +197,11 @@ Explore the bivariate relationships between some of the available predictors and
 
 Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
 
+```{r part2}
+college <- read.csv("./data/college.csv")
+
+```
+
 # Part 3: College (GAM) [3 points]
 
 The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
@@ -212,6 +216,153 @@ The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.fe
 
 1. Split the data into a training set and a test set.
 1. Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+```{r}
+college_split <- resample_partition(college, c(test = 0.7, train = 0.3))
+college_train <- college_split$train %>%
+  tbl_df()
+college_test <- college_split$test %>%
+  tbl_df()
+
+# OLS 
+
+college_mod <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni +  Expend + Grad.Rate, data = college_train)
+pander(summary(college_mod))
+
+library(gam)
+# estimate model for splines on private, room boarding, PhD, alumni, expenditure, graduation rate 
+college_gam <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+summary(college_gam)
+
+#get graphs of each term
+college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
+
+## Room Board
+data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
+           y = college_gam_terms$`bs(Room.Board, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Room.Board, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-State tuition",
+       subtitle = "Cubic spline",
+       x = "Room Board",
+       y = expression(f[1](Room.Board)))
+
+
+## PhD
+data_frame(x = college_gam_terms$`bs(PhD, df = 5)`$x,
+           y = college_gam_terms$`bs(PhD, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(PhD, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-State tuition",
+       subtitle = "Cubic spline",
+       x = "PhD",
+       y = expression(f[1](PhD)))
+
+## perc.alumni
+data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
+           y = college_gam_terms$`bs(perc.alumni, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(perc.alumni, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-State tuition",
+       subtitle = "Cubic spline",
+       x = "Alumni Donations",
+       y = expression(f[1](perc.alumni)))
+
+## Expenditure per student
+data_frame(x = college_gam_terms$`bs(Expend, df = 5)`$x,
+           y = college_gam_terms$`bs(Expend, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Expend, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-State tuition",
+       subtitle = "Cubic spline",
+       x = "Expenditure",
+       y = expression(f[1](Expend)))
+
+## Graduation Rate
+data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
+           y = college_gam_terms$`bs(Grad.Rate, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Grad.Rate, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-State tuition",
+       subtitle = "Cubic spline",
+       x = "Graduation Rate",
+       y = expression(f[1](Grad.Rate)))
+
+## gender
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x)) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out-of-State Tuition",
+       x = NULL,
+       y = expression(f[3](Private)))
+
+# Test set 
+mse(college_mod, college_test)
+
+#  GAM MSE calculation
+mse_gam <- function(model, data) {
+  x <- mgcv:::residuals.gam(model, data, type = "deviance")
+  mean(x ^ 2, na.rm = TRUE)
+} 
+
+mse_gam(college_gam)
+
+#mgcv::summary.gam(college_gam, college_test)
+
+```
+
 1. Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
 1. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
 1. For which variables, if any, is there evidence of a non-linear relationship with the response?^[Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.]
+
+```{r anova}
+college_base <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+
+college_roomS <- gam(Outstate ~ Private + s(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+
+college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + s(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+
+college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + s(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+
+college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + s(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+
+college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + s(Grad.Rate, df = 5), data = college_train)
+
+
+anova(college_base, college_roomS, test  = "F")
+anova(college_base, college_phdS, test  = "F")
+anova(college_base, college_alumS, test = "F")
+anova(college_base, college_expS, test = "F")
+anova(college_base, college_gradS, test = "F")
+```
