@@ -14,9 +14,10 @@ library(tidyverse)
 library(broom)
 library(modelr)
 library(pROC)
-library(MASS)
 library(stargazer)
 library(modelr)
+library(splines)
+library(gam)
 knitr::opts_chunk$set(cache = TRUE,
                       message = FALSE,
                       warning = FALSE,
@@ -30,7 +31,7 @@ df.wage = read.csv('data/Wage.csv')
 
 ### 1. Estimate the training MSE of the model using the traditional approach.
 
-```{r biden_lm}
+```{r biden_lm, results = 'asis'}
 lm.biden.all <- lm(biden ~ ., data = df.biden)
 
 # Based off of resampling class notes
@@ -40,6 +41,7 @@ calc_mse <- function(model, data){
 }
 
 mse.train_only <- calc_mse(lm.biden.all, df.biden)
+stargazer(lm.biden.all, type = 'html')
 ```
 The mean squared error of a linear model using all of the predictors, and calculated on all of the (training) data is `r mse.train_only`.
 
@@ -61,7 +63,7 @@ The mean squared error of a linear model using all of the predictors, and calcul
 
 ### 3. Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
 
-```{r vset_approach}
+```{r vset_approach_100}
 sim_biden_mse = function(n, df, method = 'vset', test = .3, train = .7, k = 10){
   set.seed(69)
   if(method == 'vset'){
@@ -86,8 +88,7 @@ sim_biden_mse = function(n, df, method = 'vset', test = .3, train = .7, k = 10){
   return(tibble(mse = mses))
 }
 
-sim_biden_mse(100, df.biden) %>%
-  {.} -> vset_mses
+vset_mses <- sim_biden_mse(100, df.biden)
 
 vset_mses %>%
   ggplot(aes(mse)) +
@@ -101,6 +102,8 @@ vset_mses %>%
 
 As we can see from the above density graph, thanks to the Central Limit Theorem (each Test MSE is independent!), the distribution of our Test MSE's is centered about the true mean of the distribution: the MSE for the whole dataset. Of course, since we have a distribution, there is some variability as to what the Test MSE actually is. If we were to select a model based on the test MSE of a certain validation set (1 train 1 test) split of the data, that model selected has a chance of differing from a model selected using the same procedure, but a different validation set split.
 
+***
+
 ### 4. Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
 
 ```{r loocv}
@@ -109,10 +112,489 @@ mse.loocv <-  sim_biden_mse(NA, df.biden, 'loocv')
 
 The estimated test MSE of the model using the LOOCV approach is: `r mse.loocv`. This is only slightly above the training MSE of the model (`r mse.train_only`) we obtained when calculated against the entire dataset.
 
+***
+
 ### 5. Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.
 
 ```{r 10fold}
-mse.1fold <- sim_biden_mse(1, df.biden, 'kfold', k = 10)
+mse.kfold <- sim_biden_mse(1, df.biden, 'kfold', k = 10)
 ```
 
-The test MSE of the model using the 10-fold cross-validation approach is `r mse.1fold`.
+The test MSE of the model using the 10-fold cross-validation approach is `r mse.kfold`. This is a bit higher than the full dataset mse of `r mse.train_only`.
+
+***
+
+### 6. Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained. 
+
+```{r 10fold_100}
+mse.kfold_100 <- sim_biden_mse(100, df.biden, 'kfold', k = 10)
+
+mse.kfold_100 %>%
+ggplot(aes(mse)) +
+  geom_density() +
+  labs(title = 'MSE density over 100 different splits of Biden Data into 10 folds') +
+  geom_vline(aes(color = "Test MSE Mean", xintercept = mean(mse.kfold_100$mse)), linetype = 'dashed') +
+  geom_vline(aes(color = "All Data MSE", xintercept = mse.train_only)) +
+  scale_color_manual('', breaks = c('Test MSE Mean', 'All Data MSE'), values = c('red', 'green')) + 
+  theme(legend.position = 'bottom')
+```
+
+As we can see from the density graph, the mean of 100 different test MSEs of the data split is much higher than the All Data MSE we calculated from step 1. This seems to better reflect the nature of how the MSE might be for *actual* out of sample test data.
+
+***
+
+### 7. Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (n = 1000).
+
+```{r bootstrap_compare}
+set.seed(69) # Need reproducible bootstrap
+df.biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ ., data = .)),
+         coef = map(model, tidy)) %>%
+  dplyr::select(-strap) %>%
+         {.} -> df.biden.boot
+
+print('The bootstrap coefficients and standard errors:')
+df.biden.boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+
+coef(summary(lm.biden.all))
+```
+
+The bootstrap standard errors for `female`, `age`, `dem`, and `rep` are larger than the standard errors in the original model in step 1, while the bootstrap standard errors for `educ` and the intercept are smaller than the standard errors in the original model.  
+
+In general, this confirms what we expect of the bootstrap standard errors, that they are larger (for the most part) than the non-bootstrap standard errors because they do not rely on distributional assumptions.
+
+The parameters between the two models are essentially the same.
+
+***
+***
+
+# 2. College (bivariate)
+
+### (1) Simple Linear Model: `Outstate` on `Room.Board`
+
+The first thing that we should check is whether or not a linear relationship is appropriate. Let's begin by simply plotting `Outstate` against `Room.Board`
+```{r os_rb_scatter}
+ggplot(df.college, aes(Room.Board, Outstate)) +
+  geom_point() + 
+  labs(title = 'Room.Board vs. Outstate')
+```
+
+Looking at this graph, a linear relationship, though not a perfect fit, seems to be appropriate to model the relationship between `Outstate` and `Room.Board`. Let's go ahead and look at the predicted values and residuals plot when a linear model is applied. If the residuals are not correlated with the fitted values, then a linear model is indeed appropriate.
+
+```{r os_rb_predresid}
+lm.college.rb = lm(Outstate ~ Room.Board, data = df.college)
+
+df.college %>%
+  add_predictions(lm.college.rb) %>%
+  add_residuals(lm.college.rb) %>%
+  ggplot(aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Linear model of Outstate regressed on Room.Board',
+       x = 'Predicted Out of State Tuition', 
+       y = 'Residuals')
+```
+
+Looking at the smooth fit line on this graph, it does indeed appear that the residuals are not correlated with the predicted values. Perhaps there seems to be a bit of a negative correlation towards the higher predicted out of state tuition, but the overall trend is clear.
+
+***
+
+However, it is still possible that higher degree polynomials might provide better results. Thus, we will use k-fold cross validation (`k = 10`) to determine the ideal polynomial.
+
+```{r, os_rb_10fold}
+set.seed(69) # Want reproducible results
+df.college %>%
+  crossv_kfold(k = 10) %>%
+  {.} -> df.college.10fold
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models <- map(df.college.10fold$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, df.college.10fold$test, calc_mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+data_frame(terms = terms,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE)) +
+  geom_line() +
+  labs(title = "MSE estimates for 10-fold cross validation",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+rm(df.college.10fold)
+```
+
+Looking at this graph of MSE, we see that a 2nd degree polynomialprovides the lowest MSE under 10-fold cross validation. Thus, we will create a 2nd degree polynomial linear model and report/graph the results.
+
+```{r os_rb_results, results = 'asis'}
+lm(Outstate ~ poly(Room.Board, 2), data = df.college) %>%
+  {.} -> lm.college.rb.2p
+
+lm.college.rb.2p %>%
+  stargazer(type = 'html', title = 'Outstate on Room.Board | Linear 2nd degree polynomial')
+
+df.college %>%
+  select(Outstate, Room.Board) %>%
+  ggplot(aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2)) + 
+  labs(title = 'Room.Board vs. Outstate with 2nd degree polynomial Regression')
+```
+
+Let's also do a final graph of the predicted out of state tuition versus the residuals.
+
+```{r rs_ob_final}
+df.college %>%
+  add_predictions(lm.college.rb.2p) %>%
+  add_residuals(lm.college.rb.2p) %>%
+  ggplot(aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Linear model of Outstate regressed on Room.Board (2nd Degree Polynomial)',
+       x = 'Predicted Out of State Tuition', 
+       y = 'Residuals')
+```
+
+As desired, the residuals do not apear to be correlated with predicted out of state tuition.
+
+***
+
+### (2) Simple Linear Model: `Outstate` on `Grad.Rate`
+
+The first thing that we should check is whether or not a linear relationship is appropriate. Let's begin by simply plotting `Outstate` against `Grad.Rate`
+```{r os_gr_scatter}
+ggplot(df.college, aes(Room.Board, Grad.Rate)) +
+  geom_point() + 
+  labs(title = 'Graduation Rate vs. Out of State Tuition')
+```
+
+Looking at this graph, a linear relationship, seems to be appropriate to model the relationship between `Outstate` and `Grad.Rate`. However, looking closely at the graph, we see a graduation rate of over 100%. This observation seems to be erroneous so we will have it removed in the proceeding work done to explore the bivariate relationship between `Outstate` and `Grad.Rate`.  
+
+Let's go ahead and look at the predicted values and residuals plot when a linear model is applied. If the residuals are not correlated with the fitted values, then a linear model is indeed appropriate.
+
+```{r os_gr_predresid}
+lm.college.rb = lm(Outstate ~ Grad.Rate, data = df.college)
+
+df.college %>%
+  filter(Grad.Rate <= 100) %>%
+  add_predictions(lm.college.rb) %>%
+  add_residuals(lm.college.rb) %>%
+  ggplot(aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Linear model of Outstate regressed on Grad.Rate',
+       x = 'Predicted Out of State Tuition', 
+       y = 'Residuals')
+```
+
+Looking at the smooth fit line on this graph, with the exception of the earlier predicted Out of State Tuition, it does indeed appear that the residuals are not correlated with the predicted values. However, in order to deal with the correlation between the residuals and predictd out of state tuition in for lower predicted of state tuition values, we should consider polynomial regression.
+
+***
+
+```{r, os_gr_10fold}
+set.seed(69) # Want reproducible results
+df.college %>%
+  filter(Grad.Rate <= 100) %>%
+  crossv_kfold(k = 10) %>%
+  {.} -> df.college.10fold
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models <- map(df.college.10fold$train, ~ lm(Outstate ~ poly(Grad.Rate, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, df.college.10fold$test, calc_mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+data_frame(terms = terms,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE)) +
+  geom_line() +
+  labs(title = "MSE estimates for 10-fold cross validation",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+```
+
+Looking at this graph of MSE, we see that a 3rd degree polynomialprovides the lowest MSE under 10-fold cross validation. Thus, we will create a 3rd degree polynomial linear model and report/graph the results.
+
+```{r os_gr_final, results = 'asis'}
+df.college %>%
+  filter(Grad.Rate <+ 100) %>%
+  lm(Outstate ~ poly(Room.Board, 2), data = .) %>%
+  {.} -> lm.college.gr.3p
+
+lm.college.gr.3p %>%
+  stargazer(type = 'html', title = 'Outstate on Room.Board | Linear 2nd degree polynomial')
+
+df.college %>%
+  filter(Grad.Rate <= 100) %>%
+  select(Outstate, Grad.Rate) %>%
+  ggplot(aes(Grad.Rate, Outstate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 3)) + 
+  labs(title = 'Grad.Rate vs. Outstate with 2nd degree polynomial Regression')
+```
+
+Let's also do a final graph of the predicted out of state tuition versus the residuals.
+
+```{r rs_ob_final}
+df.college %>%
+  filter(Grad.Rate <= 100) %>%
+  add_predictions(lm.college.gr.3p) %>%
+  add_residuals(lm.college.gr.3p) %>%
+  ggplot(aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Linear model of Outstate regressed on Grad.Rate (3rd Degree Polynomial)',
+       x = 'Predicted Out of State Tuition', 
+       y = 'Residuals')
+```
+
+As desired, the residuals do not apear to be correlated with predicted out of state tuition.
+
+***
+
+### (3) Simple Linear Model: `Outstate` on `Expend`
+
+The first thing that we should check is whether or not a linear relationship is appropriate. Let's begin by simply plotting `Outstate` against `Expend`
+```{r os_ex_scatter}
+ggplot(df.college, aes(Expend, Outstate)) +
+  geom_point() + 
+  labs(title = 'Expenditure vs. Out of State Tuition',
+       y = 'Out of State Tuition',
+       x = 'Instructional Expenditure per Student')
+```
+
+The relationship between `Outstate` and `Expend` does not appear to be linear, but rather logarithmic. Accordingly, we will regress `Outstate` on the logarithm of X.
+
+```{r os_ex_log}
+lm.college.ex.log <- lm(Outstate ~ log(Expend), data = df.college)
+
+df.college %>%
+  add_predictions(lm.college.ex.log) %>%
+  add_residuals(lm.college.ex.log) %>%
+  ggplot(aes(pred, resid)) +
+    geom_point() +
+    geom_smooth() +
+    labs(title = 'Linear model of Outstate regressed on Expend',
+         y = 'Residuals',
+         x = 'Predicted Out of State Tuition')
+
+ggplot(df.college, aes(Expend, Outstate)) + 
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ log(x)) +
+  labs(title = 'Scatter Plot of Expend vs. Outstate',
+       subtitle = 'With linear model of Outstate regressed on log(Expend)',
+       y = 'Out of State tuition',
+       x = 'Instructional Expenditure per Student')
+```
+
+How do we know that a linear model of `Outstate` regressed on `log(Expend)` is better than a linear model regressed on `Expend`? Let's use 10-fold cross validation to compare the log MSE vs the untransformed MSE with several polynomial degrees.
+
+```{r os_ex_mse}
+set.seed(69) # Want reproducible results
+df.college %>%
+  crossv_kfold(k = 10) %>%
+  {.} -> df.college.10fold
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+lms.college.ex.log.fold <- map(df.college.10fold$train, ~ lm(Outstate ~ log(Expend), 
+                                                             data = .))
+log_mse <- mean(map2_dbl(lms.college.ex.log.fold, df.college.10fold$test, calc_mse))
+
+for(i in terms){
+  cv10_models <- map(df.college.10fold$train, ~ lm(Outstate ~ poly(Expend, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, df.college.10fold$test, calc_mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+data_frame(terms = terms,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE)) +
+    geom_line() +
+    labs(title = "MSE estimates for 10-fold cross validation",
+         x = "Degree of Polynomial",
+         y = "Mean Squared Error") +
+    geom_hline(aes(color = '10-fold CV Log(Expend) MSE', yintercept = log_mse)) + 
+    scale_color_manual('', breaks = c('10-fold CV Log(Expend) MSE'), values = c('red')) +
+    theme(legend.position = 'bottom')
+```
+
+As we can see form the above graph, the 10-fold MSE is actually lower for a third degree polynomial of `Expend` than it is for the `log(Expend)`. However, paying attention to the scale here, the difference is actually not all that large. Because interpretation is more tractable for a regression on `log(Expend)` we will elect to use that model. Let's report/graph the results then.
+
+```{r os_ex_results, results = 'asis'}
+stargazer(lm.college.ex.log, type = 'html', title = 'Outstate on Room.Board | Linear 2nd degree polynomial')
+
+ggplot(df.college, aes(Expend, Outstate)) + 
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ log(x)) +
+  labs(title = 'Scatter Plot of Expend vs. Outstate',
+       subtitle = 'With linear model of Outstate regressed on log(Expend)',
+       y = 'Out of State tuition',
+       x = 'Instructional Expenditure per Student')
+```
+
+A note for the interpretation of the coefficient of `log(Expend)`. We can say that a 1% increase in Instructional Expenditure per student results in a `coefficient(Expend) / 100` increase in Out of State tuition. In this case, we can say that a 1% increase in `Expend` results in a `r coef(lm.college.ex.log)[2] / 100` increase in `Outstate` (Out of state tuition).
+
+# Part 3. College (GAM)
+
+### 1. Split the data into a training set and a test set.
+
+```{r college_split, echo = TRUE}
+set.seed(69)
+college_split <- resample_partition(df.college, c(test = .3, train = .7))
+```
+
+### 2. Estimate an OLS model on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+
+```{r college_ols, results = 'asis'}
+lm.college.train <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+                       data = college_split$train)
+stargazer(lm.college.train, title = 'OLS', type = 'text')
+```
+
+As we can see from the table, all 6 predictor variables are significant even at the $\alpha = .01$ level. Let's take a quick look at the residuals versus predicted values plot.
+
+```{r college_ols_pred_resid_plot}
+df.college[unlist(college_split$train["idx"], use.names = FALSE),] %>%
+  add_predictions(lm.college.train) %>%
+  add_residuals(lm.college.train) %>%
+  ggplot(aes(pred, resid)) +
+    geom_point() +
+    geom_smooth()
+```
+
+For the most part, with the exception of the upper tail, the residuals seem uncorrelated with the predicted values, as desired.
+
+***
+
+### 3. Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+
+We will use a GAM model using local regression for all predictors except `Private` (the binary predictor). 
+
+```{r college_gam, results = 'asis'}
+gam.college.train <- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+summary(gam.college.train)
+```
+
+Looking at this table we see that there is strong evidence for `Expend` having nonparametric effects, but not for the other 5 predictors.
+
+***
+
+### 4. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+
+```{r mse_compare}
+college_test <- df.college[college_split$test$idx,]
+
+ols_mse <- calc_mse(lm.college.train, college_test)
+
+college_test %>%
+  add_residuals(gam.college.train) %>%
+  select(resid) %>%
+  {.} -> gam.resids 
+
+gam.resids <- unlist(gam.resids, use.names = FALSE)
+squared_resids <- gam.resids ^ 2
+
+gam_mse <- mean(squared_resids)
+```
+
+Using the test set to calculate the MSE for both the OLS and the GAM models, we get MSEs of `r ols_mse` and `r gam_mse` respectively. So it seems that the the GAM model more accurately fits the test data.
+
+### 5. For which variables, if any, is there evidence of a non-linear relationship with the response?
+
+```{r nonlinear_evidence_prep}
+gam.all <- gam.college.train # Base model
+
+# Room and Board (1/5)
+gam.no_rb <- gam(
+  Outstate ~ Private + lo(PhD) + lo(perc.alumni) + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+gam.lin_rb <- gam(
+  Outstate ~ Private + Room.Board + lo(PhD) + lo(perc.alumni) + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+
+# PhD (2/5)
+gam.no_phd <- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(perc.alumni) + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+gam.lin_phd <- gam(
+  Outstate ~ Private + lo(Room.Board) + PhD + lo(perc.alumni) + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+
+# Expenditure (3/5)
+gam.no_ex<- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + lo(Grad.Rate), 
+                       data = college_split$train)
+gam.lin_ex <- gam(
+  Outstate ~ Private + lo(Room.Board) + PhD + lo(perc.alumni) + Expend + lo(Grad.Rate), 
+                       data = college_split$train)
+
+# Percent Alumni (4/5)
+gam.no_pa <- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+gam.lin_pa <- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(PhD) + perc.alumni + lo(Expend) + lo(Grad.Rate), 
+                       data = college_split$train)
+
+# Graduation Rate (5/5)
+gam.no_gr <- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + lo(Expend), 
+                       data = college_split$train)
+gam.lin_gr <- gam(
+  Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + lo(Expend) + Grad.Rate, 
+                       data = college_split$train)
+```
+
+Following 7.8.3 from ISLR we will be computing 5 different ANOVA tests, one for each variable except `Private` which is a qualitative binary variable. Each ANOVA will compare a GAM model utilizing the variable in question in a non-linear fashion, a GAM model utilizing the variable in a linear fashion, and a GAM model not utilizing the variable at all. If one of the models is significant under the ANOVA test, that is evidence that the variable is either not needed, needed with a linear funciton, or needed with a non-linear function.
+
+#### Room and Board 
+```{r rb_test}
+anova(gam.no_rb, gam.lin_rb, gam.all)
+```
+
+Here we see that the 2nd model (linear `Room.Board`) is statistically significant at the '`0`' level and that the 3rd model (non-linear `Room.Board`) is statistically significiant at the '`.05`' level. Thus we have evidence that `Room.Board` has a non-linear relationship with the response variable: `Outstate`. However, there does appear to be stronger evidence that `Room.Board` actually has a linear relationship with `Outstate`.
+
+#### PhD
+```{r rb_test}
+anova(gam.no_phd, gam.lin_phd, gam.all)
+```
+
+Here we see that the 2nd model (linear `PhD`) is statistically significant at the '`.05`' level and that the 3rd model (non-linear `PhD`) is not statistically significant. Thus we have evidence that `Room.Board` has a linear relationship with the response variable: `Outstate`.
+
+#### Expenditure
+```{r rb_test}
+anova(gam.no_ex, gam.lin_ex, gam.all)
+```
+
+Here we see that the 2nd model (linear `Expend`) is not statistically significant that the 3rd model (non-linear `Expend`) is statistically significiant at the '`0`' level. Thus we have evidence that `Room.Board` has a non-linear relationship with the response variable: `Outstate`.
+
+#### Percent Alumni
+```{r rb_test}
+anova(gam.no_pa, gam.lin_pa, gam.all)
+```
+
+Here we see that the 2nd model (linear `perc.alumni`) is statistically significant at the '`0`' level and that the 3rd model (non-linear `perc.alumni`) is not statistically significant. Thus we have evidence that `perc.alumni` has a linear relationship with the response variable: `Outstate`.
+
+#### Graduation Rate
+```{r rb_test}
+anova(gam.no_gr, gam.lin_gr, gam.all)
+```
+
+Here we see that the 2nd model (linear `Grad.Rate`) is statistically significant at the '`0`' level and that the 3rd model (non-linear `Grad.Rate`) is not statistically significiant. Thus we have evidence that `Grad.Rate` has a linear relationship with the response variable: `Outstate`.
