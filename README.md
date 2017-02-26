@@ -47,11 +47,11 @@ If you need any special accommodations, please provide us with a copy of your Ac
 | Feb. 15 | W | Generalized linear models | Notes |  |
 | Feb. 20 | M | Resampling methods (cross-validation and bootstrapping) | ISL Ch 5 | GLM PS due |
 | Feb. 22 | W | Non-linear modeling | ISL Ch 7 |  |
-| Feb. 27 | M | Decision trees | ISL Ch 8.1 | Resampling/non-linear PS due |
-| Mar.  1 | W | Bagging, random forests, boosting | ISL Ch 8.2 |  |
-| Mar.  6 | M | Support vector machines | ISL Ch 9 | Trees PS due |
+| Feb. 27 | M | Tree-based methods | ISL Ch 8 | Resampling/non-linear PS due |
+| Mar.  1 | W | Support vector machines | ISL Ch 9 |  |
+| Mar.  6 | M | Non-parametric methods | TBD | Trees & SVM PS due |
 | Mar.  8 | W | Unsupervised learning | ISL Ch 10 |  |
-| Mar. 13 | M |  |  | SVM/unsupervised PS due |
+| Mar. 13 | M |  |  | Nonparametric/unsupervised PS due |
 
 ## References and Readings ##
 
