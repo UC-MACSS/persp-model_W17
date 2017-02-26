@@ -492,7 +492,7 @@ gam.college.train <- gam(
 summary(gam.college.train)
 ```
 
-Looking at this table we see that there is strong evidence for `Expend` having nonparametric effects, but not for the other 5 predictors.
+Looking at this table we see that there is strong evidence for `Expend` and `Room.Board` having non-linear relationships with `Outstate` but not the other 3 predictors.
 
 ***
 
@@ -598,3 +598,7 @@ anova(gam.no_gr, gam.lin_gr, gam.all)
 ```
 
 Here we see that the 2nd model (linear `Grad.Rate`) is statistically significant at the '`0`' level and that the 3rd model (non-linear `Grad.Rate`) is not statistically significiant. Thus we have evidence that `Grad.Rate` has a linear relationship with the response variable: `Outstate`.
+
+***
+
+Interestingly enough, if we recall the table that was reported with the GAM model fitted in step 3 of this problem, it told us the same thing as all of these separate ANOVA tests did (that there was evidence for nonlinear relationships with the predictors `Room.Board` and `Expend` and the response `Outstate`).
