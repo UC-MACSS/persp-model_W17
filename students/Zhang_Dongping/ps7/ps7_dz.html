@@ -857,7 +857,7 @@ data_frame(model = c(&quot;LM&quot;, &quot;GAM&quot;),
 ## 2   GAM 3750495</code></pre>
 <p>As shown above, it is clear that GAM’s MSE is relatively smaller than that of LM. This is expected because we are treating predictors cautiously and included nonlinearity into the model, which could help the data to fit better and make more accurate predictions.</p>
 <p><strong>5. For which variables, if any, is there evidence of a non-linear relationship with the response?</strong></p>
-<p>After looking at the plots and analyses above, I highly suspect <code>Expend</code> and <code>PhD</code> to have non-linear relationship with <code>Outstate</code>. In both of those two plots, there are positive slopes (increasing trend) as well as negative slopes (decreasing trend) showing the possibilities of non-linearity. At the same time, the other plots all exhibiting consistent increaseing rate or positive slopes. In conclusion, <code>Expend</code> and <code>PhD</code> are most likely to have non-linear relationship with <code>Outstate</code>.</p>
+<p>After looking at the plots and analyses above, I highly suspect <code>Expend</code> and <code>PhD</code> to have non-linear relationship with <code>Outstate</code>. In both of those two plots, there are positive slopes (increasing trend) as well as negative slopes (decreasing trend) showing the possibilities of non-linearity. At the same time, the other plots all exhibiting consistent increaseing rate or positive slopes. In addition, the F-statistic of <code>Expend</code> is also statistically significant in Anova for Nonparametric Effects table. In conclusion, <code>Expend</code> and <code>PhD</code> are most likely to have non-linear relationship with <code>Outstate</code>.</p>
 </div>
 
 
