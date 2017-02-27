@@ -24,7 +24,6 @@ knitr::opts_chunk$set(cache = TRUE,
                       echo = FALSE)
 df.biden = read.csv('data/biden.csv')
 df.college = read.csv('data/College.csv')
-df.wage = read.csv('data/Wage.csv')
 ```
 
 # Part 1: Sexy Joe Biden 
@@ -461,7 +460,7 @@ college_split <- resample_partition(df.college, c(test = .3, train = .7))
 ```{r college_ols, results = 'asis'}
 lm.college.train <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
                        data = college_split$train)
-stargazer(lm.college.train, title = 'OLS', type = 'text')
+stargazer(lm.college.train, title = 'OLS', type = 'html')
 ```
 
 As we can see from the table, all 6 predictor variables are significant even at the $\alpha = .01$ level. Let's take a quick look at the residuals versus predicted values plot.
