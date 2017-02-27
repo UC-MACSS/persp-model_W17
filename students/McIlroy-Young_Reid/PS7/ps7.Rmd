@@ -21,8 +21,6 @@ library(gam)
 
 ![](http://i.giphy.com/54Y2ZtR7BOuNa.gif)
 
-
-
 ``` {r, Q 1.1}
 targetFile <- "data/biden.csv"
 data <- read.csv(targetFile)
@@ -35,6 +33,7 @@ mse <- function(model, data) {
 
 lin_Biden <- lm(biden ~ age + female + educ + dem + rep, data = data) 
 lin_mse <- mse(lin_Biden, data)
+summary(lin_Biden)
 ```
 
 The MSE for the whole set is `r lin_mse`.
@@ -60,10 +59,18 @@ mseCal <- function(i) {
   mse(lin_model, split$test)
 }
 
-mseLst <- lapply(1:100, mseCal)
+set.seed(1234)
+df <- data.frame(index = 1:100)
+df$mse <- unlist(lapply(df$index, mseCal))
 
-plot(1:100, mseLst)
+
+ggplot(data = df, aes(x = index, mse)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="MSE vs Percentage of elements in the testing set",  x ="Percentage of elements in the testing set", y = "MSE") 
 ```
+
+We can see from the plot that most partitions result in an MSE of 400, but both high and low percentages result in higher MSE, dues to over fitting and under fitting respectively. Although $100%$ inclusion in the training set results in lower MSE, like we saw in section 1.
 
 ``` {r, Q 1.4}
 loocv_data <- crossv_kfold(data, k = nrow(data))
@@ -72,17 +79,31 @@ loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
 loocv_mean_mse <- mean(loocv_mse)
 ```
 
-The mean MSE under leave-one-out is `r loocv_mean_mse`.
+The mean MSE under leave-one-out is `r loocv_mean_mse`. This is about what we saw in the center of the 100 splits and seems to be the lowest we can get without over fitting.
 
 ``` {r, Q 1.5}
-tenFold_data <- crossv_kfold(data, k = 10)
-tenFold_models <- map(tenFold_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
-tenFold_mse <- map2_dbl(tenFold_models, tenFold_data$test, mse)
-tenFold_mean_mse <- mean(tenFold_mse)
-```
-The mean MSE under 10-fold CV is `r tenFold_mean_mse`.
 
-``` {r, Q1.6}
+mseFoldCal <- function(i) {
+  tenFold_data <- crossv_kfold(data, k = 10)
+  tenFold_models <- map(tenFold_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  tenFold_mse <- map2_dbl(tenFold_models, tenFold_data$test, mse)
+  tenFold_mean_mse <- mean(tenFold_mse)
+}
+
+
+set.seed(1234)
+ten_fold_df <- data.frame(index = 1:100)
+ten_fold_df$mse <- unlist(lapply(ten_fold_df$index, mseFoldCal))
+
+```
+The mean MSE under 10-fold CV is `r ten_fold_df$mse[1]`. This is about what we saw in the center of the 100 splits, and very similar to the mean of the LOOCV, it still seems to be the lowest we can get without over fitting.
+``` {r Q 1.6}
+qplot(mse, data=ten_fold_df, geom="histogram", main = "Histogram of model MSE under 10-fold CV", binwidth = .1, xlab = 'MSE', ylab ='Count')
+```
+
+The histogram of 10-fold MSEs shows that the MSE is always very close to 398 under different iterations of 10-fold CV.This is very similar to the of the LOOCV which was similar under most cuts.
+
+``` {r, Q1.7}
 biden_boot <- data %>%
   modelr::bootstrap(1000) %>%
   mutate(model = map(strap, ~ lm(biden ~ age + female + educ + dem + rep, data = .)),
@@ -93,27 +114,25 @@ biden_boot %>%
   group_by(term) %>%
   summarize(est.boot = mean(estimate),
             se.boot = sd(estimate, na.rm = TRUE))
+summary(lin_Biden)
 ```
+
+These are very similar estimated values to those provided by the initial fit (e.g. `age` differs by only $2.5%$), but the errors for the the bootstrap are larger.
+
 # College
 
 ``` {r, Q 2}
 targetFile <- "data/college.csv"
 data <- read.csv(targetFile)
+lin_coll <- lm(Outstate ~ ., data = data)
+summary(lin_coll)
 ```
 
-``` {r, Q 2.phd}
-lin_phd <- lm(Outstate ~ phD, data = data)
-summary(lin_phd)
-```
+Doing a linear fit across all the variables shows lets us pick a few variables that are likely to be significant. Lets look at: `Expend`, `Room.Board` and `PrivateYes`
 
-``` {r, Q 2.Grad.Rate}
-lin_Grad.Rate <- lm(Outstate ~ Grad.Rate, data = data)
-summary(lin_Grad.Rate)
-```
-
-``` {r, Q 2.Room.Board}
-lin_Room.Board <- lm(Outstate ~ Room.Board, data = data)
-summary(lin_Room.Board)
+``` {r, Q 2.Expend}
+lin_Expend <- lm(Outstate ~ Expend, data = data)
+summary(lin_Expend)
 ```
 
 ``` {r, Q 2.Room.Board}
@@ -121,10 +140,104 @@ lin_Room.Board <- lm(Outstate ~ Room.Board, data = data)
 summary(lin_Room.Board)
 ```
 
-``` {r, Q 2.nonlinear}
-college_step <- glm(Outstate ~ cut(PhD, 5), data = data)
-summary(college_step)
+``` {r, Q 2.Apps}
+lin_Apps <- lm(Outstate ~ Apps, data = data)
+summary(lin_Apps)
 ```
+
+Looking at the summaries of the models shows that the $R^2$ values are very low (around $.4$) and that the `Apps` p-value has increased significantly (its $R^2$ is also low). The best fit, by $R^2$ is for `expend`. So lets plot that:
+
+``` {r}
+expendDF <- add_predictions(data, lin_Expend)
+expendDF <- add_residuals(expendDF, lin_Expend)
+
+ggplot(expendDF, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="Linear model regression for Expend",  x ="Predicted expenditure", y = "Residuals") 
+```
+
+The plot show that the model is mostly accurate for expenditures around $10 000 USD$ but gets worse as the expenditure increases. This likely due to a non-linear term becoming dominant. So lets try a polynomial fit, to find the polynomial we will use 10-fold CV.
+
+``` {r}
+set.seed(1234)
+tenFold_data <- crossv_kfold(data, k = 10)
+
+polyMSE <- function(d) {
+  tenFold_models <- map(tenFold_data$train, ~ lm(Outstate ~ poly(Expend , d), data = .))
+  tenFold_mse <- map2_dbl(tenFold_models, tenFold_data$test, mse)
+  tenFold_mean_mse <- mean(tenFold_mse)
+}
+
+tenFoldDF <- data.frame(index = 1:10)
+tenFoldDF$mse <- unlist(lapply(1:10, polyMSE))
+
+ggplot(tenFoldDF, aes(index, mse)) +
+  geom_line() +
+  geom_point() +
+  scale_y_log10() +
+  labs(title="MSE vs polynomial fit degree for Expend",  x ="Degree", y = "MSE") 
+```
+
+We can see that the lowest MSE is obtained for a polynomial of degree 3. So lets SE what that model leads to.
+
+``` {r}
+poly3_Expend <- lm(Outstate ~ poly(Expend , 3), data = data)
+summary(poly3_Expend)
+```
+An $R^2$ higher than $.5$ that's a much better fit. Lets plot it:
+``` {r}
+expendDF <- add_predictions(data, poly3_Expend)
+expendDF <- add_residuals(expendDF, poly3_Expend)
+
+ggplot(expendDF, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="3rd order polynomial model regression for Expend",  x ="Predicted expenditure", y = "Residuals") 
+```
+
+This model has none of the edge effects of the linear fit and is a much better fit for the data all around. Since that went well, lets try a nonlinear model for the worst fit `Apps`, but this time a spline. First we will find the optimal number of knots with 3rd order piece wise polynomials:
+
+
+``` {r}
+set.seed(1234)
+tenFold_data <- crossv_kfold(data, k = 10)
+
+polyMSE <- function(n) {
+  tenFold_models <- map(tenFold_data$train, ~ glm(Outstate ~ bs(Apps, df = n), data = .))
+  tenFold_mse <- map2_dbl(tenFold_models, tenFold_data$test, mse)
+  tenFold_mean_mse <- mean(tenFold_mse)
+}
+
+tenFoldDF <- data.frame(index = 1:10)
+tenFoldDF$mse <- unlist(lapply(1:10, polyMSE))
+
+ggplot(tenFoldDF, aes(index, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title="MSE vs number of knots",  x ="Number of knots", y = "MSE")
+```
+
+We see the minimum is at 8, but that 4 is almost as low so we will try that.
+
+``` {r}
+spline4_Apps <- glm(Outstate ~ bs(Apps, df = 4), data = data)
+summary(spline4_Apps)
+```
+
+Still not that good, lets see the plot
+
+``` {r}
+expendDF <- add_predictions(data, spline4_Apps)
+expendDF <- add_residuals(expendDF, spline4_Apps)
+
+ggplot(expendDF, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="3rd order polynomial model regression for Expend",  x ="Predicted expenditure", y = "Residuals") 
+```
+
+Looks like this is still a bad fit and in fact using any kind of polynomial based fit is not good for this data and it likely has very little predictive power regardless.
 
 # GAM College
 
@@ -138,15 +251,43 @@ data_split <- resample_partition(data, c(test = 0.3, train = 0.7))
 
 ``` {r, Q 3.2}
 lin_college <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = data_split$train)
-summary(lin_Room.Board)
+summary(lin_college)
+```
+The summary shows that all the values are significant and that together their $R^2$ indicates $75%$ of the variance is accounted for. We can look at the residuals plot to see if were the $25%$ may be coming from
+
+``` {r}
+fullDF <- add_predictions(data, lin_college)
+fullDF <- add_residuals(fullDF, lin_college)
+
+ggplot(fullDF, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="Residuals vs predicted values for the full linear fit",  x ="Predicted expenditure", y = "Residuals")
 ```
 
-``` {r, Q 3.3}
-college_gam <- gam(Outstate ~ lo(perc.alumni) + lo(PhD) + lo(Expend) + lo(Grad.Rate) +Private + lo(Room.Board), data = data_split$train)
+The error appears to be largest for large predicted values, lets see if a a GAM can improve this. We will use the sum of loess fits for our continuous variables since the loess fits is a nice smooth fit and should work with most distributions.
 
+``` {r, Q 3.3}
+college_gam <- gam(Outstate ~ lo(perc.alumni) + lo(PhD) + lo(Expend) + lo(Grad.Rate) + lo(Room.Board) + Private , data = data_split$train)
+summary(college_gam)
+```
+
+Even better $R^2$ values lets look at the residuals plot
+
+``` {r}
+gamDF <- add_predictions(data, college_gam)
+gamDF <- add_residuals(gamDF, college_gam)
+
+ggplot(gamDF, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="Residuals vs predicted values for the full linear fit",  x ="Predicted expenditure", y = "Residuals")
+```
+
+Much less edge effect, it looks like the GAM model has much lower error. Lets look at a few of the individual components:
+``` {r}
 college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
 
-## age
 data_frame(x = college_gam_terms$`lo(perc.alumni)`$x,
            y = college_gam_terms$`lo(perc.alumni)`$y,
            se.fit = college_gam_terms$`lo(perc.alumni)`$se.y) %>%
@@ -156,8 +297,71 @@ data_frame(x = college_gam_terms$`lo(perc.alumni)`$x,
   geom_line() +
   geom_line(aes(y = y_low), linetype = 2) +
   geom_line(aes(y = y_high), linetype = 2) +
-  labs(title = "GAM of Biden feeling thermometer",
-       subtitle = "Cubic spline",
-       x = "Age",
-       y = expression(f[1](age)))
+  labs(title = "GAM of out-of-state tuition",
+       x = "Percentage of donating alumni",
+       y = expression(f[1](perc.alumni)))
 ```
+
+We can see that higher rates of alumni donations tend to increase out-of-state tuition.
+``` {r}
+data_frame(x = college_gam_terms$`lo(PhD)`$x,
+           y = college_gam_terms$`lo(PhD)`$y,
+           se.fit = college_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Percentage of faculty with PhDs",
+       y = expression(f[1](PhD)))
+```
+
+We can see that higher rates of faculty with PhD's tend to increase out-of-state tuition in general but there is a local maxima around $30%$, even when extend to $95%$ confidence interval.
+``` {r}
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x, levels = c('No', 'Yes'), labels = c("Public", "Private"))) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of out-of-state tuition",
+       x = NULL,
+       y = expression(f[3](gender)))
+
+```
+
+We can see that being private has a statistical significant and large effect on  out-of-state tuition.
+``` {r, Q 3.4}
+lin_mse <- mse(lin_college, data_split$test)
+gam_mse <- mse(college_gam, data_split$test)
+```
+The MSE for the linear model is `r lin_mse` while for the GAM is `gam_mse`. This is not that large of a difference. Going to the much more complicated GAM yields only $.3%$ improvement. This is likely due to the GAME being over fitted, using polynomials or less other less complicated components in the GAM than loess fits could likely improve the MSE by reducing the levels of over fitting.
+
+``` {r, Q 3.5}
+summary(college_gam)
+```
+
+The ANOVA test indicates that `Expend` is with a high likelihood non-linear, while `Room.Board` is also quite possibly no-linear. Lets look at the plot of `Expend`
+
+``` {r}
+data_frame(x = college_gam_terms$`lo(Expend)`$x,
+           y = college_gam_terms$`lo(Expend)`$y,
+           se.fit = college_gam_terms$`lo(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Expenditure per student",
+       y = expression(f[1](Expend)))
+```
+
+As you can see from the plot the expenditure per student is non-linear and we also saw this effecting our ability to use it in part 2.
