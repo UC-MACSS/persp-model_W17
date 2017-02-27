@@ -6,6 +6,8 @@ ChengYee Lim
 -   [Part 1: Sexy Joe Biden (redux) \[4 points\]](#part-1-sexy-joe-biden-redux-4-points)
 -   [Part 2: College (bivariate) \[3 points\]](#part-2-college-bivariate-3-points)
 -   [Part 3: College (GAM) \[3 points\]](#part-3-college-gam-3-points)
+    -   [Model Fit](#model-fit)
+    -   [Non-linear relationship](#non-linear-relationship)
 
 ``` r
 knitr::opts_chunk$set(
@@ -20,6 +22,7 @@ library(broom)
 library(knitr)
 library(pander)
 library(purrr)
+library(gam)
 
 theme_set(theme_minimal())
 ```
@@ -508,7 +511,7 @@ college <- read.csv("./data/college.csv")
 Part 3: College (GAM) \[3 points\]
 ==================================
 
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
+We now fit a GAM to predict out-of-state tuition using natural spline functions of `Room.Board`, `PhD`, `perc.alumni`, `Expend`, `Grad.Rate` and treating `Private` as a qualitative predictor.
 
 -   `Outstate` - Out-of-state tuition.
 -   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
@@ -518,18 +521,30 @@ The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.fe
 -   `Expend` - Instructional expenditure per student.
 -   `Grad.Rate` - Graduation rate.
 
-1.  Split the data into a training set and a test set.
-2.  Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+We do so by extending the following multiple linear regression model
+
+*y*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*X*<sub>*i*1</sub> + *β*<sub>2</sub>*X*<sub>*i*2</sub> + *β*<sub>3</sub>*X*<sub>*i*3</sub> + *β*<sub>4</sub>*X*<sub>*i*4</sub> + *β*<sub>5</sub>*X*<sub>*i*5</sub> + *β*<sub>6</sub>*X*<sub>*i*6</sub> + *ϵ*<sub>*i*</sub>
+ where *X*<sub>*i*1</sub> is `Private`, *X*<sub>*i*2</sub> is `Room.Board`, *X*<sub>*i*3</sub> is `PhD`, *X*<sub>*i*4</sub> is `perc.alumni`, *X*<sub>*i*5</sub> is `Expend`, and *X*<sub>*i*6</sub> is `Grad.Rate`
+
+and allowing for non-linear relationships between each predictor and the response variable. Each linear component *β*<sub>*j*</sub>*x*<sub>*i**j*</sub> is replaced with a smooth, non-linear function *f*<sub>*j*</sub>(*x*<sub>*i**j*</sub>):
+
+$$y\_i = \\beta\_0 + \\sum\_{j = 1}^6 f\_j(x\_{ij}) + \\epsilon\_i$$
+
+Thus, our ultimate GAM for the college dataset is as follows:
+
+Outstate = *β*<sub>0</sub> + *f*<sub>1</sub>(Private)+*f*<sub>2</sub>(Room.Board)+*f*<sub>3</sub>(PhD)+*f*<sub>4</sub>(perc.alumni)+*f*<sub>5</sub>(Expend)+*f*<sub>6</sub>(Grad.Rate)+*ϵ*
+
+Where *f*<sub>2</sub>, *f*<sub>3</sub>, *f*<sub>4</sub>, *f*<sub>5</sub>, *f*<sub>6</sub> are cubic splines with 2 knots and *f*<sub>1</sub> generates a separate constant for non-private and private universities using traditional dummy variables.
 
 ``` r
+# training-test set split
 college_split <- resample_partition(college, c(test = 0.7, train = 0.3))
 college_train <- college_split$train %>%
   tbl_df()
 college_test <- college_split$test %>%
   tbl_df()
 
-# OLS 
-
+# OLS estimation
 college_mod <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni +  Expend + Grad.Rate, data = college_train)
 pander(summary(college_mod))
 ```
@@ -630,8 +645,11 @@ pander(summary(college_mod))
 </tbody>
 </table>
 
+Out-of-state tuition is expected to be $2548 higher for private colleges than public colleges, holding all other independent variables constant. This is unsurprising as public colleges receive additional funding from the government, thus they do not need to charge college tuition as high as private colleges.
+
+An additional dollar increase in room and boarding costs corresponds to an $1.06 increase in out-of-state tuition. Similarly, one percent increase in the percentage of the PhDs in the faculty corresponds with a $38.5 increase in out-of-state tuition. One percent increase in the percentage of alumni who donates also corresponds to a $44.13 increase in out-of-state tuition. A dollar increase in instructional expenditure per student corresponds with a $0.1508 increase in out-of-state tuition. A unit increase in graduation rate of the college also corresponds with $53.91 increase in out-of-state tuition.
+
 ``` r
-library(gam)
 # estimate model for splines on private, room boarding, PhD, alumni, expenditure, graduation rate 
 college_gam <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 summary(college_gam)
@@ -669,6 +687,27 @@ summary(college_gam)
 #get graphs of each term
 college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
 
+## private
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x)) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out-of-State Tuition",
+       x = NULL,
+       y = expression(f[3](Private)))
+```
+
+![](ps7-resample-nonlinear_files/figure-markdown_github/3GAM-1.png)
+
+For `private`, the difference between non-private and private is substantial and statistically distinguishable from 0. Private colleges are predicted to have high out-of-state tuition than non-private colleges.
+
+``` r
 ## Room Board
 data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
            y = college_gam_terms$`bs(Room.Board, df = 5)`$y,
@@ -685,7 +724,9 @@ data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
        y = expression(f[1](Room.Board)))
 ```
 
-![](ps7-resample-nonlinear_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](ps7-resample-nonlinear_files/figure-markdown_github/3room-1.png)
+
+For room and boarding costs, the effect appears to be substantial and statistically significant; as room and boarding costs increase, predicted out-of-state tuition increases. The downward trend after $6500 room and boarding costs might not be statistically significant due to the wide confidence intervals.
 
 ``` r
 ## PhD
@@ -704,7 +745,9 @@ data_frame(x = college_gam_terms$`bs(PhD, df = 5)`$x,
        y = expression(f[1](PhD)))
 ```
 
-![](ps7-resample-nonlinear_files/figure-markdown_github/unnamed-chunk-3-2.png)
+![](ps7-resample-nonlinear_files/figure-markdown_github/PhD-1.png)
+
+For percentage of PhDs in the faculty, there does not appear to be a substantial or significant relationship with out-of-state tuition after controlling for other university characteristics. The cubic spline is relatively flat and the 95% confidence interval is relatively wide at extreme values.
 
 ``` r
 ## perc.alumni
@@ -723,7 +766,9 @@ data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
        y = expression(f[1](perc.alumni)))
 ```
 
-![](ps7-resample-nonlinear_files/figure-markdown_github/unnamed-chunk-3-3.png)
+![](ps7-resample-nonlinear_files/figure-markdown_github/alum-1.png)
+
+For percentage of alumni who donates, there does not appear to be a substantial or significant relationship with out-of-state tuition after controlling for other university characteristics. The cubic spline is relatively flat and the 95% confidence interval is wide.
 
 ``` r
 ## Expenditure per student
@@ -742,9 +787,11 @@ data_frame(x = college_gam_terms$`bs(Expend, df = 5)`$x,
        y = expression(f[1](Expend)))
 ```
 
-![](ps7-resample-nonlinear_files/figure-markdown_github/unnamed-chunk-3-4.png)
+![](ps7-resample-nonlinear_files/figure-markdown_github/exp-1.png)
 
-``` r
+For instructional expenditure per student, the effect appears to be substantial and statistically significant; as instructional expenditure increases, predicted out-of-state tuition increases until $25000 per student, and plateaus after that.
+
+``` grad
 ## Graduation Rate
 data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
            y = college_gam_terms$`bs(Grad.Rate, df = 5)`$y,
@@ -761,26 +808,9 @@ data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
        y = expression(f[1](Grad.Rate)))
 ```
 
-![](ps7-resample-nonlinear_files/figure-markdown_github/unnamed-chunk-3-5.png)
+For graduation rate, the effect appears to be substantial and statistically significant; as graduation increases, predicted out-of-state tuition increases. Out-of-state tuition decreases when graduation rate goes past 100%. This effect is likely to be due to an outlier or a wrongly documented statistic, as colleges cannot have graduation rates above 100% and the 95% confidence interval widens after graduation rate goes past 100%.
 
-``` r
-## gender
-data_frame(x = college_gam_terms$Private$x,
-           y = college_gam_terms$Private$y,
-           se.fit = college_gam_terms$Private$se.y) %>%
-  unique %>%
-  mutate(y_low = y - 1.96 * se.fit,
-         y_high = y + 1.96 * se.fit,
-         x = factor(x)) %>%
-  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
-  geom_errorbar() +
-  geom_point() +
-  labs(title = "GAM of Out-of-State Tuition",
-       x = NULL,
-       y = expression(f[3](Private)))
-```
-
-![](ps7-resample-nonlinear_files/figure-markdown_github/unnamed-chunk-3-6.png)
+#### Model Fit
 
 ``` r
 # Test set 
@@ -805,38 +835,38 @@ mse_gam(college_gam)
 #mgcv::summary.gam(college_gam, college_test)
 ```
 
-1.  Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-2.  Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
-3.  For which variables, if any, is there evidence of a non-linear relationship with the response?[3]
+#### Non-linear relationship
+
+To determine if the predictors have a non-linear relationship with the response variable, we perform an ANOVA test between two models. The first model uses a spline function of the predictor variable and allows for a non-linear relationship between the response variable and the predictor variable. The second model assumes a linear relationship between the response variable and the predictor variable. If the F test shows that the second model (linear model) is significantly different from the first model, i.e. with a p-value smaller than 1%, we reject the null hypothesis that both models are the same.
 
 ``` r
 college_base <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_roomS <- gam(Outstate ~ Private + s(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_base <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = college_train)
 
-college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + s(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_roomS <- gam(Outstate ~ Private + Room.Board + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + s(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + PhD + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + s(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + perc.alumni + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + s(Grad.Rate, df = 5), data = college_train)
+college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + Expend + bs(Grad.Rate, df = 5), data = college_train)
+
+college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Grad.Rate, data = college_train)
 
 
 anova(college_base, college_roomS, test  = "F")
 ```
 
-    ## Analysis of Deviance Table
+    ## Analysis of Variance Table
     ## 
-    ## Model 1: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
-    ## Model 2: Outstate ~ Private + s(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
-    ##   Resid. Df Resid. Dev        Df Deviance      F    Pr(>F)    
-    ## 1       207  717766225                                        
-    ## 2       207  717671263 8.049e-06    94962 3402.9 1.502e-05 ***
+    ## Model 1: Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + 
+    ##     Grad.Rate
+    ## Model 2: Outstate ~ Private + Room.Board + bs(PhD, df = 5) + bs(perc.alumni, 
+    ##     df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5)
+    ##   Res.Df       RSS Df Sum of Sq      F    Pr(>F)    
+    ## 1    227 983664878                                  
+    ## 2    211 744518824 16 239146054 4.2359 4.043e-07 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
@@ -844,33 +874,31 @@ anova(college_base, college_roomS, test  = "F")
 anova(college_base, college_phdS, test  = "F")
 ```
 
-    ## Analysis of Deviance Table
+    ## Analysis of Variance Table
     ## 
-    ## Model 1: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
-    ## Model 2: Outstate ~ Private + bs(Room.Board, df = 5) + s(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
-    ##   Resid. Df Resid. Dev         Df Deviance F Pr(>F)
-    ## 1       207  717766225                             
-    ## 2       207  719095057 0.00012398 -1328832
+    ## Model 1: Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + 
+    ##     Grad.Rate
+    ## Model 2: Outstate ~ Private + bs(Room.Board, df = 5) + PhD + bs(perc.alumni, 
+    ##     df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5)
+    ##   Res.Df       RSS Df Sum of Sq      F    Pr(>F)    
+    ## 1    227 983664878                                  
+    ## 2    211 725544052 16 258120826 4.6916 4.426e-08 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
 ``` r
 anova(college_base, college_alumS, test = "F")
 ```
 
-    ## Analysis of Deviance Table
+    ## Analysis of Variance Table
     ## 
-    ## Model 1: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
+    ## Model 1: Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + 
+    ##     Grad.Rate
     ## Model 2: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     s(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
-    ##   Resid. Df Resid. Dev          Df Deviance      F  Pr(>F)    
-    ## 1       207  717766225                                        
-    ## 2       207  717778624 -0.00025721   -12398 13.902 0.00074 ***
+    ##     perc.alumni + bs(Expend, df = 5) + bs(Grad.Rate, df = 5)
+    ##   Res.Df       RSS Df Sum of Sq      F   Pr(>F)    
+    ## 1    227 983664878                                 
+    ## 2    211 735242772 16 248422105 4.4558 1.39e-07 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
@@ -878,38 +906,34 @@ anova(college_base, college_alumS, test = "F")
 anova(college_base, college_expS, test = "F")
 ```
 
-    ## Analysis of Deviance Table
+    ## Analysis of Variance Table
     ## 
-    ## Model 1: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
+    ## Model 1: Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + 
+    ##     Grad.Rate
     ## Model 2: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + s(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
-    ##   Resid. Df Resid. Dev         Df Deviance      F    Pr(>F)    
-    ## 1       207  717766225                                         
-    ## 2       207  713835872 0.00025251  3930353 4513.6 6.154e-05 ***
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ##     bs(perc.alumni, df = 5) + Expend + bs(Grad.Rate, df = 5)
+    ##   Res.Df       RSS Df Sum of Sq      F Pr(>F)
+    ## 1    227 983664878                           
+    ## 2    211 885416706 16  98248172 1.4633 0.1157
 
 ``` r
 anova(college_base, college_gradS, test = "F")
 ```
 
-    ## Analysis of Deviance Table
+    ## Analysis of Variance Table
     ## 
-    ## Model 1: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, 
-    ##     df = 5)
+    ## Model 1: Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + 
+    ##     Grad.Rate
     ## Model 2: Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + 
-    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + s(Grad.Rate, 
-    ##     df = 5)
-    ##   Resid. Df Resid. Dev          Df Deviance F Pr(>F)
-    ## 1       207  717766225                              
-    ## 2       207  715444311 -1.4558e-05  2321915
+    ##     bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Grad.Rate
+    ##   Res.Df       RSS Df Sum of Sq      F    Pr(>F)    
+    ## 1    227 983664878                                  
+    ## 2    211 730313557 16 253351321 4.5748 7.797e-08 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Thus, the results of our ANOVA test shows that `Room.Board`, `PhD`, `perc.alumni` and `Grad.Rate` have a non-linear relationship with `Outstate`. Only `Expend` has a linear relationship with `Outstate`.
 
 [1] Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.
 
 [2] Independents must be left out to serve as the baseline category, otherwise we would encounter perfect multicollinearity.
-
-[3] Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.

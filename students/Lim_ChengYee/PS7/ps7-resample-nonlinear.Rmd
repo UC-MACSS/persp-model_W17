@@ -20,6 +20,7 @@ library(broom)
 library(knitr)
 library(pander)
 library(purrr)
+library(gam)
 
 theme_set(theme_minimal())
 ```
@@ -203,8 +204,7 @@ college <- read.csv("./data/college.csv")
 ```
 
 # Part 3: College (GAM) [3 points]
-
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
+We now fit a GAM to predict out-of-state tuition using natural spline functions of `Room.Board`, `PhD`, `perc.alumni`, `Expend`, `Grad.Rate` and treating `Private` as a qualitative predictor. 
 
 * `Outstate` - Out-of-state tuition.
 * `Private` - A factor with levels `No` and `Yes` indicating private or public university.
@@ -214,21 +214,40 @@ The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.fe
 * `Expend` - Instructional expenditure per student.
 * `Grad.Rate` - Graduation rate.
 
-1. Split the data into a training set and a test set.
-1. Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-```{r}
+We do so by extending the following multiple linear regression model
+
+$$y_i = \beta_0 + \beta_{1} X_{i1} + \beta_{2} X_{i2} + \beta_{3} X_{i3} + \beta_{4} X_{i4} + \beta_{5} X_{i5} + \beta_{6} X_{i6} + \epsilon_i$$
+where $X_{i1}$ is `Private`, $X_{i2}$ is `Room.Board`, $X_{i3}$ is `PhD`, $X_{i4}$ is `perc.alumni`, $X_{i5}$ is `Expend`, and $X_{i6}$ is `Grad.Rate`
+
+and allowing for non-linear relationships between each predictor and the response variable. Each linear component $\beta_{j} x_{ij}$ is replaced with a smooth, non-linear function $f_j(x_{ij})$:
+
+$$y_i = \beta_0 + \sum_{j = 1}^6 f_j(x_{ij}) + \epsilon_i$$
+
+Thus, our ultimate GAM for the college dataset is as follows:
+
+$$\text{Outstate} = \beta_0 + f_1(\text{Private}) + f_2(\text{Room.Board}) + f_3(\text{PhD}) + f_4(\text{perc.alumni}) + f_5(\text{Expend}) + f_6(\text{Grad.Rate}) + \epsilon$$
+
+Where $f_2$, $f_3$, $f_4$, $f_5$, $f_6$ are cubic splines with 2 knots and $f_1$ generates a separate constant for non-private and private universities using traditional dummy variables.
+
+
+```{r 3OLS}
+# training-test set split
 college_split <- resample_partition(college, c(test = 0.7, train = 0.3))
 college_train <- college_split$train %>%
   tbl_df()
 college_test <- college_split$test %>%
   tbl_df()
 
-# OLS 
-
+# OLS estimation
 college_mod <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni +  Expend + Grad.Rate, data = college_train)
 pander(summary(college_mod))
+```
 
-library(gam)
+Out-of-state tuition is expected to be $2548 higher for private colleges than public colleges, holding all other independent variables constant. This is unsurprising as public colleges receive additional funding from the government, thus they do not need to charge college tuition as high as private colleges.  
+
+An additional dollar increase in room and boarding costs corresponds to an \$1.06 increase in out-of-state tuition. Similarly, one percent increase in the percentage of the PhDs in the faculty corresponds with a \$38.5 increase in out-of-state tuition. One percent increase in the percentage of alumni who donates also corresponds to a \$44.13 increase in out-of-state tuition. A dollar increase in instructional expenditure per student corresponds with a \$0.1508 increase in out-of-state tuition. A unit increase in graduation rate of the college also corresponds with \$53.91 increase in out-of-state tuition.
+
+```{r 3GAM}
 # estimate model for splines on private, room boarding, PhD, alumni, expenditure, graduation rate 
 college_gam <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 summary(college_gam)
@@ -236,6 +255,26 @@ summary(college_gam)
 #get graphs of each term
 college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
 
+## private
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x)) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out-of-State Tuition",
+       x = NULL,
+       y = expression(f[3](Private)))
+
+```
+ 
+For `private`, the difference between non-private and private is substantial and statistically distinguishable from 0. Private colleges are predicted to have high out-of-state tuition than non-private colleges. 
+
+```{r 3room}
 ## Room Board
 data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
            y = college_gam_terms$`bs(Room.Board, df = 5)`$y,
@@ -251,7 +290,11 @@ data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
        x = "Room Board",
        y = expression(f[1](Room.Board)))
 
+```
 
+For room and boarding costs, the effect appears to be substantial and statistically significant; as room and boarding costs increase, predicted out-of-state tuition increases. The downward trend after $6500 room and boarding costs might not be statistically significant due to the wide confidence intervals.
+
+```{r PhD}
 ## PhD
 data_frame(x = college_gam_terms$`bs(PhD, df = 5)`$x,
            y = college_gam_terms$`bs(PhD, df = 5)`$y,
@@ -267,6 +310,11 @@ data_frame(x = college_gam_terms$`bs(PhD, df = 5)`$x,
        x = "PhD",
        y = expression(f[1](PhD)))
 
+```
+
+For percentage of PhDs in the faculty, there does not appear to be a substantial or significant relationship with out-of-state tuition after controlling for other university characteristics. The cubic spline is relatively flat and the 95% confidence interval is relatively wide at extreme values. 
+
+```{r alum}
 ## perc.alumni
 data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
            y = college_gam_terms$`bs(perc.alumni, df = 5)`$y,
@@ -281,7 +329,11 @@ data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
        subtitle = "Cubic spline",
        x = "Alumni Donations",
        y = expression(f[1](perc.alumni)))
+```
 
+For percentage of alumni who donates, there does not appear to be a substantial or significant relationship with out-of-state tuition after controlling for other university characteristics. The cubic spline is relatively flat and the 95% confidence interval is wide. 
+
+```{r exp}
 ## Expenditure per student
 data_frame(x = college_gam_terms$`bs(Expend, df = 5)`$x,
            y = college_gam_terms$`bs(Expend, df = 5)`$y,
@@ -297,6 +349,11 @@ data_frame(x = college_gam_terms$`bs(Expend, df = 5)`$x,
        x = "Expenditure",
        y = expression(f[1](Expend)))
 
+```
+
+For instructional expenditure per student, the effect appears to be substantial and statistically significant; as instructional expenditure increases, predicted out-of-state tuition increases until $25000 per student, and plateaus after that.
+
+```{grad}
 ## Graduation Rate
 data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
            y = college_gam_terms$`bs(Grad.Rate, df = 5)`$y,
@@ -312,21 +369,12 @@ data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
        x = "Graduation Rate",
        y = expression(f[1](Grad.Rate)))
 
-## gender
-data_frame(x = college_gam_terms$Private$x,
-           y = college_gam_terms$Private$y,
-           se.fit = college_gam_terms$Private$se.y) %>%
-  unique %>%
-  mutate(y_low = y - 1.96 * se.fit,
-         y_high = y + 1.96 * se.fit,
-         x = factor(x)) %>%
-  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
-  geom_errorbar() +
-  geom_point() +
-  labs(title = "GAM of Out-of-State Tuition",
-       x = NULL,
-       y = expression(f[3](Private)))
+```
 
+For graduation rate, the effect appears to be substantial and statistically significant; as graduation increases, predicted out-of-state tuition increases. Out-of-state tuition decreases when graduation rate goes past 100%. This effect is likely to be due to an outlier or a wrongly documented statistic, as colleges cannot have graduation rates above 100% and the 95% confidence interval widens after graduation rate goes past 100%.
+
+####Model Fit
+```{r 3fit}
 # Test set 
 mse(college_mod, college_test)
 
@@ -342,22 +390,22 @@ mse_gam(college_gam)
 
 ```
 
-1. Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-1. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
-1. For which variables, if any, is there evidence of a non-linear relationship with the response?^[Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.]
-
+####Non-linear relationship 
+To determine if the predictors have a non-linear relationship with the response variable, we perform an ANOVA test between two models. The first model uses a spline function of the predictor variable and allows for a non-linear relationship between the response variable and the predictor variable. The second model assumes a linear relationship between the response variable and the predictor variable. If the F test shows that the second model (linear model) is significantly different from the first model, i.e. with a p-value smaller than 1%, we reject the null hypothesis that both models are the same.  
 ```{r anova}
 college_base <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_roomS <- gam(Outstate ~ Private + s(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_base <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = college_train)
 
-college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + s(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_roomS <- gam(Outstate ~ Private + Room.Board + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + s(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + PhD + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + s(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + perc.alumni + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
-college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + s(Grad.Rate, df = 5), data = college_train)
+college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + Expend + bs(Grad.Rate, df = 5), data = college_train)
+
+college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Grad.Rate, data = college_train)
 
 
 anova(college_base, college_roomS, test  = "F")
@@ -366,3 +414,4 @@ anova(college_base, college_alumS, test = "F")
 anova(college_base, college_expS, test = "F")
 anova(college_base, college_gradS, test = "F")
 ```
+Thus, the results of our ANOVA test shows that `Room.Board`, `PhD`, `perc.alumni` and `Grad.Rate` have a non-linear relationship with `Outstate`. Only `Expend` has a linear relationship with `Outstate`. 
