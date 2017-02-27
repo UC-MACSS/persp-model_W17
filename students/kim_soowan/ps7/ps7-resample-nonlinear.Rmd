@@ -1,6 +1,6 @@
 ---
 title: "Problem set #7: resampling and nonlinearity"
-author: "Soo Wam Kim"
+author: "Soo Wan Kim"
 date: "February 25, 2017"
 output:
   github_document:
@@ -28,7 +28,8 @@ biden <- read.csv("data/biden.csv")
 
 # Part 1: Sexy Joe Biden (redux) [4 points]
 
-  1. **Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.**
+####Question  1. 
+**Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.**
 
 ```{r entire_set_MSE}
 #function to calculate MSE
@@ -116,7 +117,7 @@ The MSE calculated using the 10-fold cross-validation approach is `r cv10_mse`. 
 
   6. **Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.**
   
-```{r 10-fold_CV_MSE_100}
+```{r 10-fold_CV_MSE_100, cache=TRUE}
 cv10_mse_list <- vector(, 100) #create vector of length 100
 
 #function
@@ -142,13 +143,13 @@ This time, the estimates vary very little, with a standard deviation of only `r 
 
   7. **Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).**
 
-####Original model estimates
+**Original model estimates**
 
 ```{r original_est}
 pander(tidy(glm_trad))
 ```
 
-####Bootstrap estimates
+**Bootstrap estimates**
 
 ```{r bootstrap, cache=TRUE}
 #estimate model using bootstrap, display in tidy format
