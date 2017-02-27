@@ -191,42 +191,224 @@ joe %>%
 The estimated parameters using the bootstrap is almost identical as the estimated parameters from the original model. However, the estimated standard errors from the bootstrap are consistently larger than the standard errors from the original model.
 
 # Part 2: College (Bivariate) [3 points]
-
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
-
-* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
-* `Apps` - Number of applications received.
-* `Accept` - Number of applications accepted.
-* `Enroll` - Number of new students enrolled.
-* `Top10perc` - Percent of new students from top 10% of H.S. class.
-* `Top25perc` - Percent of new students from top 25% of H.S. class.
-* `F.Undergrad` - Number of fulltime undergraduates.
-* `P.Undergrad` - Number of parttime undergraduates.
-* `Outstate` - Out-of-state tuition.
-* `Room.Board` - Room and board costs.
-* `Books` - Estimated book costs.
-* `Personal` - Estimated personal spending.
-* `PhD` - Percent of faculty with Ph.D.'s.
-* `Terminal` - Percent of faculty with terminal degrees.
-* `S.F.Ratio` - Student/faculty ratio.
-* `perc.alumni` - Percent of alumni who donate.
-* `Expend` - Instructional expenditure per student.
-* `Grad.Rate` - Graduation rate.
-
-Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
-
-* No transformation
-* Monotonic transformation
-* Polynomial regression
-* Step functions
-* Splines
-* Local regression
-
-Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
-
 ```{r part2}
 college <- read.csv("./data/college.csv")
+```
 
+####Top10perc and Out-of-State tuition
+The initial scatterplot of `Top10perc` and `Outstate` suggests a relationship between `Top10perc` and `Outstate`. This is also corroborated with the residual plot of the linear model (`Outstate` ~ `Top10perc`). If there is a linear relationship between `Top10perc` and `Outstate`, the residuals of the observations should be distributed normally with an expected error $E(\epsilon) = 0$ and not be correlated with fitted values. 
+
+```{r top10}
+college %>% 
+  ggplot(aes(x = Top10perc, y = Outstate)) + 
+  geom_point(alpha = 1/4) + 
+  geom_smooth(method = "lm") + 
+  labs(
+    title = "Relationship between new students from top 10% and Out-of-State Tuition", 
+    y = "Out-of-State tuition", 
+    x = "Percentage of new students from top 10% of H.S. Class"
+  )
+
+top10_mod <- lm(Outstate ~ Top10perc, data = college)
+pander(summary(top10_mod))
+
+college %>%
+  add_predictions(top10_mod) %>%
+  add_residuals(top10_mod) %>%
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = 1/4) +
+  geom_hline(yintercept = 0, linetype = 2, color = "black") + 
+  labs(title = "Top10perc Linear Model Predicted Values and Residuals",
+       x = "Predicted Out-of-State Tuition",
+       y = "Residuals")   
+```
+
+We then affirm the non-transformation of `Top10perc` with a 10-fold cross validation on the number of polynomial. From the results of the 10-fold cross validation, it appears that 10-fold CV MSE is minimized with a second ordered polynomial. Since MSE is only reduced by 0.2%, we will still use the non-transformed `Top10perc` model.  
+
+**Summary of the Findings**  
+A percent increase in percentage of new students from the top 10% of the H.S. cohort corresponds to an increase of \$128.2 in out-of-state tuition.
+
+####Student Faculty Ratio and Tuition 
+The initial scatterplot of `S.F.Ratio` and `Outstate` shows a non-linear relationship between the two variables. This is also corroborated with the residual plot of the linear model (`Outstate` ~ `S.F.Ratio`). If there is a linear relationship between `Expend` and `Outstate`, the residuals of the observations should be distributed normally with an expected error $E(\epsilon) = 0$ and not be correlated with fitted values. However, the residual plots of the linear model do not appear to be normally distributed around 0. 
+
+```{r sf-linearity}
+college %>%
+  ggplot(aes(x = S.F.Ratio, y = Outstate)) +
+  geom_point(alpha = 1/2) + 
+  geom_smooth(method = "lm") + 
+  labs(title = "Linear Model of Out-of-State Tuition and Student-Faculty Ratio",
+       x = "Student-faculty ratio",
+       y = "Out-of-State Tuition") 
+
+sf_mod <- lm(Outstate ~ S.F.Ratio, data = college) 
+
+college %>% 
+  add_residuals(sf_mod) %>%
+  add_predictions(sf_mod) %>%
+  ggplot(aes(x = pred, y = resid)) +
+  geom_hline(yintercept = 0, linetype = 2, color = "grey") + 
+  geom_point() + 
+  labs(title = "S.F.Ratio Linear Model Predicted Values and Residuals",
+       x = "Predicted Out-of-State Tuition",
+       y = "Residuals") 
+```
+
+Thus, we model a `Outstate` regression spline to fit separate polynomial functions over different regions of `S.F.Ratio`. The residual plot appears to be uncorrelated with fitted `Outstate` values and normally distributed around zero. 
+```{r sf_smoothh}
+sf_smooth <- lm(Outstate ~ bs(S.F.Ratio, knots = c(5)), data = college)
+
+college %>% 
+  add_predictions(sf_smooth) %>%
+  ggplot(aes(S.F.Ratio)) + 
+  geom_point(aes(y = Outstate), alpha = 1/4) + 
+  geom_line(aes(y= pred), size = 0.8, color = "black") + 
+  geom_vline(xintercept = 15, linetype = 2, color = "grey") +
+  labs(title = "Piecewise cubic regression",
+       x = "Student-Faculty ratio",
+       y = "Out-of-State Tuition") +
+  theme(legend.position = "none")
+
+college %>%
+  add_residuals(sf_smooth) %>% 
+  add_predictions(sf_smooth) %>%
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_hline(yintercept = 0, linetype = 2, color = "grey") + 
+  geom_point() + 
+  labs(title = "Outstate Spline Regression Predicted Values and Residuals",
+       x = "Predicted Out-of-State Tuition",
+       y = "Residuals") 
+```
+
+We then affirm the choice of knots and  of non-linear techniques with a 10-fold cross validation. From the results of the 10-fold cross validation, it appears that 10-fold CV MSE is minimized with a first order polynomial and when knots = 2. This affirms the choice of polynomials and knots we modelled. 
+
+```{r}
+# function to simplify things
+wage_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ lm(Outstate ~ bs(S.F.Ratio, df = df, degree = degree),
+                                  data = .))
+  
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+wage_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+wage_degree_mse <- data_frame(degrees = 1:4,
+                              mse = map_dbl(degrees, ~ wage_spline_cv(wage_kfold, degree = .,
+                                                                      df = 3 + .)))
+
+# estimate mse for degrees of freedom (aka knots)
+wage_df_mse <- data_frame(df = 1:10,
+                          mse = map_dbl(df, ~ wage_spline_cv(wage_kfold, df = 3 + .)))
+
+# graph the results
+ggplot(wage_degree_mse, aes(degrees, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for outstate spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE") 
+
+ggplot(wage_df_mse, aes(df, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of knots for outstate spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
+
+
+```
+
+####Instructional Expenditure and Tuition 
+The initial scatterplot of `Expend` and `Outstate` suggests a monotonic transformation of `Expend` to `log(Expend)` according to the "Bulging Rule" by Tukey and Mostellar to induce linearity between the two variables. This is also corroborated with the residual plot of the linear model (`Outstate` ~ `Expend`). If there is a linear relationship between `Expend` and `Outstate`, the residuals of the observations should be distributed normally with an expected error $E(\epsilon) = 0$ and not be correlated with fitted values. However, the residual plots of the linear model do not appear to be normally distributed around 0. The residuals are also more correlated with fitted out-of-state tuition values from \$75,000 and  \$150,000. 
+```{r expenditure-linearity}
+college %>%
+  ggplot(aes(x = Expend, y = Outstate)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  labs(title = "Linear Model of Out-of-State Tuition and Instructional Expenditure",
+       x = "Instructional Expenditure per Child",
+       y = "Out-of-State Tuition") 
+
+expend <- lm(Outstate ~ Expend, data = college) 
+pander(summary(expend))
+
+college %>%
+  add_residuals(expend) %>%
+  add_predictions(expend) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = 1/2) + 
+  geom_hline(yintercept = 0, linetype = 2, color = "black") +
+  labs(title = "Expend Linear Model Predicted Values and Residuals",
+       x = "Predicted Out-of-State Tuition",
+       y = "Residuals") 
+```
+
+Plotting the log(`Expend`) model with the scatterplot of `Expend` and `Outstate` does appear to be a better fit than the linear model, at first glance. The residual plots also seem to be normally distributed around zero and be uncorrelated with the fitted values. 
+```{r expend_log}
+expend_log <- lm(Outstate ~ log(Expend), data = college)
+pander(summary(expend_log))
+
+college_exp <- college %>% 
+  add_predictions(expend_log) %>%
+  add_residuals(expend_log)
+
+college_exp %>%
+  ggplot(aes(Expend)) + 
+  geom_point(aes(y = Outstate), alpha = 1/4) + 
+  geom_line(aes(y= pred), size = 1) + 
+  geom_vline(xintercept = 20000, linetype = 2, color = "grey") +
+  labs(title = "Log(Expend) Model",
+       x = "Instructional Expenditure per Student",
+       y = "Out-of-State Tuition") +
+  theme(legend.position = "none")
+
+college_exp %>%
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = 1/2) + 
+  geom_hline(yintercept = 0, linetype = 2, color = "black") + 
+  labs(title = "Log(Expend) Model Predicted Values and Residuals",
+       x = "Predicted Out-of-State Tuition",
+       y = "Residuals") +
+  theme(legend.position = "none")
+
+```
+
+We then affirm the use of non-linear techniques with a 10-fold cross validation on the number of polynomial. From the results of the 10-fold cross validation, it appears that 10-fold CV MSE is minimized with a fourth ordered polynomial. However, higher order polynomials are often harder to interpret and MSE is only reduced by 7% from first order polynomial to fourth order polynomial. Thus, we choose to retain the ease in interpreting our results with a log(`Expend`) model.  
+
+**Summary of Findings**  
+From the results of the log(`Expend`) model, a one percent increase in instructional expenditure per student corresponds with with a 7.482 increase in out-of-state tuition. 
+
+```{r expend_cv}
+college_kfold <- crossv_kfold(college, k = 10)
+cv_error_fold10 <- vector("numeric", 7)
+terms <- 1:7
+
+for(i in terms){
+  cv10_models <- map(college_kfold$train, ~ lm(Outstate ~ poly(log(Expend), i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, college_kfold$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+cv_error_fold10
+
+data_frame(terms = terms, 
+           fold10mse = cv_error_fold10) %>%
+  ggplot(aes(x = terms, y = fold10mse)) +
+  geom_line() + 
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for log(Expend)",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE") 
 ```
 
 # Part 3: College (GAM) [3 points]
@@ -250,12 +432,11 @@ and allowing for non-linear relationships between each predictor and the respons
 
 $$y_i = \beta_0 + \sum_{j = 1}^6 f_j(x_{ij}) + \epsilon_i$$
 
-Thus, our ultimate GAM for the college dataset is as follows:
+We also retain the log-transformation of `Expend` for the explained reasons in part 2, thus our ultimate GAM for the college dataset is as follows:
 
-$$\text{Outstate} = \beta_0 + f_1(\text{Private}) + f_2(\text{Room.Board}) + f_3(\text{PhD}) + f_4(\text{perc.alumni}) + f_5(\text{Expend}) + f_6(\text{Grad.Rate}) + \epsilon$$
+$$\text{Outstate} = \beta_0 + f_1(\text{Private}) + f_2(\text{Room.Board}) + f_3(\text{PhD}) + f_4(\text{perc.alumni}) + \beta_1log(\text{Expend}) + f_5(\text{Grad.Rate}) + \epsilon$$
 
-Where $f_2$, $f_3$, $f_4$, $f_5$, $f_6$ are cubic splines with 2 knots and $f_1$ generates a separate constant for non-private and private universities using traditional dummy variables.
-
+Where $f_2$, $f_3$, $f_4$, $f_5$ are cubic splines with 2 knots and $f_1$ generates a separate constant for non-private and private universities using traditional dummy variables.
 
 ```{r 3OLS}
 # training-test set split
@@ -276,7 +457,7 @@ An additional dollar increase in room and boarding costs corresponds to an \$1.0
 
 ```{r 3GAM}
 # estimate model for splines on private, room boarding, PhD, alumni, expenditure, graduation rate 
-college_gam <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
+college_gam <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + log(Expend) + bs(Grad.Rate, df = 5), data = college_train)
 summary(college_gam)
 
 #get graphs of each term
@@ -319,7 +500,7 @@ data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
 
 ```
 
-For room and boarding costs, the effect appears to be substantial and statistically significant; as room and boarding costs increase, predicted out-of-state tuition increases. The downward trend after $6500 room and boarding costs might not be statistically significant due to the wide confidence intervals.
+For room and boarding costs, the effect appears to be substantial and statistically significant; as room and boarding costs increase, predicted out-of-state tuition increases. From 0 to \$3,000 room and boarding costs, there is a negative relationship between out-of-state tuition and room and boarding costs, however, confidence intervals are wide as well, thus we do not know if the downward trend from 0-\$3,000 is statistically significant.
 
 ```{r PhD}
 ## PhD
@@ -360,27 +541,7 @@ data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
 
 For percentage of alumni who donates, there does not appear to be a substantial or significant relationship with out-of-state tuition after controlling for other university characteristics. The cubic spline is relatively flat and the 95% confidence interval is wide. 
 
-```{r exp}
-## Expenditure per student
-data_frame(x = college_gam_terms$`bs(Expend, df = 5)`$x,
-           y = college_gam_terms$`bs(Expend, df = 5)`$y,
-           se.fit = college_gam_terms$`bs(Expend, df = 5)`$se.y) %>%
-  mutate(y_low = y - 1.96 * se.fit,
-         y_high = y + 1.96 * se.fit) %>%
-  ggplot(aes(x, y)) +
-  geom_line() +
-  geom_line(aes(y = y_low), linetype = 2) +
-  geom_line(aes(y = y_high), linetype = 2) +
-  labs(title = "GAM of Out-of-State tuition",
-       subtitle = "Cubic spline",
-       x = "Expenditure",
-       y = expression(f[1](Expend)))
-
-```
-
-For instructional expenditure per student, the effect appears to be substantial and statistically significant; as instructional expenditure increases, predicted out-of-state tuition increases until $25000 per student, and plateaus after that.
-
-```{grad}
+```{r grad}
 ## Graduation Rate
 data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
            y = college_gam_terms$`bs(Grad.Rate, df = 5)`$y,
@@ -398,7 +559,7 @@ data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
 
 ```
 
-For graduation rate, the effect appears to be substantial and statistically significant; as graduation increases, predicted out-of-state tuition increases. Out-of-state tuition decreases when graduation rate goes past 100%. This effect is likely to be due to an outlier or a wrongly documented statistic, as colleges cannot have graduation rates above 100% and the 95% confidence interval widens after graduation rate goes past 100%.
+For graduation rate, the effect appears to be substantial and statistically significant; as graduation increases, predicted out-of-state tuition increases. Out-of-state tuition decreases when graduation rate goes past 80%, however the confidence intervals become wider as well. Thus, we cannot tell ifi the decrease in out-of-state tuition is statistically significant.
 
 ####Model Fit
 ```{r 3fit}
@@ -406,34 +567,24 @@ For graduation rate, the effect appears to be substantial and statistically sign
 mse(college_mod, college_test)
 
 #  GAM MSE calculation
-mse_gam <- function(model, data) {
-  x <- mgcv:::residuals.gam(model, data, type = "deviance")
-  mean(x ^ 2, na.rm = TRUE)
-} 
-
-mse_gam(college_gam)
-
-#mgcv::summary.gam(college_gam, college_test)
-
+mse(college_gam, college_test)
 ```
+The MSE of the OLS model is `r mse(college_mod, college_test)`.  
+The MSE of the GAM model is `r mse(college_gam, college_test)`. 
 
 ####Non-linear relationship 
-To determine if the predictors have a non-linear relationship with the response variable, we perform an ANOVA test between two models. The first model uses a spline function of the predictor variable and allows for a non-linear relationship between the response variable and the predictor variable. The second model assumes a linear relationship between the response variable and the predictor variable. If the F test shows that the second model (linear model) is significantly different from the first model, i.e. with a p-value smaller than 1%, we reject the null hypothesis that both models are the same.  
+To determine if the predictors have a non-linear relationship with the response variable, we perform an ANOVA test between two models. The first model uses a spline function of the predictor variable and allows for a non-linear relationship between the response variable and the predictor variable. The second model assumes a linear relationship between the response variable and the predictor variable. If the F test shows that the second model (linear model) is significantly different from the first model, i.e. with a p-value smaller than 10%, we reject the null hypothesis that both models are the same.  
 ```{r anova}
-college_base <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-
-college_base <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = college_train)
-college_roomS <- gam(Outstate ~ Private + Room.Board + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + PhD + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + perc.alumni + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + Expend + bs(Grad.Rate, df = 5), data = college_train)
-college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Grad.Rate, data = college_train)
+college_base <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + log(Expend) + bs(Grad.Rate, df = 5), data = college_train)
+college_roomS <- gam(Outstate ~ Private + Room.Board + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + log(Expend) + bs(Grad.Rate, df = 5), data = college_train)
+college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + PhD + bs(perc.alumni, df = 5) + log(Expend) + bs(Grad.Rate, df = 5), data = college_train)
+college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + perc.alumni + log(Expend) + bs(Grad.Rate, df = 5), data = college_train)
+college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + log(Expend) + Grad.Rate, data = college_train)
 
 
 anova(college_base, college_roomS, test  = "F")
 anova(college_base, college_phdS, test  = "F")
 anova(college_base, college_alumS, test = "F")
-anova(college_base, college_expS, test = "F")
 anova(college_base, college_gradS, test = "F")
 ```
-Thus, the results of our ANOVA test shows that `Room.Board`, `PhD`, `perc.alumni` and `Grad.Rate` have a non-linear relationship with `Outstate`. Only `Expend` has a linear relationship with `Outstate`. 
+Thus, the results of our ANOVA test shows that `Room.Board`, `perc.alumni` and `Grad.Rate` do not have a non-linear relationship with `Outstate`. Only `PhD` seems to have a non-linear relationship with `Outstate`.
