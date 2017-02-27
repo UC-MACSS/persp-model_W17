@@ -18,6 +18,7 @@ library(knitr)
 library(splines)
 library(lattice)
 library(gam)
+library(stargazer)
 ```
 
 
@@ -89,7 +90,7 @@ while(i < 100){
 }
 
 ggplot(data_split, mapping=aes(x=MSE))+
-  geom_histogram(binwidth = 1)+
+  geom_histogram(binwidth = 5, fill=I('blue'), col=I('black'))+
   labs(title="The distribution of MSEs",
          x="MSE",
          y="Frequency")
@@ -97,7 +98,7 @@ ggplot(data_split, mapping=aes(x=MSE))+
 mean(data_split$MSE)
 ```
 
-4. Using the leave-one-out cross-validation (LOOCV) approach, the test MSE is 397.9555. It is close to the test MSEs estimated by the validation set approach. And the test MSE is very stable, which is an advantage over the validation set approach.
+4. Using the leave-one-out cross-validation (LOOCV) approach, the test MSE is 397.9555. It is close to, but in many times of my running this approach smaller than the test MSEs estimated by the validation set approach. This means the LOOCV approach may produce less errors than the validation set approach. And the test MSE is very stable, which is another advantage over the validation set approach.
 ```{r problem1_4, echo=FALSE}
 loocv_data <- crossv_kfold(bidenData, k = nrow(bidenData))
 
@@ -121,7 +122,7 @@ cv_mse <- data_frame(terms = terms,
 cv_mse
 ```
 
-5. Compared to the LOOCV approach, the test MSE for the 10-fold cross-validation approach is lower.
+5. Compared to the LOOCV approach, the test MSEs for the 10-fold cross-validation approach are lower.
 ```{r problem1_5, echo=FALSE}
 cv10_data <- crossv_kfold(bidenData, k = 10)
 
@@ -175,6 +176,36 @@ while (i<100){
 fold10_100
 ```
 
+```{r problem1_6, ehco=FALSE}
+# set random seed
+set.seed(1234)
+
+# repeat 100 times
+fold10_100 <- replicate(100, {
+  biden_10fold <- crossv_kfold(bidenData, k = 10)
+  biden_10models <- map(biden_10fold$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  biden_10mses <- map2_dbl(biden_10models,
+                           biden_10fold$test, mse)
+  mse_10fold <- mean(biden_10mses, na.rm = TRUE)
+})
+
+fold10_100 <- mean(fold10_100)
+
+ggplot(mapping = aes(fold10_100)) + 
+   geom_histogram(color = 'black', fill = 'white') +
+   labs(title = "Distribution of MSE using 10-fold Cross-Validation Approach 100 times",
+        x = "MSE values",
+        y = "Frequency")+
+  geom_vline(aes(xintercept = fold10_100, color = '100-times 10-fold')) +
+  geom_vline(aes(xintercept = mse_10fold, color = '1-time 10-fold')) +
+  geom_vline(aes(xintercept = mseorigin, color = 'Origin Linear Regression')) + 
+  scale_color_manual(name = NULL, breaks = c("100-times 10-fold", "1-time 10-fold","Origin Linear Regression"),values = c("blue", "green", "orange")) +
+  theme(legend.position = 'bottom')
+
+fold10_100
+```
+
+
 7. The estimated parameters are similar between the results of the original model in step 1 is close and the results of the bootstrap.
   The standard errors are also similar. But for 4 out of 5 variables, `age`, `female`, `educ` and `rep`, the standard errors of the bootstrap is slightly larger than the standard errors of the original model. This may due to the bootstrap approach does not rely on any distributional assumptions.
 ```{r problem1_7_origin, echo=FALSE}
@@ -200,8 +231,10 @@ biden_boot %>%
 
 ## Part 2: College (bivariate)
 
-### 1. No transformation
-  The first model is a simple linear regression model, estimating the relationship between instructional expenditure per student and the out-of-state tuition, without transformation. According to the plot below, the simple linear regression without transforamtion does not fit the data vell, although it seems to have captured the general trend of the relationship.
+### 1. Instructional expenditure per student vs. out-of-state Tuition
+
+1.1 No transformation
+  This is a simple linear regression model, estimating the relationship between `Expend`, instructional expenditure per student, and `Outstate`, the out-of-state tuition, without transformation. According to the plot below, the simple linear regression without transforamtion does not fit the data vell, although it seems to have captured a positive relationship.
 ```{r problem2_1_model, echo=FALSE}
 sim_linear_mod <- lm(Outstate ~ Expend, data = collegeData)
 summary(sim_linear_mod)
@@ -211,7 +244,7 @@ ggplot(collegeData, aes(Expend, Outstate)) +
   geom_smooth(method = "lm") +
   labs(title = "Linear model for a linear relationship")
 ```
-
+  The plot below shows the histogram of residuals. If the linear assumption holds true, the distribution of residuals should have been normally distributed. However, the distribution shown below is not strictly normal.
 ```{r problem2_1_residuals, echo=FALSE}
 sim_linear_pred <- collegeData %>%
   add_predictions(sim_linear_mod) %>%
@@ -219,7 +252,7 @@ sim_linear_pred <- collegeData %>%
 
 # distribution of residuals
 ggplot(sim_linear_pred, aes(resid)) +
-  geom_histogram(aes(y = ..density..)) +
+  geom_histogram(aes(y = ..density..), binwidth=100) +
   stat_function(fun = dnorm,
                 args = list(mean = mean(sim_linear_pred$resid),
                             sd = sd(sim_linear_pred$resid))) +
@@ -228,6 +261,7 @@ ggplot(sim_linear_pred, aes(resid)) +
 
 ```
 
+  The residuals are not randomly distributed around the predicted values. They are correlated with fitted values, which again violate the linear assumption of OLS.
 ```{r problem2_1_pred&resid, echo=FALSE}
 # predicted vs. residuals
 ggplot(sim_linear_pred, aes(pred, resid)) +
@@ -238,8 +272,9 @@ ggplot(sim_linear_pred, aes(pred, resid)) +
        y = "Residuals")
 ```
 
-### 2. Polynomial regression
-  The second model have the same predictor and response as the previous model, but it applies the polynomial regression approach. According to the results of the model, the parameters for each one of linear, quadratic and cubic terms are statistically significant on the 0.001 significance level. With a better use of information, this model provides a better estimation, compared to the previous model without transformation.
+
+1.2 Polynomial regression
+  This model has the same predictor and response as the previous model, but it applies the polynomial regression approach. According to the results of the model, the parameters for each one of linear, quadratic and cubic terms are statistically significant on the 0.001 significance level. With a better use of information, this model provides a better estimation, compared to the previous model without transformation.
   And the parameter of the intercept becomes smaller and less statistically significant, which means some unexplained variance in the non-transformation model has been explained by this polynomial regression model.
 ```{r problem2_2_model, echo=FALSE}
 # estimate model
@@ -272,16 +307,147 @@ vcov(problem2_2) %>%
 ```
 
 
-### 3. Regression splines
+### 2. Percent of faculty with Ph.D.'s vs. out-of-state tuition
 
+2.2 No transformation
+  First, we use a non-transformation linear model to see how it fits. Although the parameter for `PhD` is statistically significant on the 0.001 level, the plot shows that the relationship is not perfectly captured by the simple linear regression line and its 95% confidence interval.
 ```{r problem2_3_model, echo=FALSE}
-piece_mod1 <- lm(Outstate ~ poly(Expend, 5, raw = TRUE), data = collegeData, subset = Expend < 20000)
-piece_mod2 <- lm(Outstate ~ poly(Expend, 5, raw = TRUE), data = collegeData, subset = Expend >= 20000)
+sim_linear_mod2 <- lm(Outstate ~ PhD, data = collegeData)
+summary(sim_linear_mod2)
 
-summary(piece_mod1)
-summary(piece_mod2)
+ggplot(collegeData, aes(PhD, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
 ```
 
+  Again, the residuals are not strictly normally distributed.
+```{r problem2_3_residuals, echo=FALSE}
+sim_linear_pred2 <- collegeData %>%
+  add_predictions(sim_linear_mod2) %>%
+  add_residuals(sim_linear_mod2)
+
+# distribution of residuals
+ggplot(sim_linear_pred2, aes(resid)) +
+  geom_histogram(aes(y = ..density..), binwidth=100) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(sim_linear_pred$resid),
+                            sd = sd(sim_linear_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+```
+  The residuals are not randomly distributed. On the contrary, they are correlated with the fitted values, which is against the linear assumption. I need to use non=linear fitting techniques to solve this problem. 
+```{r problem2_3_pred&resid, echo=FALSE}
+# predicted vs. residuals
+ggplot(sim_linear_pred2, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+2.2 Here I use the regression splines technique, since according to the plots above, I believe the relationship between `PhD` and `Outstate` needs the combination of monotonic transformations and piecewise polynomial approach.
+  The table below shows the results of regression splines with 3 knots. We could see that the parameters for the quadratic term and the cubic term are statistically significant on the 0.001 level. This means the relationship between `PhD` and `Outstate` is more than a simple linear relationship. This model provides better fit to the data.
+```{r problem2_4_model, echo=FALSE}
+# estimate model
+outstate_spline <- glm(Outstate ~ bs(PhD, df = 3), data = collegeData)
+summary(outstate_spline)
+```
+
+  The plot below also shows that the regression splines technique is a better approach for this model, compared to the simple linear regression with no transformation.
+```{r problem2_4_plot, echo=FALSE}
+# estimate the predicted values and confidence interval
+outstate_spline_pred <- augment(outstate_spline, newdata = data_grid(collegeData, PhD)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+
+# plot the curve
+ggplot(outstate_spline_pred, aes(PhD)) +
+  geom_point(data = collegeData, aes(PhD, Outstate), alpha = .05) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(collegeData$PhD, df = 3), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Cubic spline regression of Biden feeling thermometer",
+       subtitle = "3 knots, with 95% confidence interval",
+       x = "PhD",
+       y = "Predicted Outstate")
+```
+
+
+### 3. Room and board costs vs. out-of-state tuition
+3.1 No transformation
+  Similar to the previous step, we first build a model using linear regression without transformation. Although the parameter for `Room.Board` is statistically significant on the 0.001 level, the plot shows that there are too many data points that are not captured by the regression line and its 95% confidence interval, especially at the very left hand side and the very right hand side.
+```{r problem2_5_model, echo=FALSE}
+sim_linear_mod3 <- lm(Outstate ~ Room.Board, data = collegeData)
+summary(sim_linear_mod3)
+
+ggplot(collegeData, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+```
+  
+  Again, the distribution of residuals are not strictly normal.
+```{r problem2_4_residuals, echo=FALSE}
+sim_linear_pred3 <- collegeData %>%
+  add_predictions(sim_linear_mod3) %>%
+  add_residuals(sim_linear_mod3)
+
+# distribution of residuals
+ggplot(sim_linear_pred3, aes(resid)) +
+  geom_histogram(aes(y = ..density..), binwidth=100) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(sim_linear_pred$resid),
+                            sd = sd(sim_linear_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+```
+
+  Again, the residuals are somehow correlated with the fitted value.
+```{r problem2_5_pred&resid, echo=FALSE}
+# predicted vs. residuals
+ggplot(sim_linear_pred3, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+  We should again use the regression splines technique for this model, since the first plot shows there is a combination of non-linear trend and local characteristics.
+
+3.2 Regression splines
+  The table below shows the results of regression splines with 4 knots. We could see that the parameters for the quadratic term , the cubic term and quartic term are statistically significant on the 0.001 level. This means the relationship between `Room.Board` and `Outstate` is more than a simple linear relationship. This model provides better fit to the data.
+```{r problem2_6_model, echo=FALSE}
+# estimate model
+outstate_spline2 <- glm(Outstate ~ bs(Room.Board, df = 4), data = collegeData)
+summary(outstate_spline2)
+```
+
+  The plot shows that this model does a better job in capturing the relationship than the non-transformation model, espcially at the upper end when `Room.Board` gets above 7,000.
+```{r problem2_6_plot, echo=FALSE}
+# estimate the predicted values and confidence interval
+outstate_spline_pred2 <- augment(outstate_spline2, newdata = data_grid(collegeData, Room.Board)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+
+# plot the curve
+ggplot(outstate_spline_pred2, aes(Room.Board)) +
+  geom_point(data = collegeData, aes(Room.Board, Outstate), alpha = .05) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(collegeData$PhD, df = 3), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Cubic spline regression of Biden feeling thermometer",
+       subtitle = "4 knots, with 95% confidence interval",
+       x = "Room.Board",
+       y = "Predicted Outstate")
+```
 
 
 ## Part 3: College (GAM)
