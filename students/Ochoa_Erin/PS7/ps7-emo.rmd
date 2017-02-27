@@ -176,7 +176,9 @@ for(i in 1:rounds) {
 mse_df_100 = as.data.frame(mse_list_100)
 ```
 
+Each round results in a mean squared error.  We take the mean of these and find it to be `r mean(mse_df_100$mse_list_100)`, which is higher than the mean squared error estimated using the full-dataset multiple-regression model (`r mse_full_dataset`) and using the training model with the validation dataset (`r mse_test30`).
 
+We plot a histogram of the per-round mean-squared errors:
 
 ```{r, 70_30_100_rounds_MSE_histogram, echo=FALSE}
 
@@ -192,13 +194,9 @@ ggplot(mse_df_100, aes(x = mse_list_100)) +
        #scale_x_continuous(breaks = c(345,355,365,375,385,395,405,415,425,435,445,455))
 ```
 
+The mean squared errors appear to be distributed normally with a mean of `r mean(mse_df_100$mse_list_100)` and median of `r median(mse_df_100$mse_list_100)`.  While some of the rounds produced a lower mean squared error, some of the rounds produced a higher mean squared error.  Together, these features suggest that despite randomness in the split of the training and test samples, the average mean quared error over 100 rounds is very similar to, albeit slightly higher than, the mean squared error produced by the original multivariate regression using the entire sample (`r mse_full_dataset`).
 
-1. Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
-
-
-
-
-
+Next, we estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach:
 
 ```{r loocv_biden}
 
@@ -206,10 +204,15 @@ loocv_biden_data <- crossv_kfold(df, k = nrow(df))
 loocv_biden_models <- map(loocv_biden_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
 
 loocv_biden_mse_list <- map2_dbl(loocv_biden_models, loocv_biden_data$test, mse)
-loocv_biden_mean_mse = (loocv_biden_mse_list)
+loocv_biden_mean_mse = mean(loocv_biden_mse_list)
 
 loocv_biden_mse = as.data.frame(loocv_biden_mse_list)
 ```
+
+Each round of the leave-one-out process returns a mean-squared error.  We take the mean of these and find it to be `r loocv_biden_mean_mse`, which is slightly higher than the MSE obtained using the full dataset (`r mse_full_dataset`) or using 100 rounds of testing sets (`r mse_100_test30`), but lower than the testing dataset (`r mse_test30`) in a single round.
+
+
+We pool all the mean squared errors returned by LOOCV and plot their distribution:
 
 ```{r, LOOCV_MSE_histogram, echo=FALSE}
 
@@ -224,18 +227,9 @@ ggplot(loocv_biden_mse, aes(x = loocv_biden_mse_list)) +
        scale_x_continuous(breaks = c(0,1000,2000,3000,4000,5000,6000))
 ```
 
+We can see that while most of the MSEs are small, some are quite high and approach 5800.  This indicates that while most of the model fits resonably well for most of the values, it fits quite poorly for some.
 
-
-
-
-
-
-
-
-
-
-1. Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
-
+We use the 10-fold cross validation approach:
 
 ```{r 10_fold_cv}
 
@@ -245,23 +239,24 @@ biden_cv10_model = map(biden_cv10_data$train, ~ lm(biden ~ age + female + educ +
 biden_cv10_mse = map2_dbl(biden_cv10_model, biden_cv10_data$test, mse)
 biden_cv_error_10fold = mean(biden_cv10_mse)
 
-biden_cv_error_10fold
-
 biden_cv_mse = as.data.frame(biden_cv10_mse)
 ```
+
+Using this approach, we find the MSE to be `r biden_cv_error_10fold`, which is very similar to the errors found and reported earlier.
+
+We plot a histogram of the distribution of MSEs found using 10-fold cross validation:
 
 ```{r, 10fold_MSE_histogram, echo=FALSE}
 
 ggplot(biden_cv_mse, aes(x = biden_cv10_mse)) +
-       geom_histogram(breaks = seq(285,470),fill = "darkturquoise") +
+       geom_histogram(bins = 20, fill = "darkturquoise", color='grey30') +
          labs(title = "Mean Squared Error for 10-fold Cross Validation",
             x = "Mean Squared Error",
             y = "Frequency count of validation rounds") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1),
              panel.grid.minor.y = element_blank()) +
-       scale_y_continuous(breaks = c(0,1,2,3,4)) + 
-       scale_x_continuous(breaks = seq(250,500,by=50))
+       scale_y_continuous(breaks = c(0,1,2))
 ```
 
 
