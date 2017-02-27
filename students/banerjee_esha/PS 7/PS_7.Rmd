@@ -1,0 +1,546 @@
+---
+title: "PS 7"
+author: "Esha Banerjee"
+date: "26 February 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align = "middle", na.action = na.omit)
+```
+
+```{r Loading packages}
+library(broom)
+library(modelr)
+library(tidyverse)
+library(knitr)
+library (pander)
+library(gam)
+library(splines)
+theme_set(theme_minimal())
+```
+```{r Load Data}
+
+biden <- read_csv("biden.csv") 
+clg <- read_csv("college.csv") 
+
+```
+# Part 1: Sexy Joe Biden (redux)
+#### Estimate the training MSE of the model using the traditional approach.
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5 + \epsilon$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.
+```{r}
+req_model <- lm(biden ~ age + female + educ + dem + rep , biden)
+pander(tidy(req_model))
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+mse_all <- round (mse(req_model, biden), 2)
+mse_all
+```
+
+MSE using traditional approach is `r mse_all`
+
+#### Estimate the test MSE of the model using the validation set approach.
+```{r}
+set.seed(4884)
+split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+req_model1 <- lm(biden ~ age + female + educ + dem + rep, data = split$train)
+pander(tidy(req_model1))
+mse_valid <- round (mse(req_model1, split$test), 2)
+mse_valid
+```
+
+MSE using validation approach (70:30 split) is `r mse_valid`. The validation set approach yields a higher MSE than one obtained from fitting all the data-points which is expected since the MSE considering all data is over-fitted.
+
+#### Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+```{r}
+set.seed(4884)
+mse_100 <- replicate(100, {
+  split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+  train_model <- lm(biden ~ age + female + educ + dem + rep, data = split$train)
+  mse(train_model, split$test)
+})
+mse_valid_100 <- mean(mse_100, na.rm = TRUE)
+mse_valid_100
+
+hist(mse_100, 
+     main="Distribution of MSE using Validation Set Approach 100 times", 
+     xlab="MSE values", 
+     border="black", 
+     col="red")
+```
+
+The mean MSE from the 100-time validation approach is `r round(mse_valid_100, 2)`. This value is lower than the traditional MSE using all points, the most frequently occuring MSE's are the ones having values close to the traditional one. The MSE's are distributed over a range of values (375-450). If we chose a different seed or different number of iterations, we might end up with a different mean mse since this approach is highly dependent on composition of training & testing sets. However this particular one, seems to fit the data very well.
+
+#### Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+```{r}
+set.seed(4884)
+loocv_data <- crossv_kfold(biden, k = nrow(biden))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse) 
+mean(loocv_mse)
+```
+
+MSE using LOOCV approach is `r round(mean(loocv_mse),2)`. This value is higher than traditional MSE and quite close to the one time validation approach. This approach is computationally expensive and dependent on the split of the data. 
+
+#### Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
+```{r}
+set.seed(4884)
+biden_10fold <- crossv_kfold(biden, k = 10)
+biden_10models <- map(biden_10fold$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+biden_10mses <- map2_dbl(biden_10models, biden_10fold$test, mse)
+mse_10fold <- mean(biden_10mses, na.rm = TRUE)
+mse_10fold
+```
+The 10-fold cross validation approach MSE is `r round(mse_10fold,2)`, the highest so far, but still close to the LOOCV approach and much faster computationally. Thus it is better than LOOCV.
+
+#### Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
+```{r}
+set.seed(4884)
+MSE_10fold_100 <- replicate(100, {
+  biden_10fold <- crossv_kfold(biden, k = 10)
+  biden_10models <- map(biden_10fold$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  biden_10mses <- map2_dbl(biden_10models,
+                           biden_10fold$test, mse)
+  mse_10fold <- mean(biden_10mses, na.rm = TRUE)
+})
+
+mse_10fold_100 <- mean(MSE_10fold_100)
+
+
+hist(MSE_10fold_100, 
+     main="Distribution of MSE using 10-fold Cross-Validation Set Approach 100 times", 
+     xlab="MSE values", 
+     border="black", 
+     col="red")
+mse_10fold_100
+```
+
+The 10-fold cross validation approach repeated 100 times gives a MSE `r round(mse_10fold_100,2)`, lower than the 10-fold cross validation approach done once or LOOCV. Thus it is better than 10-fold cross-validation done once and is fast enough.
+
+#### Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).
+```{r}
+set.seed(4884)
+Model_boot <- biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ age + female + educ + dem + rep, data = .)),
+         coef = map(model, tidy))
+
+Model_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+tidy(req_model)
+```
+The original model is ` r tidy(req_model)`. The bootstrap standard errors for female, dem,   is lower than the standard errors in the original model in step 1, while the bootstrap standard errors for age, educ, rep and the intercept are higher than the standard errors in the original model.
+
+This is intuitive, bootstrap errors are usually larger than the non-bootstrap standard errors because they do not rely on distributional assumptions. The parameters are similar.
+
+
+# Part 2: College (bivariate)
+#### Explore the bivariate relationships between some of the available predictors and Outstate. You should estimate at least 3 simple linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, as appropriate. 
+```{r}
+mod1 <- lm(Outstate ~ perc.alumni, data = clg)
+tidy (mod1)
+mod2 <- lm(Outstate ~ Private, data = clg)
+tidy (mod2)
+mod3 <- lm(Outstate ~ PhD, data = clg)
+tidy (mod3)
+mod4 <- lm(Outstate ~ Expend, data = clg)
+tidy (mod4) 
+mod5 <- lm(Outstate ~ Room.Board, data = clg)
+tidy (mod5)
+mod6 <- lm(Outstate ~ Grad.Rate, data = clg)
+tidy (mod6)
+mod7 <- lm(Outstate ~ Top10perc, data = clg)
+tidy (mod7)
+mod8 <- lm(Outstate ~ Enroll, data = clg)
+tidy (mod8)
+mod9 <- lm(Outstate ~ Accept, data = clg)
+tidy (mod9)
+mod10 <- lm(Outstate ~ Apps, data = clg)
+tidy (mod10)
+mod11 <- lm(Outstate ~ Top25perc, data = clg)
+tidy (mod11)
+mod12 <- lm(Outstate ~ F.Undergrad, data = clg)
+tidy (mod12)
+mod13 <- lm(Outstate ~ P.Undergrad, data = clg)
+tidy (mod13)
+mod14 <- lm(Outstate ~ Books, data = clg)
+tidy (mod14)
+mod15 <- lm(Outstate ~ Personal, data = clg)
+tidy (mod15)
+mod16 <- lm(Outstate ~ Terminal, data = clg)
+tidy (mod16)
+mod17 <- lm(Outstate ~ S.F.Ratio, data = clg)
+tidy (mod17)
+
+```
+
+Considering all the available variables, Expend, Room.Board and Grad.Rate are found to be the most significant ones. 
+
+Plotting the Outstate vs Expend:
+```{r }
+ex <- lm(Outstate ~ Expend, data = clg)
+
+ggplot(clg, aes(Expend, Outstate)) +
+  geom_point(colour="red") + 
+  geom_smooth(method = "lm")+
+  labs(title = 'Outstate vs. Expenditure',
+       y = 'Out of State Tuition',
+       x = 'Instructional Expenditure per Student')
+
+clg %>%
+  add_predictions(ex) %>%
+  add_residuals(ex) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point(aes(y = resid)) +
+  geom_point(alpha = .2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Residuals and Predicted Values: Outstate vs. Expenditure",
+       x = "Predicted values",
+       y = "Residuals")
+```
+Looking at the graphs, it is evident that the relationship is not a linear one, so we apply a log transformation. 
+
+```{r}
+ex_log <- glm(Outstate ~ log(Expend), data = clg)
+
+ggplot(clg, aes(log(Expend), Outstate)) +
+  geom_point(colour="red") + 
+  geom_smooth(method = "lm")+
+  labs(title = 'Outstate vs. Log(Expenditure)',
+       y = 'Out of State Tuition',
+       x = 'Instructional Expenditure per Student')
+```
+
+The log transformation leads to a more even distribution of points. Clarifying with the residuals:
+
+```{r}
+clg %>%
+  add_predictions(ex_log) %>%
+  add_residuals(ex_log) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point(aes(y = resid)) +
+  geom_point(alpha = .2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Residuals and Predicted Values: Outstate vs. Log(Expenditure)",
+       x = "Predicted values",
+       y = "Residuals")
+```
+The distribution of the residuals is much more even. Validating this through 10-fold cross-fold validation:
+
+```{r}
+ex_log_cv10 <- crossv_kfold(clg, k = 10)
+ex_log_cv10_model <- map(ex_log_cv10$train, ~ lm(Outstate ~ log(Expend), data = .))
+
+ex_log_cv10_mse <- map2_dbl(ex_log_cv10_model, ex_log_cv10$test, mse)
+ex_log_mse <- mean(ex_log_cv10_mse, na.rm = TRUE)
+
+ex_log_mse
+
+
+ex_cv10 <- crossv_kfold(clg, k = 10)
+ex_cv10_model <- map(ex_cv10$train, ~ lm(Outstate ~ Expend, data = .))
+
+ex_cv10_mse <- map2_dbl(ex_cv10_model, ex_cv10$test, mse)
+ex_mse <- mean(ex_cv10_mse, na.rm = TRUE)
+
+ex_mse
+
+```
+
+The 10-fold cross validation approach MSE for log(expenditure) is `r round(ex_log_mse,2)`, which is much lower than `r round(ex_mse,2)`, the mse for expenditure. So, the log transformation suits the model well.
+
+Considering another significant variable, Room.Board:
+```{r}
+rb <- lm(Outstate ~ Room.Board, data = clg)
+
+ggplot(clg, aes(Room.Board, Outstate)) +
+  geom_point(colour="red") + 
+  geom_smooth(method = "lm")+
+  labs(title = 'Outstate vs. Room & Board Costs',
+       y = 'Out of State Tuition',
+       x = 'Room & Board Costs')
+
+clg %>%
+  add_predictions(rb) %>%
+  add_residuals(rb ) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point(aes(y = resid)) +
+  geom_point(alpha = .2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Residuals and Predicted Values: Outstate vs. Room & Board Costs",
+       x = "Predicted values",
+       y = "Residuals")
+
+```
+The data fits the linear model close enough, for a better fit we try polynomial regression.
+```{r}
+set.seed(4884)
+rb10 <- crossv_kfold(clg, k = 10)
+rb_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  rb10_models <- map(rb10$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  rb10_mse <- map2_dbl(rb10_models, rb10$test, mse)
+  rb_error_fold10[[i]] <- mean(rb10_mse)
+}
+
+
+mse_rb <- round (mse(rb, clg), 2)
+
+data_frame(terms = terms,
+           fold10 = rb_error_fold10) %>%
+  ggplot(aes(x=terms, y=fold10)) +
+  geom_line() +
+  geom_hline(aes(yintercept = mse_rb, color = 'MSE for linear regression'), linetype = 'dashed') +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+```
+
+Lowest MSE is obtained for a degree of 5, but that is very difficult to interpret, we choose a degree of 3 which yields a lower value than the traditional linear one.
+
+```{r}
+rb_3 <- lm(Outstate ~ poly(Room.Board , 3), data = clg)
+rb_pred <- add_predictions(clg, rb_3)
+rb_pred <- add_residuals(rb_pred, rb_3)
+
+ggplot(rb_pred, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="3rd order polynomial model regression for Room & Board Costs",  x ="Predicted expenditure", y = "Residuals") 
+
+summary(rb_3)
+summary(rb)
+
+```
+Even though a polynomial in degree 3 results in a lower MSE, it is not sgnificantly lower, also the r-squared values do not change significantly, so for this case, choosing a linear model is efficient.
+
+Considering another significant factor, Graduation Rate:
+
+```{r}
+clg_f <- filter(clg, Grad.Rate <= 100)
+gr <- lm(Outstate ~ Grad.Rate, data = clg)
+
+ggplot(clg_f, aes(Grad.Rate, Outstate)) +
+  geom_point(colour="red") + 
+  geom_smooth(method = "lm")+
+  labs(title = 'Outstate vs. Graduation Rate',
+       y = 'Out of State Tuition',
+       x = 'Graduation Rate')
+
+clg_f %>%
+  add_predictions(gr) %>%
+  add_residuals(gr) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point(aes(y = resid)) +
+  geom_point(alpha = .2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Residuals and Predicted Values: Outstate vs. Graduation Rate",
+       x = "Predicted values",
+       y = "Residuals")
+
+```
+Evidently, the simple linear model doesn't explain the data well. The residuals seem to have heteroscedastic variance.
+
+We use polynomial regression.
+
+```{r}
+set.seed(4884)
+gr10 <- crossv_kfold(clg, k = 10)
+gr_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  gr10_models <- map(gr10$train, ~ lm(Outstate ~ poly(Grad.Rate, i), data = .))
+  gr10_mse <- map2_dbl(gr10_models, gr10$test, mse)
+  gr_error_fold10[[i]] <- mean(gr10_mse)
+}
+
+
+mse_gr <- round (mse(gr, clg_f), 2)
+
+data_frame(terms = terms,
+           fold10 = gr_error_fold10) %>%
+  ggplot(aes(x=terms, y=fold10)) +
+  geom_line() +
+  geom_hline(aes(yintercept = mse_gr, color = 'MSE for linear regression'), linetype = 'dashed') +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+```
+Evidently, degree 4 gives a lower MSE, but we choose 3 for easier interpretation.
+
+
+```{r}
+gr_3 <- lm(Outstate ~ poly(Grad.Rate , 3), data = clg)
+gr_pred <- add_predictions(clg_f, gr_3)
+gr_pred <- add_residuals(gr_pred, gr_3)
+
+ggplot(gr_pred, aes(x = pred, y = resid)) +
+  geom_smooth() +
+  geom_point() +
+  labs(title="3rd order polynomial regression for Graduation Rate",  x ="Predicted Rate", y = "Residuals") 
+
+summary(gr_3)
+summary(gr)
+```
+The MSE has changed significantly from `r mse_gr` to `r round(mse(gr_3, clg_f), 2` while the r squared shows that the new model can explain 35 % of the variation in data compared to the previous 33%, so while it is better than the linear one, it is still not very good.
+
+Applying splines, with degree 2 and knot 1, we see it fits the data better.
+
+```{r}
+set.seed(4884)
+
+gr_s <- glm(Outstate ~ bs(Grad.Rate, degree = 3, df = 3), data = clg_f)
+
+clg_f %>%
+  add_predictions(gr_s) %>%
+  add_residuals(gr_s) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point(aes(y = resid)) +
+  geom_point(alpha = .2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Residuals and Predicted Values: Outstate vs. Graduation Rate",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+
+# Part 3: College (GAM) 
+#### Split the data into a training set and a test set. 
+```{r GAM}
+set.seed(4884)
+clg_split <- resample_partition(clg, c(test = 0.5, train = 0.5))
+```
+
+Estimate an OLS model on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+
+```{r}
+clg_ols <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = clg_split$train)
+summary(clg_ols)
+
+train <- clg_split$train %>%
+  as_tibble()
+train %>%
+  add_predictions(clg_ols) %>%
+  add_residuals(clg_ols) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point() +
+  geom_smooth()
+  labs(title = "Residuals and Predicted Values of OLS",
+       x = "Predicted values",
+       y = "Residuals")
+```
+ The model explains 75 % of the variation in data with all variables being statistically significant, but it doesnt satisfactorily explain the data.
+ 
+Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+```{r}
+clg_gam <- gam(Outstate ~ PhD + perc.alumni + log(Expend) + bs(Grad.Rate, degree = 3, df = 3) + Private + Room.Board, data = clg_split$train, na.action = na.fail)
+summary(clg_gam)
+
+train %>%
+  add_predictions(clg_gam) %>%
+  add_residuals(clg_gam) %>%
+ggplot(aes(x = pred, y= resid)) +
+  geom_point() +
+  geom_smooth()
+  labs(title = "Residuals and Predicted Values of GAM",
+       x = "Predicted values",
+       y = "Residuals")
+```
+Based on Part 2, I use a log-transformed 'expend' and spline with 3 degrees of freedom and 2 degrees polynomial on Grad.Rate. I use 'Room.Board', 'perc.alumni', 'PhD' and 'Private' as is.  In the GAM regression output, we see that all 6 variables are highly statistically significant similar to the OLS regression. Visually, it still does not satisfactorily fit the data.
+
+Choosing the three most significant ones: log(Expend), perc.alumni and PhD, we plot the following.
+
+```{r}
+clg_gam_terms <- preplot(clg_gam, se = TRUE, rug = FALSE)
+
+data_frame(x = clg_gam_terms$PhD$x,
+           y = clg_gam_terms$PhD$y,
+           se.fit = clg_gam_terms$PhD$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Outstate Tuition",
+       x = "PhD",
+       y = expression(f[1](phd)))
+
+
+data_frame(x = clg_gam_terms$`log(Expend)`$x,
+           y = clg_gam_terms$`log(Expend)`$y,
+           se.fit = clg_gam_terms$`log(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate Tuition",
+       subtitle = "Log Transformation",
+       x = "Expend",
+       y = expression(f[3](expend)))
+
+data_frame(x = clg_gam_terms$perc.alumni$x,
+           y = clg_gam_terms$perc.alumni$y,
+           se.fit = clg_gam_terms$perc.alumni$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Outstate Tuition",
+       x = "perc.alumni",
+       y = expression(f[2](perc.alumni)))
+
+  
+```
+As PhD increases, outstate continuously increases as well. It seems to be a linear relationship. Percent of alumni who donate also has a similar linearly postive relationship with outstate tuition. The amount of money spent on each student (Expend) has a curvilinear relationship with out of state tuition that has especially small confidence intervals right around 10,0000.
+
+
+#### Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+```{r}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+mse_ols <- mse(clg_ols, clg_split$test)
+mse_gam <- mse(clg_gam, clg_split$test)
+mse_ols
+mse_gam
+```
+
+MSE value of GAM model on the test set is `r mse_gam`  which is slightly smaller than the OLS model, the value of which is `r mse_ols` . Thus the GAM model indeed is better than OLS.
+
+#### For which variables, if any, is there evidence of a non-linear relationship with the response?
+```{r}
+gam1 = gam(Outstate ~ PhD + perc.alumni + log(Expend) + bs(Grad.Rate, degree = 3, df = 3) + Private + Room.Board, data = clg_split$train, na.action = na.fail)
+
+gam2 = gam(Outstate ~ lo(PhD) + perc.alumni + log(Expend) + bs(Grad.Rate, degree = 3, df = 3) + Private + Room.Board, data = clg_split$train, na.action = na.fail)
+
+gam3 = gam(Outstate ~ PhD + lo(perc.alumni) + log(Expend) + bs(Grad.Rate, degree = 3, df = 3) + Private + Room.Board, data = clg_split$train, na.action = na.fail)
+
+gam4 = gam(Outstate ~ PhD + perc.alumni + Expend + bs(Grad.Rate, degree = 3, df = 3) + Private + Room.Board, data = clg_split$train, na.action = na.fail)
+
+gam5 = gam(Outstate ~ PhD + perc.alumni + log(Expend) + Grad.Rate + Private + Room.Board, data = clg_split$train, na.action = na.fail)
+
+gam6 = gam(Outstate ~ PhD + perc.alumni + log(Expend) + bs(Grad.Rate, degree = 3, df = 3) + Private + lo(Room.Board), data = clg_split$train, na.action = na.fail)
+
+anova(gam1, gam2, gam3, gam4, gam5, gam6)
+
+
+
+
+```
+From the anova tests, it seems that Expend has a non-linear relationship with the response as the significance of the models having linear and non-linear terms for expend vary considerably.
