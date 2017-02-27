@@ -1,0 +1,674 @@
+---
+title: "Problem set #7: resampling and nonlinearity"
+author: "Soo Wam Kim"
+date: "February 25, 2017**"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(modelr)
+library(broom)
+library(pander)
+library(pROC)
+library(knitr)
+library(splines)
+library(gam)
+
+options(na.action = na.warn)
+set.seed(1234) #set seed
+options(digits = 3)
+theme_set(theme_bw()) #set theme for all plots
+
+#import data
+biden <- read.csv("data/biden.csv")
+
+
+```
+
+# Part 1: Sexy Joe Biden (redux) [4 points]
+
+For this exercise we consider the following functional form:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5 + \epsilon$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.^[Independents must be left out to serve as the baseline category, otherwise we would encounter perfect multicollinearity.] Report the parameters and standard errors.
+
+```{r glm1_model}
+glm_trad <- glm(biden ~ age + female + educ + dem + rep, data = biden)
+pander(tidy(glm_trad))
+```
+
+  1. Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.
+
+```{r entire_set_MSE}
+#function to calculate MSE
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+#estimate model
+biden_lm <- lm(biden ~ female*pid, data = biden)
+summary(biden_lm)
+
+entire_mse <- mse(biden_lm, biden) #calculate MSE
+```
+
+  2. Estimate the test MSE of the model using the validation set approach. How does this value compare to the training MSE from step 1?
+
+```{r validation_set_MSE}
+biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+biden_train <- biden_split$train %>% 
+  tbl_df()
+biden_test <- biden_split$test %>% 
+  tbl_df()
+
+biden_train_lm <- lm(biden ~ female*pid, data = biden_train) #estimate model on training set
+summary(biden_train_lm)
+
+validation_mse <- mse(biden_train_lm, biden_test) #calculate MSE using test set
+```
+
+  3. Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+  
+```{r}
+mse_list <- vector(, 100)
+
+#function
+validation_mse <- function(data, model, reps) {
+  count <- 0
+  while (count < reps) {
+    split <- resample_partition(biden, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+    train <- tbl_df(split$train) 
+    test <- dplyr::tbl_df(split$test)
+    train_lm <- lm(model, data = data)
+    validation_mse <- mse(train_lm, test)
+    mse_list[count + 1] <- validation_mse
+    count <- count + 1
+  }
+  return(mse_list)
+}
+
+mse_list <- validation_mse(biden, biden ~ age + female + educ + dem + rep, 100)
+summary(mse_list)
+sd(mse_list)
+```
+  
+  4. Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+
+
+```{r LOOCV_MSE, cache=TRUE}
+loocv_data <- crossv_kfold(biden, k = nrow(biden)) #divide data into k folds where k = number of observations
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ female*pid, data = .)) #estimate model
+loocv_mse_map <- map2_dbl(loocv_models, loocv_data$test, mse) #calculate MSEs
+loocv_mse <- mean(loocv_mse_map, na.rm = TRUE) #get mean of MSEs
+```
+
+  5. Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
+
+```{r 10-fold_CV_MSE}
+biden_cv10 <- crossv_kfold(biden, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ lm(biden ~ female*pid, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+cv10_mse <- mean(biden_cv10$mse, na.rm = TRUE) #get mean MSE
+```
+
+  6. Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
+  
+```{r}
+cv10_mse_list <- vector(, 100)
+
+#function
+cv10_mse <- function(data, model, reps) {
+  count <- 0
+  while (count < reps) {
+    folded <- crossv_kfold(data, k = 10) #divide data set into 10 folds
+    folded$mod <- map(folded$train, ~lm(model, data = .)) #estimate model
+    folded$mse <- map2_dbl(folded$mod, folded$test, mse)
+    cv10_mse <- mean(folded$mse, na.rm = TRUE)
+    cv10_mse_list[count + 1] <- cv10_mse
+    count <- count + 1
+  }
+  return(cv10_mse_list)
+}
+
+cv10_mse_list <- cv10_mse(biden, biden ~ age + female + educ + dem + rep, 100)
+summary(cv10_mse_list)
+sd(cv10_mse_list)
+```
+
+  7. Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).
+
+```{r bootstrap, cache=TRUE}
+boot <- titanic %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ glm(Survived ~ Sex + Age + Pclass, data = .,
+                                  family = binomial)),
+         coef = map(model, tidy))
+
+boot_est <- boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+boot_est
+```
+
+```{r differences}
+#put MSEs into a single data frame and report
+labels <- as.data.frame(c("Entire set", "Validation set (70/30)", "LOOCV", "10-fold CV"))
+mse_vals <- as.data.frame(c(entire_mse, validation_mse, loocv_mse, cv10_mse))
+#bind columns together
+names(labels) <- c("")
+names(mse_vals) <-  c("")
+mse_tab <- cbind(labels, mse_vals)
+names(mse_tab) <- c("Approach", "MSE")
+
+mse_tab %>%
+  kable(caption = "MSEs using different validation approaches",
+        col.names = c("Approach", "MSE"),
+        format = "html")
+```
+
+# Part 2: College (bivariate) [3 points]
+
+The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
+
+* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
+* `Apps` - Number of applications received.
+* `Accept` - Number of applications accepted.
+* `Enroll` - Number of new students enrolled.
+* `Top10perc` - Percent of new students from top 10% of H.S. class.
+* `Top25perc` - Percent of new students from top 25% of H.S. class.
+* `F.Undergrad` - Number of fulltime undergraduates.
+* `P.Undergrad` - Number of parttime undergraduates.
+* `Outstate` - Out-of-state tuition.
+* `Room.Board` - Room and board costs.
+* `Books` - Estimated book costs.
+* `Personal` - Estimated personal spending.
+* `PhD` - Percent of faculty with Ph.D.'s.
+* `Terminal` - Percent of faculty with terminal degrees.
+* `S.F.Ratio` - Student/faculty ratio.
+* `perc.alumni` - Percent of alumni who donate.
+* `Expend` - Instructional expenditure per student.
+* `Grad.Rate` - Graduation rate.
+
+```{r}
+college <- read.csv("data/College.csv")
+```
+
+
+Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
+
+* No transformation
+* Monotonic transformation
+* Polynomial regression
+* Step functions
+* Splines
+* Local regression
+
+Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
+
+####Room and board
+```{r Room.Board_plots}
+Room.Board_mod <- glm(Outstate ~ Room.Board, data = college)
+
+ggplot(college, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+Room.Board_mod_pred <- college %>%
+  add_predictions(Room.Board_mod) %>%
+  add_residuals(Room.Board_mod)
+
+# distribution of residuals
+ggplot(Room.Board_mod_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(Room.Board_mod_pred$resid),
+                            sd = sd(Room.Board_mod_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+# predicted vs. residuals
+ggplot(Room.Board_mod_pred, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+
+Room.Board_linear_cv10 <- crossv_kfold(college, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ lm(Outstate ~ Room.Board, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+cv10_mse <- mean(Room.Board_linear_cv10$mse, na.rm = TRUE) #get mean MSE
+#[1] 9321262
+```
+
+```{r Room.Board_spline}
+# function to simplify things
+Room.Board_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(Room.Board, df = df, degree = degree),
+                                  data = .))
+  
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+Room.Board_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+Room.Board_degree_mse <- data_frame(degrees = 1:10,
+                              mse = map_dbl(degrees, ~ Room.Board_spline_cv(Room.Board_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+Room.Board_df_mse <- data_frame(df = 1:10,
+                          mse = map_dbl(df, ~ Room.Board_spline_cv(Room.Board_kfold, df = 3 + .))) %>%
+  arrange(mse)
+
+Room.Board_degree_mse
+labs(title = "Optimal number of degrees for wage spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+Room.Board_df_mse
+labs(title = "Optimal number of knots for wage spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
+
+Room.Board_optim <- glm(Outstate ~ bs(Room.Board, df = 6, degree = 2), data = college)
+
+augment(Room.Board_optim, newdata = data_grid(college, Room.Board)) %>%
+  mutate(.fitted_low = .fitted - 1.96 * .se.fit,
+         .fitted_high = .fitted + 1.96 * .se.fit) %>%
+  ggplot(aes(Room.Board, .fitted)) +
+  geom_point(data = college, aes(y = Outstate), alpha = .1) +
+  geom_line() +
+  geom_line(aes(y = .fitted_low), linetype = 2) +
+  geom_line(aes(y = .fitted_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(college$Room.Board, df = 6, degree = 2), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Sixth-order polynomial spline of wage",
+       subtitle = "Knots = 2")
+
+summary(Room.Board_optim)
+
+
+Room.Board_mod_pred <- college %>%
+  add_predictions(Room.Board_optim)
+
+ggplot(Room.Board_mod_pred, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_line(aes(y = pred))
+
+Room.Board_mod_pred <- college %>%
+  add_predictions(Room.Board_mod)
+
+```
+
+
+```{r}
+#PhD
+
+PhD_mod <- glm(Outstate ~ PhD, data = college)
+
+ggplot(PhD_mod, aes(PhD, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+
+PhD_mod_pred <- college %>%
+  add_predictions(PhD_mod) %>%
+  add_residuals(PhD_mod)
+
+# distribution of residuals
+ggplot(PhD_mod_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(PhD_mod_pred$resid),
+                            sd = sd(PhD_mod_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+
+# predicted vs. residuals
+ggplot(PhD_mod_pred, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+
+
+
+
+```
+
+```{r}
+PhD_linear_cv10 <- crossv_kfold(college, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ lm(Outstate ~ PhD, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+mean(PhD_linear_cv10$mse, na.rm = TRUE) #get mean MSE
+#[1] 13885032
+
+#square x or logy
+
+college <- college %>%
+  mutate(PhDsq = PhD^2)
+
+ggplot(college, aes(x = PhDsq, y = Outstate)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+
+PhD_linear_cv10 <- crossv_kfold(college, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ lm(Outstate ~ PhDsq, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+mean(PhD_linear_cv10$mse, na.rm = TRUE) #get mean MSE
+#[1] 13279872
+
+#PhD_mod <- glm(Outstate ~ PhD, data = college)
+
+
+# function to simplify things
+PhD_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(PhD, df = df, degree = degree),
+                                  data = .))
+  
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+college_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+PhD_degree_mse <- data_frame(degrees = 1:10,
+                              mse = map_dbl(degrees, ~ PhD_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+PhD_df_mse <- data_frame(df = 1:10,
+                          mse = map_dbl(df, ~ PhD_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+
+Room.Board_degree_mse
+labs(title = "Optimal number of degrees for wage spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+Room.Board_df_mse
+labs(title = "Optimal number of knots for wage spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
+
+PhD_optim <- glm(Outstate ~ bs(PhD, df = 5, degree = 6), data = college)
+
+augment(PhD_optim, newdata = data_grid(college, PhD)) %>%
+  mutate(.fitted_low = .fitted - 1.96 * .se.fit,
+         .fitted_high = .fitted + 1.96 * .se.fit) %>%
+  ggplot(aes(PhD, .fitted)) +
+  geom_point(data = college, aes(y = Outstate), alpha = .1) +
+  geom_line() +
+  geom_line(aes(y = .fitted_low), linetype = 2) +
+  geom_line(aes(y = .fitted_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(college$PhD, df = 6, degree = 2), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Sixth-order polynomial spline of wage",
+       subtitle = "Knots = 2")
+
+summary(Room.Board_optim)
+
+
+PhD_linear_cv10 <- crossv_kfold(college, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ glm(PhD_optim, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+mean(PhD_linear_cv10$mse, na.rm = TRUE) #get mean MSE
+
+#[1] 12668711
+
+```
+
+
+```{r}
+#perc.alumni
+
+perc.alumni_mod <- glm(Outstate ~ perc.alumni, data = college)
+
+ggplot(perc.alumni_mod, aes(perc.alumni, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+
+perc.alumni_mod_pred <- college %>%
+  add_predictions(perc.alumni_mod) %>%
+  add_residuals(perc.alumni_mod)
+
+# distribution of residuals
+ggplot(perc.alumni_mod_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(perc.alumni_mod_pred$resid),
+                            sd = sd(perc.alumni_mod_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+
+# predicted vs. residuals
+ggplot(perc.alumni_mod_pred, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+```{r}
+perc_linear_cv10 <- crossv_kfold(college, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ glm(Outstate ~ perc.alumni, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+mean(perc_linear_cv10$mse, na.rm = TRUE) #get mean MSE
+
+#[1] 11082666
+
+
+# function to simplify things
+perc_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(perc.alumni, df = df, degree = degree),
+                                  data = .))
+  
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+
+# estimate mse for polynomial degrees in 1:10
+PhD_degree_mse <- data_frame(degrees = 1:10,
+                              mse = map_dbl(degrees, ~ PhD_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+PhD_df_mse <- data_frame(df = 1:10,
+                          mse = map_dbl(df, ~ PhD_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+
+Room.Board_degree_mse
+labs(title = "Optimal number of degrees for wage spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+Room.Board_df_mse
+labs(title = "Optimal number of knots for wage spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
+
+PhD_optim <- glm(Outstate ~ bs(PhD, df = 5, degree = 6), data = college)
+
+augment(PhD_optim, newdata = data_grid(college, PhD)) %>%
+  mutate(.fitted_low = .fitted - 1.96 * .se.fit,
+         .fitted_high = .fitted + 1.96 * .se.fit) %>%
+  ggplot(aes(PhD, .fitted)) +
+  geom_point(data = college, aes(y = Outstate), alpha = .1) +
+  geom_line() +
+  geom_line(aes(y = .fitted_low), linetype = 2) +
+  geom_line(aes(y = .fitted_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(college$PhD, df = 6, degree = 2), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Sixth-order polynomial spline of wage",
+       subtitle = "Knots = 2")
+
+summary(Room.Board_optim)
+
+
+PhD_linear_cv10 <- crossv_kfold(college, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ glm(PhD_optim, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+mean(PhD_linear_cv10$mse, na.rm = TRUE) #get mean MSE
+
+#[1] 12668711
+```
+
+```{r}
+#Expend
+
+Expend_mod <- glm(Outstate ~ Expend, data = college)
+
+ggplot(Expend_mod, aes(Expend, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+
+Expend_mod_pred <- college %>%
+  add_predictions(Expend_mod) %>%
+  add_residuals(Expend_mod)
+
+# distribution of residuals
+ggplot(Expend_mod_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(Expend_mod_pred$resid),
+                            sd = sd(Expend_mod_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+
+# predicted vs. residuals
+ggplot(Expend_mod_pred, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+```{r}
+#Grad.Rate
+
+Grad.Rate_mod <- glm(Outstate ~ Grad.Rate, data = college)
+
+ggplot(Grad.Rate_mod, aes(Grad.Rate, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+
+Grad.Rate_mod_pred <- college %>%
+  add_predictions(Grad.Rate_mod) %>%
+  add_residuals(Grad.Rate_mod)
+
+# distribution of residuals
+ggplot(Grad.Rate_mod_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(Grad.Rate_mod_pred$resid),
+                            sd = sd(Grad.Rate_mod_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+# predicted vs. residuals
+ggplot(Grad.Rate_mod_pred, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+
+# Part 3: College (GAM) [3 points]
+
+The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
+
+* `Outstate` - Out-of-state tuition.
+* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
+* `Room.Board` - Room and board costs.
+* `PhD` - Percent of faculty with Ph.D.'s.
+* `perc.alumni` - Percent of alumni who donate.
+* `Expend` - Instructional expenditure per student.
+* `Grad.Rate` - Graduation rate.
+
+
+
+  1. Split the data into a training set and a test set.
+
+```{r}
+college_split <- resample_partition(college, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+college_train <- college_split$train %>% 
+  tbl_df()
+college_test <- college_split$test %>% 
+  tbl_df()
+```
+
+  2. Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+
+```{r}
+college_train_lm <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+                       data = college_train) #estimate model on training set
+summary(college_train_lm)
+
+validation_mse <- mse(biden_train_lm, biden_test) #calculate MSE using test set
+```
+
+  3. Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+  
+```{r}
+# estimate model for splines on age and education plus dichotomous female
+biden_gam <- gam(biden ~ bs(age, df = 5) + bs(educ, df = 5) + female, data = biden)
+summary(biden_gam)
+```
+
+  4. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+  
+```{r}
+
+```
+
+  5. For which variables, if any, is there evidence of a non-linear relationship with the response?^[Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.]
+
+```{r}
+
+```
+
+
+```{r session_info, include=FALSE}
+devtools::session_info()
+```
