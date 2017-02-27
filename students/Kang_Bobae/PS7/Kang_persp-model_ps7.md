@@ -312,20 +312,20 @@ Second, I compare models where `PhD` is the explanatory variable. The plot shows
 ![](Kang_persp-model_ps7_files/figure-markdown_github/Part%202%20compare%20PhD-1.png)
 
     ## # A tibble: 2 × 3
-    ##    Model Predictor      mse
-    ##    <chr>     <chr>    <dbl>
-    ## 1 Linear       PhD 13792993
-    ## 2  Cubic       PhD 12380110
+    ##        Model Predictor      mse
+    ##        <chr>     <chr>    <dbl>
+    ## 1     Linear       PhD 13792993
+    ## 2 ploy(X, 3)       PhD 12380110
 
 Finally, I compare models where `S.F.Ratio` is the explanatory variable. On the plot, the difference between linear and non-linear models seem rather insignificant. The comparison between the two in MSE suggest that the non-linear model shows slightly improved performance on the test set: (11188174-11020458)/11188174 or approximately 1.5%
 
 ![](Kang_persp-model_ps7_files/figure-markdown_github/Part%202%20compare%20S.F.Ratio-1.png)
 
     ## # A tibble: 2 × 3
-    ##    Model Predictor      MSE
-    ##    <chr>     <chr>    <dbl>
-    ## 1 Linear S.F.Ratio 11188174
-    ## 2 Log(Y) S.F.Ratio 11020458
+    ##     Model Predictor      MSE
+    ##     <chr>     <chr>    <dbl>
+    ## 1  Linear S.F.Ratio 11188174
+    ## 2 sqrt(X) S.F.Ratio 11020458
 
 Part 3: College (GAM) \[3 points\]
 ==================================
@@ -333,7 +333,16 @@ Part 3: College (GAM) \[3 points\]
 OLS
 ---
 
-First, I fit the OLS model to the training data, which consists of 80% of all observations. Its response variable is, again, `Outstate` and the explanatory variables include `Private`, `Room.Board`, `PhD`, `perc.alumni`, `Expend`, and `Grad.Rate`. The summary of the model indicates that the R-squared value suggests that model as a whole explains about 75% of the variation in `Outstate`, and the coefficients for all six predictors are statistically significant with very small p-vales. These coefficients suggest the following: 1. being a private institution, on average, leads to an increase in out-of-state tutition by $2,780, holding other variables constant; 2. a unit increase in room and board costs, on average, leads to an increase in out-of-state tuition by $0.9694, holding other variables constant ; 3. a unit increase in the percent of faculty with Ph.D.'s, on average, leads to an increase in out-of-state tuition by $3.905, holding other variables constant; 4. a unit increase in the percent of alumni who donate, on average, leads to an increase in out-of-state tuition by $4.193, holding other variables constant; 5. a unit increase in the instructional expenditure per student, on average, leads to an increase in out-of-state tuition by $0.2127, holding other variables constant; and 6. a unit increase in the graduation rate, on average, leads to an increase in out-of-state tuition by \#3.358, holding other variables constant.
+First, I fit the OLS model to the training data, which consists of 80% of all observations. Its response variable is, again, `Outstate` and the explanatory variables include `Private`, `Room.Board`, `PhD`, `perc.alumni`, `Expend`, and `Grad.Rate`. The summary of the model indicates that the R-squared value suggests that model as a whole explains about 75% of the variation in `Outstate`, and the coefficients for all six predictors are statistically significant with very small p-vales. These coefficients suggest the following:
+
+-   being a private institution, on average, leads to an increase in out-of-state tutition by $2,780, holding other variables constant;
+-   a unit increase in room and board costs, on average, leads to an increase in out-of-state tuition by $0.9694, holding other variables constant ;
+-   a unit increase in the percent of faculty with Ph.D.'s, on average, leads to an increase in out-of-state tuition by $3.905, holding other variables constant;
+-   a unit increase in the percent of alumni who donate, on average, leads to an increase in out-of-state tuition by $4.193, holding other variables constant;
+-   a unit increase in the instructional expenditure per student, on average, leads to an increase in out-of-state tuition by $0.2127, holding other variables constant; and
+-   a unit increase in the graduation rate, on average, leads to an increase in out-of-state tuition by \#3.358, holding other variables constant.
+
+<!-- -->
 
     ## 
     ## Call:
@@ -414,12 +423,15 @@ The general additive model I used to explain 'Outstate' consists of the followin
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
 The following plots show the relationship between the response variable and each of six explanatory variables, holding others constant. The interpretation of these plots are as follows:
-\* Being private schools leads to the higher out-of-state tuition, holding other variables constant;
-\* The higher room and board costs generally lead to the higher out-of-state tuition, holding other variables constant;
-\* Overall, the percentage of faculty with Ph.D.'s is positively correlated with out-of-state tuition, holding other variables constant.However, there is negative correlation between them around 30 &lt; `PhD` &lt; 50;
-\* The higher percentage of alumni who donate generally lead to higher out-of-state tuition, holding other variables constant;
-\* Holding other variables constant, instructional expenditure per student is positively correlated with out-of-state tuition while `Expend` is lower than about 30000. When `Expend` value is higher, it is negatively correlated with the response variable; and
-\* Holding other variables constant, the graduate rate is positively correlated with out-of-state tuition while `Grad.Rate` is lower than about 80. When `Grad.Rate` value is higher, it is negatively correlated with the response variable. ![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-1.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-2.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-3.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-4.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-5.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-6.png)
+
+-   Being private schools leads to the higher out-of-state tuition, holding other variables constant;
+-   The higher room and board costs generally lead to the higher out-of-state tuition, holding other variables constant;
+-   Overall, the percentage of faculty with Ph.D.'s is positively correlated with out-of-state tuition, holding other variables constant.However, there is negative correlation between them around 30 &lt; `PhD` &lt; 50;
+-   The higher percentage of alumni who donate generally lead to higher out-of-state tuition, holding other variables constant;
+-   Holding other variables constant, instructional expenditure per student is positively correlated with out-of-state tuition while `Expend` is lower than about 30000. When `Expend` value is higher, it is negatively correlated with the response variable; and
+-   Holding other variables constant, the graduate rate is positively correlated with out-of-state tuition while `Grad.Rate` is lower than about 80. When `Grad.Rate` value is higher, it is negatively correlated with the response variable.
+
+![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-1.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-2.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-3.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-4.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-5.png)![](Kang_persp-model_ps7_files/figure-markdown_github/Part%203%20GAM%20graph-6.png)
 
 Comparison
 ----------
