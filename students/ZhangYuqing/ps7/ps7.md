@@ -8,7 +8,9 @@ Yuqing Zhang
     -   [2 Estimate the test MSE of the model using the validation set approach.](#estimate-the-test-mse-of-the-model-using-the-validation-set-approach.)
     -   [3 Repeat the validation set approach 100 times.](#repeat-the-validation-set-approach-100-times.)
     -   [4 Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach](#estimate-the-test-mse-of-the-model-using-the-leave-one-out-cross-validation-loocv-approach)
-    -   [Problem 7 Bootstrap](#problem-7-bootstrap)
+    -   [5 Estimate the test MSE of the model using the 10-fold cross-validation approach](#estimate-the-test-mse-of-the-model-using-the-10-fold-cross-validation-approach)
+    -   [6 Repeat the 10-fold cross-validation approach 100 times](#repeat-the-10-fold-cross-validation-approach-100-times)
+    -   [7 Bootstrap](#bootstrap)
 -   [Part 2: College (bivariate)](#part-2-college-bivariate)
 -   [Part3: College(GAM)](#part3-collegegam)
     -   [Problem1.Split the data](#problem1.split-the-data)
@@ -106,7 +108,9 @@ loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
 mse_loocv_mean = mean(loocv_mse)
 ```
 
-The mean MSE value is 397.956 and it's smaller than the value we got before from the 100-times validation approach. It makes sense because LOOCV is not influenced by the resampling process. \#\#\#5 Estimate the test MSE of the model using the 10-fold cross-validation approach
+The mean MSE value is 397.956 and it's smaller than the value we got before from the 100-times validation approach. It makes sense because LOOCV is not influenced by the resampling process.
+
+### 5 Estimate the test MSE of the model using the 10-fold cross-validation approach
 
 ``` r
 biden_kfold <- crossv_kfold(biden, k = 10)
@@ -119,7 +123,9 @@ biden_mse_10fold_mean
 
     ## [1] 398
 
-The mean MSE value is `biden_mse_10fold_mean` and it's smaller than the value we got before using LOOCV approach. It is Not a large difference from the LOOCV approach, but it take much less time to compute. \#\#\#6 Repeat the 10-fold cross-validation approach 100 times
+The mean MSE value is `biden_mse_10fold_mean` and it's smaller than the value we got before using LOOCV approach. It is Not a large difference from the LOOCV approach, but it take much less time to compute.
+
+### 6 Repeat the 10-fold cross-validation approach 100 times
 
 ``` r
 terms <- 1:100
@@ -153,7 +159,7 @@ ggplot(mapping = aes(biden_fold10)) +
 
 ![](ps7_files/figure-markdown_github/unnamed-chunk-2-1.png) The mse values for repeating the 10-fold cross-validation approach 100 times are mostly within the range of (397, 400), the mean is 398.059. The values of these 100 times are very close.
 
-### Problem 7 Bootstrap
+### 7 Bootstrap
 
 ``` r
 biden_boot <- biden %>%

@@ -92,7 +92,9 @@ mse_100 <- mean(MSE, na.rm = TRUE)
 sd_100 <- sd(MSE, na.rm = TRUE)
 mse_100
 ```
+
 ###4 Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach
+
 ```{r loocv}
 loocv_data <- crossv_kfold(biden, k = nrow(biden))
 loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
@@ -100,7 +102,9 @@ loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
 mse_loocv_mean = mean(loocv_mse)
 ```
 The mean MSE value is `r mse_loocv_mean` and it's smaller than the value we got before from the 100-times validation approach. It makes sense because LOOCV is not influenced by the resampling process.
+
 ###5 Estimate the test MSE of the model using the $10$-fold cross-validation approach
+
 ```{r 10fold}
 
 biden_kfold <- crossv_kfold(biden, k = 10)
@@ -111,7 +115,9 @@ biden_mse_10fold_mean = mean(biden_mse_10fold, na.rm = TRUE)
 biden_mse_10fold_mean
 ```
 The mean MSE value is `biden_mse_10fold_mean` and it's smaller than the value we got before using LOOCV approach. It is Not a large difference from the LOOCV approach, but it take much less time to compute.
+
 ###6 Repeat the $10$-fold cross-validation approach 100 times
+
 ```{r 10fold 100 times}
 
 terms <- 1:100
@@ -139,7 +145,7 @@ ggplot(mapping = aes(biden_fold10)) +
 ```
 The mse values for repeating the $10$-fold cross-validation approach 100 times are mostly within the range of (397, 400), the mean is `r biden_fold10_mean`. The values of these 100 times are very close.
 
-###Problem 7 Bootstrap
+###7 Bootstrap
 ```{r bootstrap}
 
 biden_boot <- biden %>%
@@ -155,7 +161,9 @@ biden_boot %>%
 
 ```
 The estimate from the bootstrap is very similar with the estimate from the original OLS model. The standard error differs among variables, some are larger, some are smaller.
+
 ##Part 2: College (bivariate) 
+
 ```{r simple linear1}
 
 sim_linear_mod_1 <- glm(Outstate ~ Room.Board, data = college)
