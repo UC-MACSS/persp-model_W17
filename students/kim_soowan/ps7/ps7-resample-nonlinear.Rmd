@@ -144,7 +144,7 @@ summary(cv10_mse_list)
 mse_sd <- sd(cv10_mse_list)
 ```
 
-This time, the estimates vary very little, with a standard deviation of only `r mse_sd`. This shows that the 10-fold cross validation method produces estimates much more reliable and unbiased than that of the validation set approach. However, the mean of the estimates using this method is almost identical to the mean of the MSEs from repeating the validation set approach 100 times. 
+This time, the estimates vary very little, with a standard deviation of only `r mse_sd`. This shows that the 10-fold cross validation method produces estimates much more reliable and unbiased than those of the validation set approach. However, the mean of the estimates using this method is almost identical to the mean of the MSEs from repeating the validation set approach 100 times. 
 
 ####Question 7
 **Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).**
@@ -189,9 +189,9 @@ private_mod <- glm(Outstate ~ Private, data = college)
 pander(tidy(private_mod))
 ```
 
-The factor of a university being private is highly statistically significant, and has a large estimated effect as well. A private university is expected to have out-of-state tuition rates around $5000 higher than a public university.
+The estimated effect of a university being private is large and highly statistically significant. A private university is expected to have an out-of-state tuition rate around $5000 higher than that of a public university.
 
-```{r private_plot}
+```{r private_plots}
 private_mod_pred <- college %>%
   add_predictions(private_mod) %>%
   add_residuals(private_mod)
@@ -202,7 +202,7 @@ ggplot(private_mod_pred, aes(resid)) +
        subtitle = "Outstate ~ Private")
 ```
 
-The residuals peak around 0 for both private and public universities, but residuals are more negative for private universities and there appear to be some clustering in different areas, suggesting that other factors have important effects.
+The residuals peak around 0 for both private and public universities, but residuals are somewhat more negative for private universities and there appear to be some clustering in different areas, suggesting that other factors have important effects.
 
 ####Room and board costs
 
@@ -216,7 +216,7 @@ ggplot(college, aes(Room.Board, Outstate)) +
        y = "Out-of-state tuition ($)")
 ```
 
-The relationship appears fairly linear, but it looks like the relationship could be quadratic or cubic for some ranges of the x value. I will fit a more flexible model using splines.
+The relationship appears fairly linear, but it looks like the relationship could be quadratic or cubic for some ranges of the x value. I fit a more flexible model using splines below.
 
 ```{r roomboard_splines}
 # function to simplify things
@@ -242,23 +242,36 @@ RB_degree_mse <- data_frame(degrees = 1:10,
 RB_df_mse <- data_frame(df = 1:10,
                                 mse = map_dbl(df, ~ RB_spline_cv(college_kfold, df = 3 + .))) %>%
   arrange(mse)
+
+ggplot(RB_degree_mse, aes(degrees, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for out-of-state tuition spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+ggplot(RB_df_mse, aes(df, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of knots for out-of-state tuition spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
 ```
 
-The optimal number of degrees and knots (df) for a spline regression are 2 and 6, respectively, as shown below:
+The estimates and resulting graphs are different every time I calculate the MSEs, but the number of degrees does not appear to make a significant difference in terms of MSE as long as the number is less than 7 (MSE does not reach a noticeable global minimum). The optimal number of knots is between 5 and 7. 
 
-```{r roomboard_splines_optimal_charts}
-RB_degree_mse
-RB_df_mse
-```
-
-Using the optimal number of degrees and knots, the regression estimates are as follows:
+Using 2 degrees and 6 knots, the regression estimates are as follows:
 
 ```{r roomboard_splines_optim_model}
 RB_optim <- glm(Outstate ~ bs(Room.Board, df = 6, degree = 2), data = college)
 summary(RB_optim)
 ```
 
-The relationship is highly statistically significant for all knots other than the first, possibly due to lack of data The p-value is also relatively small for the last knot, suggesting the observations were more sparse for the lower and higher ends of the predictor value. The parameter estimates increase as as `Room.Board` increases, but start to fall after the fifth knot, where it peaks. Given more data, the overall relationship could be linear, but it could also be that the effect of `Room.Board` is different at the highest values. On the whole, it looks like higher room and board costs are associated with higher tuition rates.
+The relationship is highly statistically significant for all knots other than the first, possibly due to lack of data for lower values of `Room.Board`. The p-value is also relatively big for the last knot, suggesting the observations were more sparse at the higher end of the predictor value. Given more data, the overall relationship could be linear, but it could also be that the effect of `Room.Board` is different at extreme values. On the whole, it looks like higher room and board costs are associated with higher tuition rates.
 
 ```{r roomboard_splines_optim_plot}
 augment(RB_optim, newdata = data_grid(college, Room.Board)) %>%
@@ -289,7 +302,7 @@ ggplot(college, aes(PhD, Outstate)) +
        y = "Out-of-state tuition ($)")
 ```
 
-Based on the plot, it looks like the relationship between `PhD` and `Outstate` could be cubic. I first fit a model with monotonic transformation, then a spline regression.
+Based on the plot, it looks like the relationship between `PhD` and `Outstate` could be cubic. I first fit a model with monotonic transformation (log of `Outstate` regressed on `PhD`), then a spline regression.
 
 ```{r phd_monotonic}
 college <- college %>%
@@ -300,7 +313,7 @@ ggplot(college, aes(x = PhD, y = logoutstate)) +
   geom_smooth() + 
   labs(title = "Percent of faculty with PhDs vs. Log out-of-state tuition",
        subtitle = "Fitted with smoothing line",
-       x = "Square of percent of faculty with PhDs",
+       x = "Percent of faculty with PhDs",
        y = "Log of out-of-state tuition in dollars")
 ```
 
@@ -330,16 +343,27 @@ phd_degree_mse <- data_frame(degrees = 1:10,
 phd_df_mse <- data_frame(df = 1:10,
                                 mse = map_dbl(df, ~ phd_spline_cv(college_kfold, df = 3 + .))) %>%
   arrange(mse)
+
+ggplot(phd_degree_mse, aes(degrees, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for out-of-state tuition spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+ggplot(phd_df_mse, aes(df, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of knots for out-of-state tuition spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
 ```
 
-The optimal number of degrees and knots (df) for a spline regression are both 1. 
-
-```{r phd_splines_optimal_charts}
-phd_degree_mse
-phd_df_mse
-```
-
-Thus, I apply another transformation to allow for a linear regression.
+Again, the estimates are not stable, but on the whole it seems that increasing the number of degrees or knots from 1 does not significantly improve model fit. Thus, I apply another transformation (squaring `PhD`) to allow for a linear regression.
 
 ```{r phd_monotonic2}
 college <- college %>%
@@ -349,14 +373,14 @@ phd_optim <- glm(logoutstate ~ PhDsq, data = college)
 summary(phd_optim)
 ```
 
-The relationship is statistically significant, but the parameter estimate is close to zero. The estimate suggests that a one-unit increase in the square of the percentage of faculty with PhDs increases the out-of-state tuition by less than 1%.
+The relationship is statistically significant, but the parameter estimate is close to zero. The estimate suggests that a one-point increase in the square of the percentage of faculty with PhDs increases the out-of-state tuition by less than 1%.
 
 ```{r phd_optim_plot}
 ggplot(college, aes(x = PhDsq, y = logoutstate)) + 
   geom_point() +
-  geom_smooth() + 
+  geom_smooth(method = "lm") + 
   labs(title = "Percent of faculty with PhDs (squared) vs. Log out-of-state tuition",
-       subtitle = "Fitted with smoothing line",
+       subtitle = "Fitted with OLS line",
        x = "Square of percent of faculty with PhDs",
        y = "Log of out-of-state tuition in dollars")
 ```
@@ -400,8 +424,23 @@ perc_df_mse <- data_frame(df = 1:10,
                                 mse = map_dbl(df, ~ perc_spline_cv(college_kfold, df = 3 + .))) %>%
   arrange(mse)
 
-perc_degree_mse
-perc_df_mse
+ggplot(perc_degree_mse, aes(degrees, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for out-of-state tuition spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+ggplot(perc_df_mse, aes(df, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of knots for out-of-state tuition spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
 ```
 
 Thus, I estimate a linear model with no transformation.
@@ -427,8 +466,6 @@ ggplot(college, aes(Expend, Outstate)) +
 
 The relationship looks like it follows a cube root or log pattern overall, but there appears to be some discontinuity at the lower end. 
 
-The optimal number of degrees and knots (df) for a spline regression are 3 and 2 (or 3), respectively.
-
 ```{r exp_spline}
 # function to simplify things
 exp_spline_cv <- function(data, degree = 3, df = NULL){
@@ -453,11 +490,26 @@ exp_degree_mse <- data_frame(degrees = 1:10,
 exp_df_mse <- data_frame(df = 1:10, mse = map_dbl(df, ~ exp_spline_cv(college_kfold, df = 3 + .))) %>%
   arrange(mse)
 
-exp_degree_mse
-exp_df_mse
+ggplot(exp_degree_mse, aes(degrees, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for out-of-state tuition spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+ggplot(exp_df_mse, aes(df, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of knots for out-of-state tuition spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
 ```
 
-Using the optimal number of degrees and knots, the regression estimates are as follows:
+Again, the number of degrees is unimportant. The optimal number of knots appears to be 2 or 3. Using 3 degrees and 2 knots, the regression estimates are as follows:
 
 ```{r exp_splines_optim_model}
 exp_optim <- glm(Outstate ~ bs(Expend, df = 2, degree = 3), data = college)
@@ -498,7 +550,7 @@ ggplot(filter(college, !is.na(Grad.Rate)), aes(Grad.Rate, Outstate)) +
        y = "Out-of-state tuition ($)")
 ```
 
-The smoothing line follows an interesting curve that decreases and increases. It looks like the relationship could be linear with better data. In fact, the optimal number of degrees and knots (df) for a spline regression are both 1.
+The smoothing line follows an interesting, almost S-shaped curve. It looks like the relationship could be linear with better data. In fact, the optimal number of degrees and knots (df) for a spline regression are both 1.
 
 ```{r grad_spline}
 # function to simplify things
@@ -524,8 +576,23 @@ grad_degree_mse <- data_frame(degrees = 1:10,
 grad_df_mse <- data_frame(df = 1:10, mse = map_dbl(df, ~ grad_spline_cv(college_kfold, df = 3 + .))) %>%
   arrange(mse)
 
-grad_degree_mse
-grad_df_mse
+ggplot(grad_degree_mse, aes(degrees, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of degrees for out-of-state tuition spline regression",
+       subtitle = "Knots = 3",
+       x = "Highest-order polynomial",
+       y = "10-fold CV MSE")
+
+ggplot(grad_df_mse, aes(df, mse)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Optimal number of knots for out-of-state tuition spline regression",
+       subtitle = "Highest-order polynomial = 3",
+       x = "Knots",
+       y = "10-fold CV MSE")
 ```
 
 Thus, I fit a linear model with no transformation, as follows:
@@ -572,7 +639,7 @@ college_train_lm <- glm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Ex
 summary(college_train_lm)
 ```
 
-All of the predictors have a statistically significant relationship with out-of-state tuition. Room and board costs and expenditure per student have very small effects, however. The biggest impact comes from whether the university is private. Out-of-state tuition is expected to be higher by more than $2000 dollars if the university is private rather than public. Percent of alumni who donate, the percent of faculty with PhDs, and the graduation rate have much smaller but still tangible effects, all in the positive direction. 
+All of the predictors have a statistically significant relationship with out-of-state tuition. Room and board costs and expenditure per student have very small effects, however. The biggest impact comes from whether the university is private. Out-of-state tuition is expected to be higher by more than $2000 dollars if the university is private rather than public. The percent of alumni who donate, the percent of faculty with PhDs, and the graduation rate have much smaller but still tangible effects, all in the positive direction. 
 
 As the variance-covariance matrix below shows, the relationships are probably not independent. For example, The percent of faculty with PhDs has a high positive correlation with whether the university is private, possibly because private universities are more likely to have the financial resources to attract more highly trained faculty. The percent of alumni who donate is highly negatively correlated with whether the university is private, again possibly because private universities tend to be wealthier. Interestingly, graduation rate is negatively correlated with the university being private as well. The effect of the university being private or public likely biases the separate effects of these factors with the model used. To better account for the independent effects of other factors, the model should incorporate interaction effects between predictors.
 
@@ -580,28 +647,189 @@ As the variance-covariance matrix below shows, the relationships are probably no
 vcov(college_train_lm)
 ```
 
-####Question 3
+###Question 3
 
 **Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).**
 
-```{r}
+Below I fit a GAM using the specifications from part 2.
+
+```{r college_gam}
+college_gam <- gam(Outstate ~ Private + PhDsq + perc.alumni + Grad.Rate + 
+                     bs(Room.Board, df = 6, degree = 2) + 
+                     bs(Expend, df = 2, degree = 3), 
+                   data = college_train, na.action = na.fail)
+summary(college_gam)
 ```
 
-####Question 4
+####Private or Public
+
+```{r gam_private}
+# get graphs of each term
+college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
+
+## private
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x)) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  scale_x_discrete(labels = c("Public", "Private")) + 
+  labs(title = "GAM of out-of-state tuition",
+       x = NULL,
+       y = expression(f[1](Private)))
+```
+
+The effect of university type is statistically and substantively significant. A private university likely to have a much higher tuition rate than a public university.
+
+####Percent of faculty with Ph.D.'s (squared)
+
+```{r}
+data_frame(x = college_gam_terms$PhDsq$x,
+           y = college_gam_terms$PhDsq$y,
+           se.fit = college_gam_terms$PhDsq$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Square of percent of faculty with PhDs",
+       y = expression(f[2](PhDsq)))
+```
+
+The 95% confidence intervals get extremely wide as x-values approach the minimum or maximum, and practically always include 0 for every value of `PhDsq`. This suggests the relationship with out-of-state tuition is not significant. 
+
+####Percent of alumni who donate
+
+```{r}
+data_frame(x = college_gam_terms$perc.alumni$x,
+           y = college_gam_terms$perc.alumni$y,
+           se.fit = college_gam_terms$perc.alumni$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Percent of alumni who donate",
+       y = expression(f[3](perc.alumni)))
+```
+
+The 95% confidence intervals get wide toward the ends, but the effect appears to be substantial judging by the slope of the line.
+
+####Graduation rate
+
+```{r}
+data_frame(x = college_gam_terms$Grad.Rate$x,
+           y = college_gam_terms$Grad.Rate$y,
+           se.fit = college_gam_terms$Grad.Rate$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Graduation Rate",
+       y = expression(f[4](Grad.Rate)))
+```
+
+Again, the confidence intervals are sizable, but the slope of the line suggests graduation rate still has a significant effect.
+
+####Room and board costs
+
+```{r}
+data_frame(x = college_gam_terms$`bs(Room.Board, df = 6, degree = 2)`$x,
+           y = college_gam_terms$`bs(Room.Board, df = 6, degree = 2)`$y,
+           se.fit = college_gam_terms$`bs(Room.Board, df = 6, degree = 2)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Second-order polynomial spline, 6 knots",
+       x = "Room and board costs ($)",
+       y = expression(f[5](Room.Board)))
+```
+
+The 95% confidence intervals get very wide toward the ends of the x-axis but are fairly narrow in the middle range. There does appear to be a significant, if not large effect of room and board costs on out-of-state tuition.
+
+####Instructional expenditure per student
+
+```{r}
+data_frame(x = college_gam_terms$`bs(Expend, df = 2, degree = 3)`$x,
+           y = college_gam_terms$`bs(Expend, df = 2, degree = 3)`$y,
+           se.fit = college_gam_terms$`bs(Expend, df = 2, degree = 3)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Third-order polynomial spline, 2 knots",
+       x = "Instructional expenditure per student ($)",
+       y = expression(f[6](Expend)))
+```
+
+The confidence intervals get progressively wider as `Expend` increases, probably because of sparse observations. On the other hand, the curve shows a clear and dramatic upward trend before it starts to slope downward at the higher values of `Expend`. This suggests that expenditure per student does have a significant effect on out-of-state tuition, at least when expenditure is not very high.
+
+###Question 4
 
 **Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.**
 
-```{r}
-OLS_validation_mse <- mse(college_train_lm, college_test) #calculate MSE using test set
-#[1] 3595260
+```{r GAM_OLS_model_fit}
+OLS_validation_mse <- mse(college_train_lm, college_test)
+GAM_validation_mse <- mse(college_gam, college_test)
+
+college_pred <- college_test %>%
+  add_residuals(college_train_lm) %>%
+  rename(resid_OLS = resid) %>%
+  add_residuals(college_gam) 
+
+# distribution of residuals
+ggplot(college_pred) +
+  geom_freqpoly(aes(resid), color = "red") + 
+  geom_freqpoly(aes(resid_OLS), color = "blue") + 
+  labs(title ="Distribution of residuals for OLS and GAM models", 
+       caption = "Blue = OLS, Red = GAM")
 ```
 
-####Question 5
+The MSE for the OLS model is `r OLS_validation_mse`, and the MSE for the GAM model is `r GAM_validation_mse`. The GAM MSE is lower, suggesting that the GAM model is a better fit. The distribution of residuals suggests that it is also less biased. The residuals from the GAM model peak at zero, whereas the OLS residuals peak to the left of zero.
+
+###Question 5
 
 **For which variables, if any, is there evidence of a non-linear relationship with the response?**
 
-```{r}
+To test for non-linearity, I conducted ANOVA tests on all of the non-binary predictor variables. There is evidence of a non-linear relationship with `Outstate` for only `PhD` and `Expend`, which makes sense given the graphs plotted previously.
 
+####PhD
+```{r college_phd_anova}
+#PhD
+gam.m1=gam(Outstate~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+           data=college_train, na.action = na.fail)
+gam.m2=gam(Outstate~ Private + Room.Board + bs(PhD, degree = 2) + perc.alumni + Expend + Grad.Rate,  
+           data=college_train, na.action = na.fail)
+anova(gam.m1, gam.m2, test="F")
+```
+
+####Expend
+```{r college_expend_anova}
+#Expend
+gam.m1=gam(Outstate~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+           data=college_train, na.action = na.fail)
+gam.m2=gam(Outstate~ Private + Room.Board + PhD + perc.alumni + bs(Expend, degree = 2) + Grad.Rate,  
+           data=college_train, na.action = na.fail)
+anova(gam.m1, gam.m2, test="F")
 ```
 
 ```{r session_info, include=FALSE}
