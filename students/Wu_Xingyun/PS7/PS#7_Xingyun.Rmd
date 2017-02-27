@@ -107,51 +107,15 @@ loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
 mean(loocv_mse)
 ```
 
-```{r problem1_4_optimal_terms, echo=FALSE}
-cv_error <- vector("numeric", 5)
-terms <- 1:5
-
-for(i in terms){
-  loocv_models <- map(loocv_data$train, ~ lm(biden ~ poly(age+female+educ+dem+rep, i), data = .))
-  loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
-  cv_error[[i]] <- mean(loocv_mse)
-}
-
-cv_mse <- data_frame(terms = terms,
-           cv_MSE = cv_error)
-cv_mse
-```
-
-5. Compared to the LOOCV approach, the test MSEs for the 10-fold cross-validation approach are lower.
+5. The mean MSE I got is 397.5972. Compared to the LOOCV approach, the test MSEs tends to be close to but lower for the 10-fold cross-validation approach.
 ```{r problem1_5, echo=FALSE}
 cv10_data <- crossv_kfold(bidenData, k = 10)
-
-cv_error_fold10 <- vector("numeric", 5)
-terms <- 1:5
-
-for(i in terms){
-  cv10_models <- map(cv10_data$train, ~ lm(biden ~ poly(age+female+educ+dem+rep, i), data = .))
-  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
-  cv_error_fold10[[i]] <- mean(cv10_mse)
-}
-
-cv_error_fold10
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+mean(cv10_mse)
 ```
 
-```{r problem1_5_plot, echo=FALSE}
-data_frame(terms = terms,
-           loocv = cv_error,
-           fold10 = cv_error_fold10) %>%
-  gather(method, MSE, loocv:fold10) %>%
-  ggplot(aes(terms, MSE, color = method)) +
-  geom_line() +
-  labs(title = "MSE estimates",
-       x = "Degree of Polynomial",
-       y = "Mean Squared Error",
-       color = "CV Method")
-```
-
-6. Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds, we get the results below. The mean MSE I got is 398.1786. And according to the histogram I got, most of the MSEs are located between 397 and 399, which are lower than the single 10-fold cross-validation approach. So the 100-time 10-fold cross-validation approach is more reliable.
+6. Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds, we get the results below. The mean MSE I got is 398.1786. And according to the histogram I got, most of the MSEs are located between 397 and 399, which are similar to and even many times higher than the single 10-fold cross-validation approach. Taking efficiency into consideration, I would prefer the single 10-fold cross-validation approach.
 ```{r problem1_6, echo=FALSE}
 cv_mse <- c()
 for (i in 1:100){
@@ -428,8 +392,8 @@ college_split <- resample_partition(collegeData, c(test = 0.3, train = 0.7))
 problem3_lm <- lm(Outstate ~ Private+Room.Board+PhD+perc.alumni+Expend+Grad.Rate, data = college_split$train)
 summary(problem3_lm)
 
-mse(problem3_2, college_split$train)
-mse(problem3_2, college_split$test)
+mse(problem3_lm, college_split$train)
+mse(problem3_lm, college_split$test)
 ```
 
 
