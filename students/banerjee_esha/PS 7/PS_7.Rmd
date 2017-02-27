@@ -392,7 +392,7 @@ ggplot(gr_pred, aes(x = pred, y = resid)) +
 summary(gr_3)
 summary(gr)
 ```
-The MSE has changed significantly from `r mse_gr` to `r round(mse(gr_3, clg_f), 2` while the r squared shows that the new model can explain 35 % of the variation in data compared to the previous 33%, so while it is better than the linear one, it is still not very good.
+The MSE has changed significantly from `r mse_gr` to `r round(mse(gr_3, clg_f), 2)` while the r squared shows that the new model can explain 35 % of the variation in data compared to the previous 33%, so while it is better than the linear one, it is still not very good.
 
 Applying splines, with degree 2 and knot 1, we see it fits the data better.
 
