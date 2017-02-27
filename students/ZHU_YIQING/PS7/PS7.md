@@ -563,6 +563,6 @@ Here is the ANOVA test for Grad.Rate:
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-We can see that the GAM model with the Grad.Rate in linear fashion is statistically significant at '0' level, while two others are not statistically significant, so we can conclude that Grad.Rate has a linear relationship with Outstate tuition.
+We can see that the GAM model with the Grad.Rate in linear fashion is statistically significant at '0' level, while two others are not statistically significant or significant at 0.01 level, so we can conclude that Grad.Rate has a linear relationship with Outstate tuition.
 
 So it seems that the three variables we are doing the ANOVA test on are all having linear relationships with the response.
