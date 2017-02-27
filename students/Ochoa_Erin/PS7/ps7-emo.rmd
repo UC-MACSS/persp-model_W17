@@ -345,8 +345,7 @@ ggplot(biden_100_10fold_mse_means, aes(x = mse_list_100_means)) +
 We can see that when considered in the context of the round in which they were returned, there is little variation in the MSEs; all are comparable to the MSEs found and reported earlier.
 
 
-1. Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).
-
+We bootstrap by sampling with replacement 1000 times from the full dataset:
 
 ```{r biden_bootstrapping}
 
@@ -364,41 +363,38 @@ biden_bstrap %>%
                        se.boot = sd(estimate, na.rm = TRUE))
 ```
 
+The full-dataset model found a \beta_0 estimate of `r tidy(lm_full_dataset)[1,2]` with a standard error of `r tidy(lm_full_dataset)[1,3]`; bootstrapping finds a \beta_0 estimate of 58.96180746 with a standard error of 2.94989029.
 
+The full-dataset model found a \beta_1 (age) estimate of `r tidy(lm_full_dataset)[2,2]` with a standard error of `r tidy(lm_full_dataset)[2,3]`; bootstrapping finds a \beta_1 estimate of 0.04756082 with a standard error of 0.02846997.
 
+The full-dataset model found a \beta_2 (female) estimate of `r tidy(lm_full_dataset)[3,2]` with a standard error of `r tidy(lm_full_dataset)[3,3]`; bootstrapping finds a \beta_2 estimate of 4.07552938 with a standard error of 0.94880851.
 
+The full-dataset model found a \beta_3 (education) estimate of `r tidy(lm_full_dataset)[4,2]` with a standard error of `r tidy(lm_full_dataset)[4,3]`; bootstrapping finds a \beta_3 estimate of -0.35119332 with a standard error of 0.19201866.
 
+The full-dataset model found a \beta_4 (Democrat) estimate of `r tidy(lm_full_dataset)[5,2]` with a standard error of `r tidy(lm_full_dataset)[5,3]`; bootstrapping finds a \beta_4 estimate of 15.42942074 with a standard error of 1.11104505.
 
+The full-dataset model found a \beta_5 (Republican) estimate of `r tidy(lm_full_dataset)[6,2]` with a standard error of `r tidy(lm_full_dataset)[6,3]`; bootstrapping finds a \beta_5 estimate of -15.88710208 with a standard error of 1.43153427.
 
-
-
-
+These estimates indicate that bootstrapping performs comparably to the model estimated with the full dataset.
 
 # Part 2: College (bivariate)
+
+We explore the bivariate relationships between three predictor variables, Expend, Terminal, and Personal, with Outstate.
+
+We begin by reading in the data and creating a linear model based on Expend:
 
 ```{r read_data_college}
 
 df2 = read.csv('data/College.csv')
-```
 
-
-```{r bivariate_LMs}
 lm_outstate_expend = lm(Outstate ~ Expend, data = df2)
-lm_outstate_terminal = lm(Outstate ~ Terminal, data = df2)
-lm_outstate_pers = lm(Outstate ~ Personal, data = df2)
 
 mse_outstate_expend = mse(lm_outstate_expend,df2)
 summary(lm_outstate_expend)
-
-mse_outstate_terminal = mse(lm_outstate_terminal,df2)
-summary(lm_outstate_terminal)
-
-mse_outstate_pers = mse(lm_outstate_pers,df2)
-summary(lm_outstate_pers)
-
 ```
+The model has an MSE of `r mse_outstate_expend`.
 
-
+We examine a scatter plot of Outstate vs. Expend:
 
 ```{r, scatter_plot_outstate_expend, echo=FALSE}
 ggplot(df2, mapping = aes(x = Expend, y = Outstate)) +
@@ -411,6 +407,7 @@ ggplot(df2, mapping = aes(x = Expend, y = Outstate)) +
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+The relationship does not appear linear.  To verify this, we plot the residuals against the predicted values:
 
 ```{r pred_outstate_expend}
 
@@ -427,18 +424,50 @@ ggplot(df2, mapping = aes(predExpend, residExpend)) +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
-Plot shows heteroscedasticity of residuals vs. predicted values
 
-``` {r polynomial_outstate_expend}
+The plot shows heteroscedasticity in the distribution of residuals vs. predicted values; this, along with the loess smoother line, confirm that the relationship between Expend and Outstate is not linear.
 
-glm_outstate_expend = glm(Outstate ~ I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend ** 4) + I(Expend ** 5), data = df2)
+We split the data into equally proportioned training and testing sets, then determine that the third-order polynomial regression produces the model with the lowest MSE:
+
+``` {r polynomial_outstate_expend_lowest_mse}
+
+college_split5050 = resample_partition(df2, c(test = 0.5, train = 0.5))
+college_train50 = college_split5050$train %>%
+                  tbl_df()
+college_test50 = college_split5050$test %>%
+                 tbl_df()
+
+
+college_expend_poly_results = data_frame(terms = 1:8,
+                              model = map(terms, ~ glm(Outstate ~ poly(Expend, .), data = college_train50)),
+                              MSE = map_dbl(model, mse, data = college_test50))
+
+ggplot(college_expend_poly_results, aes(terms, MSE)) +
+       geom_line(color='deeppink',size=1) +
+       labs(title = "Comparing Polynomial Regression Models",
+       subtitle = "Using Validation Set",
+       x = "Highest-order polynomial",
+       y = "Mean Squared Error") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+We estimate the linear model and add fitted values: 
+
+```{r polynomial_outstate_expend}
+
+glm_outstate_expend = glm(Outstate ~ I(Expend) + I(Expend ** 2) + I(Expend ** 3), data = college_test50)
 
 summary(glm_outstate_expend)
 
 outstate_expend_pred = augment(glm_outstate_expend, newdata = data_grid(df2, Expend)) %>%
   mutate(pred_low = .fitted - 1.96 * .se.fit,
          pred_high = .fitted + 1.96 * .se.fit)
+
+mse_outstate_expend_glm = mse(glm_outstate_expend,college_test50)
 ```
+
+Next, we plot the regression line:
 
 ```{r polynomial_outstate_expend_plot, echo=FALSE}
 
@@ -447,21 +476,24 @@ ggplot(outstate_expend_pred, aes(Expend)) +
   geom_line(aes(y = .fitted)) +
   geom_line(aes(y = pred_low), linetype = 2) +
   geom_line(aes(y = pred_high), linetype = 2) +
-  labs(title = "Out-of-state Tuition based on Instructional Expenditure per Student:\nFifth-degree Polynomial Regression",
+  labs(title = "Out-of-state Tuition based on Instructional Expenditure per Student:\nThird-degree Polynomial Regression",
        x = "Instructional Expenditure per Student",
        y = "Out-of-state tuition") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+We see that the curve fits the data much better than the inflexible first-order model applied earlier.  The confidence interval widens considerably at the right end, however, because there are very few data points in that vicinity.
+
+Next, we examine a plot of the residuals vs. the predicted values:
 
 ```{r pred_outstate_expend_polynomial_plot_resid, echo=FALSE}
 
-pred_expend_poly5 = add_predictions(df2, glm_outstate_expend, var = "predExpendPoly5")
-df2$predExpendPoly5 = pred_expend_poly5$predExpendPoly5
-df2$residExpendPoly5 = df2$Outstate - df2$predExpendPoly5
+pred_expend_poly3 = add_predictions(college_test50, glm_outstate_expend, var = "predExpendPoly3")
+college_test50$predExpendPoly3 = pred_expend_poly3$predExpendPoly3
+college_test50$residExpendPoly3 = college_test50$Outstate - college_test50$predExpendPoly3
 
-ggplot(df2, mapping = aes(predExpendPoly5, residExpendPoly5)) +
+ggplot(college_test50, mapping = aes(predExpendPoly3, residExpendPoly3)) +
        geom_point(alpha = .15, color = 'deeppink', size = 1.5) +
        geom_smooth(color = 'grey30', method = 'loess') +
        labs(title = "Out-of-state Tuition based on Institutional Expenditure per Student", subtitle = 'Residuals vs. Predicted Values',
@@ -469,38 +501,40 @@ ggplot(df2, mapping = aes(predExpendPoly5, residExpendPoly5)) +
             y = "Residual") +
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
-
-
 ```
 
+Compared to the original plot of residuals vs. fitted values, the loess smoother line here is relatively flat.  We compare the MSE to that of the original model:  the inflexible first-order model returns an MSE of `r mse_outstate_expend` and the third-degree model has an MSE of `r mse_outstate_expend_glm`.  We have succeeded in reducing the MSE.
 
+The next thing we check is whether the reduction in MSE is consistent across different splits of the data:
 
-```{r expend_split_7030_100_rounds}
+```{r expend_split_5050_100_rounds}
 
 expend_mse_list_100 = vector("numeric", rounds)
 
 set.seed(1234)
 
 for(i in 1:rounds) {
-  split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
-  train70 = split7030$train %>%
+  split5050 = resample_partition(df2, c(test = 0.5, train = 0.5))
+  train50 = split5050$train %>%
             tbl_df()
-  test30 = split7030$test %>%
+  test50 = split5050$test %>%
            tbl_df()
 
-  glm_100_train70 = glm(Outstate ~ I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend ** 4) + I(Expend ** 5), data = train70)
+  glm_100_train50 = glm(Outstate ~ I(Expend) + I(Expend ** 2) + I(Expend ** 3), data = train50)
 
-  expend_mse_100_test30 = mse(glm_100_train70,test30)
-  expend_mse_list_100[[i]] = expend_mse_100_test30
+  expend_mse_100_test50 = mse(glm_100_train50,test50)
+  expend_mse_list_100[[i]] = expend_mse_100_test50
 }
 
 expend_mse_df_100 = as.data.frame(expend_mse_list_100)
 ```
 
-```{r, 70_30_100_rounds_MSE_histogram_expend, echo=FALSE}
+BOOKMARK
+
+```{r, 50_50_100_rounds_MSE_histogram_expend, echo=FALSE}
 
 ggplot(expend_mse_df_100, aes(x = expend_mse_list_100)) +
-       geom_histogram(fill = "deeppink", color='grey70') +
+       geom_histogram(bins = 25, fill = "deeppink", color='grey70') +
        labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
             x = "Mean Squared Error",
             y = "Frequency count of rounds") +
@@ -512,8 +546,12 @@ ggplot(expend_mse_df_100, aes(x = expend_mse_list_100)) +
 
 
 
+```{r terminal}
+lm_outstate_terminal = lm(Outstate ~ Terminal, data = df2)
 
-
+mse_outstate_terminal = mse(lm_outstate_terminal,df2)
+summary(lm_outstate_terminal)
+```
 
 
 
@@ -628,6 +666,12 @@ ggplot(terminal_mse_df_100, aes(x = terminal_mse_list_100)) +
 ```
 
 
+```{r personal}
+lm_outstate_pers = lm(Outstate ~ Personal, data = df2)
+
+mse_outstate_pers = mse(lm_outstate_pers,df2)
+summary(lm_outstate_pers)
+```
 
 
 
@@ -745,28 +789,6 @@ ggplot(pers_mse_df_100, aes(x = pers_mse_list_100)) +
 
 
 
-
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
-
-
-* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
-* `Apps` - Number of applications received.
-* `Accept` - Number of applications accepted.
-* `Enroll` - Number of new students enrolled.
-* `Top10perc` - Percent of new students from top 10% of H.S. class.
-* `Top25perc` - Percent of new students from top 25% of H.S. class.
-* `F.Undergrad` - Number of fulltime undergraduates.
-* `P.Undergrad` - Number of parttime undergraduates.
-* `Outstate` - Out-of-state tuition.
-* `Room.Board` - Room and board costs.
-* `Books` - Estimated book costs.
-* `Personal` - Estimated personal spending.
-* `PhD` - Percent of faculty with Ph.D.'s.
-* `Terminal` - Percent of faculty with terminal degrees.
-* `S.F.Ratio` - Student/faculty ratio.
-* `perc.alumni` - Percent of alumni who donate.
-* `Expend` - Instructional expenditure per student.
-* `Grad.Rate` - Graduation rate.
 
 Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
 
@@ -988,8 +1010,6 @@ anova_rmbd
 
 The results of the ANOVA indicate that while both the GAM with the linear term for room & board and the GAM with the cubic spline term for room & board are both statistically significant (at the p<.001 and p<.01 levels, respectively), the former has a much higher F-statistic (`r sum(tidy(anova_rmbd)[2,5])`) compared to sum(`r sum(tidy(anova_rmbd)[3,5])`) and therefore has a higher ratio of explained to unexplained variance compared to the latter.  This is evidence that the relationship between room & board and out-of-state tuition is linear.
 
-
-
 ```{r ANOVA_minus_phd, warning=FALSE}
 
 gam_college_ex_phd = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
@@ -1010,8 +1030,6 @@ anova_alumni
 
 The GAM model with the linear term for percentage alumni who donate is statistically significantly different (p<.001) from the model that excludes the term and the model that uses a spline term.  Additionally, that model's F-statistic is higher than the model including the spline term (`r tidy(anova_alumni)[2,5]` compared to `r tidy(anova_alumni)[3,5]`), which indicates that the relationship between percentage of alumni who donate and out-of-state tuition is linear.
 
-
-
 ```{r ANOVA_minus_expend}
 
 gam_college_ex_expend = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(PhD, df=5) + bs(perc.alumni,df=5) +  bs(Grad.Rate,df=5), data = college_train70)
@@ -1019,6 +1037,7 @@ gam_college_lin_expend = gam(Outstate ~ PrivateRC + bs(Room.Board, df=5) + bs(Ph
 anova_expend = anova(gam_college_ex_expend, gam_college_lin_expend, college_gam, test="F")
 anova_expend
 ```
+
 The ANOVA results indicate that while both the GAM models including Expend are statistically significantly different (p<.001) from the model that excludes it, the model including the linear term has a higher F-statistic than the model with the fifth-order polynomial term (`r tidy(anova_expend)[2,5]` compared to `r tidy(anova_expend)[3,5]`, respectively).  This is evidence that the relatinoship between instructional expenditures per student and out-of-state tuition is actually linear.  This is contrary to our earlier explorations, in which the fifth-order term resulted in homoscedastic residuals while the simple bivariate regression resulted in heteroscedastic residuals, indicating that the fit of the fifth-order polynomial model was better than that of the simple bivariate model.  The greater F-statistic for the model with the linear expenditure term suggests that once the other covariates are taken into account, the relationship between expenditure and out-of-state tuition becomes linear.
 
 
@@ -1029,4 +1048,5 @@ gam_college_lin_grad = gam(Outstate ~ PrivateRC + bs(Room.Board, df=5) + bs(PhD,
 anova_gradrate = anova(gam_college_ex_grad, gam_college_lin_grad, college_gam, test="F")
 anova_gradrate
 ```
+
 The ANOVA results indicate that the relationship between graduation rate and out-of-state tuition is linear; this is because the GAM model with the linear term is statistically signifcantly different (p<.001) from the others and has a much higher F-statistic (`r tidy(anova_gradrate)[2,5]` compared to `r tidy(anova_gradrate)[3,5]`).
