@@ -9,6 +9,7 @@ Yuqing Zhang
     -   [3 Repeat the validation set approach 100 times.](#repeat-the-validation-set-approach-100-times.)
     -   [4 Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach](#estimate-the-test-mse-of-the-model-using-the-leave-one-out-cross-validation-loocv-approach)
     -   [Problem 7 Bootstrap](#problem-7-bootstrap)
+-   [Part 2: College (bivariate)](#part-2-college-bivariate)
 -   [Part3: College(GAM)](#part3-collegegam)
     -   [Problem1.Split the data](#problem1.split-the-data)
     -   [Problem2: OLS](#problem2-ols)
@@ -177,7 +178,10 @@ biden_boot %>%
     ## 5      female   4.1267   0.979
     ## 6         rep -15.8387   1.355
 
-The estimate from the bootstrap is very similar with the estimate from the original OLS model. The standard error differs among variables, some are larger, some are smaller. \#\#Part 2: College (bivariate)
+The estimate from the bootstrap is very similar with the estimate from the original OLS model. The standard error differs among variables, some are larger, some are smaller.
+
+Part 2: College (bivariate)
+---------------------------
 
 ``` r
 sim_linear_mod_1 <- glm(Outstate ~ Room.Board, data = college)
