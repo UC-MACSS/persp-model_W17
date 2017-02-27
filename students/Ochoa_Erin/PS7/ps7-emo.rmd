@@ -529,22 +529,25 @@ for(i in 1:rounds) {
 expend_mse_df_100 = as.data.frame(expend_mse_list_100)
 ```
 
-BOOKMARK
+We take the mean of the MSE for all 100 rounds and find that it is `r mean(expend_mse_df_100$expend_mse_list_100)`.  We find that the reduction in MSE is, on average, consistent across rounds.
+
+To visualize this, we plot a histogram of the MSE distribution for all 100 rounds:
 
 ```{r, 50_50_100_rounds_MSE_histogram_expend, echo=FALSE}
 
 ggplot(expend_mse_df_100, aes(x = expend_mse_list_100)) +
        geom_histogram(bins = 25, fill = "deeppink", color='grey70') +
-       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+       labs(title = "Mean Squared Error for 100 Rounds of 50%:50% Training:Testing Splits",
             x = "Mean Squared Error",
             y = "Frequency count of rounds") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+There is only one observed MSE that is higher than the first-order model MSE.  This means that for all but one of the observed splits of the data into training and testing sets, the third-order polynomial model performs better than the first-order model.
 
 
-
+We continue by considering the Outstate vs. Terminal model:
 
 ```{r terminal}
 lm_outstate_terminal = lm(Outstate ~ Terminal, data = df2)
@@ -553,11 +556,7 @@ mse_outstate_terminal = mse(lm_outstate_terminal,df2)
 summary(lm_outstate_terminal)
 ```
 
-
-
-
-
-
+While the relationship is statistically significant (p<.001) with a \beta 1 coefficient of 111.485, a scatter plot of the data points indicates that the relationship is not linear:
 
 ```{r, scatter_plot_outstate_terminal, echo=FALSE}
 ggplot(df2, mapping = aes(x = Terminal, y = Outstate)) +
@@ -570,6 +569,7 @@ ggplot(df2, mapping = aes(x = Terminal, y = Outstate)) +
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+We confirm this by checking a plot of the residuals vs. the fitted values:
 
 ```{r pred_outstate_terminal}
 
@@ -587,18 +587,44 @@ ggplot(df2, mapping = aes(predTerminal, residTerminal)) +
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+The curved loess line indicates heteroscedasticity in the values of the residuals, confirming that a first-order linear model is not the best fit for these data.
+
+Using the previously defined training and testing datasets, we determine that a third-order model will provide an optimal balance of parsimony and low MSE:
+
+``` {r polynomial_outstate_terminal_lowest_mse}
+
+college_terminal_poly_results = data_frame(terms = 1:8,
+                                model = map(terms, ~ glm(Outstate ~ poly(Terminal, .), data = college_train50)),
+                                MSE = map_dbl(model, mse, data = college_test50))
+
+ggplot(college_terminal_poly_results, aes(terms, MSE)) +
+       geom_line(color='purple1',size=1) +
+       labs(title = "Comparing Polynomial Regression Models",
+       subtitle = "Using Validation Set",
+       x = "Highest-order polynomial",
+       y = "Mean Squared Error") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+We fit the third-order model:
+
 ``` {r polynomial_outstate_terminal}
 
-glm_outstate_terminal = glm(Outstate ~ I(Terminal) + I(Terminal ** 2) + I(Terminal ** 3) + I(Terminal ** 4), data = df2)
-
-#glm_outstate_terminal = glm(Outstate ~ I(Terminal ** 4), data = df2)
+glm_outstate_terminal = glm(Outstate ~ I(Terminal) + I(Terminal ** 2) + I(Terminal ** 3), data = college_test50)
 
 summary(glm_outstate_terminal)
 
-outstate_terminal_pred = augment(glm_outstate_terminal, newdata = data_grid(df2, Terminal)) %>%
+outstate_terminal_pred = augment(glm_outstate_terminal, newdata = data_grid(college_test50, Terminal)) %>%
   mutate(pred_low = .fitted - 1.96 * .se.fit,
          pred_high = .fitted + 1.96 * .se.fit)
+
+mse_outstate_terminal_glm = mse(glm_outstate_terminal,college_test50)
 ```
+
+We find that MSE, which was `r mse_outstate_terminal` for the first-order model, is `r mse_outstate_terminal_glm` for the third-order model.  The third-order model has reduced the MSE.
+
+We generate a scatter plot of the third-order model:
 
 ```{r polynomial_outstate_terminal_plot, echo=FALSE}
 
@@ -607,64 +633,77 @@ ggplot(outstate_terminal_pred, aes(Terminal)) +
   geom_line(aes(y = .fitted)) +
   geom_line(aes(y = pred_low), linetype = 2) +
   geom_line(aes(y = pred_high), linetype = 2) +
-  labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nFourth-degree Polynomial Regression",
+  labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nThird-degree Polynomial Regression",
        x = "Percent of faculty with terminal degrees",
        y = "Out-of-state tuition") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+The third-order regression curve fits the data much better than the first-order regression line did.
+
+We examine a scatter plot of the residuals vs. the fitted values:
+
 ```{r pred_outstate_terminal_polynomial_plot_resid, echo=FALSE}
 
-pred_terminal_poly4 = add_predictions(df2, glm_outstate_terminal, var = "predTerminalPoly4")
-df2$predTerminalPoly4 = pred_terminal_poly4$predTerminalPoly4
-df2$residTerminalPoly4 = df2$Outstate - df2$predTerminalPoly4
+pred_terminal_poly3 = add_predictions(college_test50, glm_outstate_terminal, var = "predTerminalPoly3")
+college_test50$predTerminalPoly3 = pred_terminal_poly3$predTerminalPoly3
+college_test50$residTerminalPoly3 = college_test50$Outstate - college_test50$predTerminalPoly3
 
-ggplot(df2, mapping = aes(predTerminalPoly4, residTerminalPoly4)) +
+ggplot(college_test50, mapping = aes(predTerminalPoly3, residTerminalPoly3)) +
        geom_point(alpha = .15, color = 'purple1', size = 1.5) +
        geom_smooth(color = 'grey30', method = 'loess') +
-        labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nFourth-degree Polynomial Regression", subtitle = 'Residuals vs. Predicted Values',
+        labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nThird-degree Polynomial Regression", subtitle = 'Residuals vs. Predicted Values',
             x = "Predicted Out-of-state tuition",
             y = "Residual") +
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+Now the residuals display relative homoscedasticity.
 
+Next, we check whether the reduction in MSE is consistent across 100 rounds of splits:
 
 ```{r terminal_split_7030_100_rounds}
 
-set.seed(1234)
+#set.seed(1234)
 
 terminal_mse_list_100 = vector("numeric", rounds)
 
 for(i in 1:rounds) {
-  split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
-  train70 = split7030$train %>%
+  split5050 = resample_partition(df2, c(test = 0.5, train = 0.5))
+  train50 = split5050$train %>%
             tbl_df()
-  test30 = split7030$test %>%
+  test50 = split5050$test %>%
            tbl_df()
 
-  glm_100_train70 = glm(Outstate ~ I(Terminal) + I(Terminal ** 2) + I(Terminal ** 3) + I(Terminal ** 4), data = train70)
+  glm_100_train50 = glm(Outstate ~ I(Terminal) + I(Terminal ** 2) + I(Terminal ** 3), data = train50)
 
-  terminal_mse_100_test30 = mse(glm_100_train70,test30)
-  terminal_mse_list_100[[i]] = terminal_mse_100_test30
+  terminal_mse_100_test50 = mse(glm_100_train50,test50)
+  terminal_mse_list_100[[i]] = terminal_mse_100_test50
 }
 
 terminal_mse_df_100 = as.data.frame(terminal_mse_list_100)
 ```
 
+We take the mean MSE of all the rounds and find that it is `r mean(terminal_mse_df_100$terminal_mse_list_100)`.  The reduction in MSE is consistent, on average, across rounds.
+
+We visualize this thus:
+
 ```{r, 70_30_100_rounds_MSE_histogram_terminal, echo=FALSE}
 
 ggplot(terminal_mse_df_100, aes(x = terminal_mse_list_100)) +
-       geom_histogram(bins = 10, fill = "purple1", color = 'grey30') +
-       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+       geom_histogram(bins = 30, fill = "purple1", color = 'grey30') +
+       labs(title = "Mean Squared Error for 100 Rounds of 50%:50% Training:Testing Splits",
             x = "Mean Squared Error",
             y = "Frequency count of rounds") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+While there are observed MSEs above the first-order model MSE of `r terminal_mse_100_test50`, a reduction in MSE occurs in the majority of splits.
+
+We continue by exploring the relationship between Personal and Outstate.
 
 ```{r personal}
 lm_outstate_pers = lm(Outstate ~ Personal, data = df2)
@@ -673,8 +712,9 @@ mse_outstate_pers = mse(lm_outstate_pers,df2)
 summary(lm_outstate_pers)
 ```
 
+The first-order model has an MSE of `r mse_outstate_pers`.
 
-
+We generate a scatter plot:
 
 ```{r, scatter_plot_outstate_pers, echo=FALSE}
 ggplot(df2, mapping = aes(x = Personal, y = Outstate)) +
@@ -687,6 +727,9 @@ ggplot(df2, mapping = aes(x = Personal, y = Outstate)) +
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+The relationship appears nonlinear despite the fact that the first-order coefficient (-1.7771) is statistically significant (p<.001).
+
+For further evidence of the non-linearity of the relationship, we check the residuals:
 
 ```{r pred_outstate_pers}
 
@@ -704,22 +747,47 @@ ggplot(df2, mapping = aes(predPers, residPers)) +
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+The curved loess line suggests the nonlinearity of the relationship.
 
+Now we determine the order of the polynomial regression that will yield the lowest MSE:
 
+``` {r polynomial_outstate_personal_lowest_mse}
+
+college_personal_poly_results = data_frame(terms = 1:8,
+                                model = map(terms, ~ glm(Outstate ~ poly(Personal, .), data = college_train50)),
+                                MSE = map_dbl(model, mse, data = college_test50))
+
+ggplot(college_personal_poly_results, aes(terms, MSE)) +
+       geom_line(color='orangered',size=1) +
+       labs(title = "Comparing Polynomial Regression Models",
+       subtitle = "Using Validation Set",
+       x = "Highest-order polynomial",
+       y = "Mean Squared Error") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+Because the first through seventh order polynomial regressions will all yield equal MSE, we generate several plots (most not shown) and decide that the third order term appears to deliver the most balanced residuals.
 
 ``` {r polynomial_outstate_pers}
 
-glm_outstate_pers = glm(Outstate ~ I(Personal) + I(Personal ** 2) + I(Personal ** 3) , data = df2)
+glm_outstate_pers = glm(Outstate ~ I(Personal) + I(Personal ** 2) + I(Personal ** 3) , data = college_test50)
 
-outstate_pers_pred = augment(glm_outstate_pers, newdata = data_grid(df2, Personal)) %>%
+outstate_pers_pred = augment(glm_outstate_pers, newdata = data_grid(college_test50, Personal)) %>%
   mutate(pred_low = .fitted - 1.96 * .se.fit,
          pred_high = .fitted + 1.96 * .se.fit)
+
+mse_outstate_personal_glm = mse(glm_outstate_pers,college_test50)
 ```
+
+The third-order model as imposed on the testing dataset has an MSE of `r mse_outstate_personal_glm`, which is lower than that of the first order model (`r mse_outstate_pers`).
+
+We plot the third order model:
 
 ```{r polynomial_outstate_pers_plot, echo=FALSE}
 
 ggplot(outstate_pers_pred, aes(Personal)) +
-  geom_point(data = df2, aes(Personal, Outstate), alpha = .15, color = 'orangered', size = 1.5) +
+  geom_point(data = college_test50, aes(Personal, Outstate), alpha = .15, color = 'orangered', size = 1.5) +
   geom_line(aes(y = .fitted)) +
   geom_line(aes(y = pred_low), linetype = 2) +
   geom_line(aes(y = pred_high), linetype = 2) +
@@ -730,17 +798,20 @@ ggplot(outstate_pers_pred, aes(Personal)) +
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
+We can see that this model fits the data better than the first-order model.  The confidence interval widens considerably around 3,000, however, because there are very few data points above that threshold.
+
+We examine the residuals of the third order model:
 
 ```{r pred_outstate_pers_polynomial_plot_resid, echo=FALSE}
 
-pred_pers_poly3 = add_predictions(df2, glm_outstate_pers, var = "predPersPoly3")
-df2$predPersPoly3 = pred_pers_poly3$predPersPoly3
-df2$residPersPoly3 = df2$Outstate - df2$predPersPoly3
+pred_pers_poly3 = add_predictions(college_test50, glm_outstate_pers, var = "predPersPoly3")
+college_test50$predPersPoly3 = pred_pers_poly3$predPersPoly3
+college_test50$residPersPoly3 = college_test50$Outstate - college_test50$predPersPoly3
 
-ggplot(df2, mapping = aes(predPersPoly3, residPersPoly3)) +
+ggplot(college_test50, mapping = aes(predPersPoly3, residPersPoly3)) +
        geom_point(alpha = .15, color = 'orangered', size = 1.5) +
        geom_smooth(color = 'grey30', method = 'loess') +
-        labs(title = "Out-of-state Tuition based on Personal Spending:\nFourth-degree Polynomial Regression", subtitle = 'Residuals vs. Predicted Values',
+        labs(title = "Out-of-state Tuition based on Personal Spending:\nThird-degree Polynomial Regression", subtitle = 'Residuals vs. Predicted Values',
             x = "Predicted Out-of-state tuition",
             y = "Residual") +
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
@@ -748,8 +819,9 @@ ggplot(df2, mapping = aes(predPersPoly3, residPersPoly3)) +
 
 ```
 
+The residuals are now relatively homoscedastic.
 
-
+We check to see if the reduction in MSE is consistent across 100 rounds of cross validation:
 
 ```{r pers_split_7030_100_rounds}
 
@@ -758,72 +830,39 @@ pers_mse_list_100 = vector("numeric", rounds)
 set.seed(1234)
 
 for(i in 1:rounds) {
-  split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
-  train70 = split7030$train %>%
+  split5050 = resample_partition(df2, c(test = 0.5, train = 0.5))
+  train50 = split5050$train %>%
             tbl_df()
-  test30 = split7030$test %>%
+  test50 = split5050$test %>%
            tbl_df()
 
-  glm_100_train70 = glm(Outstate ~ I(Personal) + I(Personal ** 2) + I(Personal ** 3), data = train70)
+  glm_100_train50 = glm(Outstate ~ I(Personal) + I(Personal ** 2) + I(Personal ** 3), data = train50)
 
-  pers_mse_100_test30 = mse(glm_100_train70,test30)
-  pers_mse_list_100[[i]] = pers_mse_100_test30
+  pers_mse_100_test50 = mse(glm_100_train50,test50)
+  pers_mse_list_100[[i]] = pers_mse_100_test50
 }
 
 pers_mse_df_100 = as.data.frame(pers_mse_list_100)
 ```
 
+We take the mean of the MSEs from all 100 rounds and find it to be `r mean(pers_mse_df_100$pers_mse_list_100)`.  This is higher than the first-order MSE of `r mse_outstate_pers`.  This indicates that, despite having constructed a model that appears to fit better, we have constructed a model with higher MSE.
+
+We visualize the distribution of MSEs across 100 rounds:
+
 ```{r, 70_30_100_rounds_MSE_histogram_pers, echo=FALSE}
 
 ggplot(pers_mse_df_100, aes(x = pers_mse_list_100)) +
        geom_histogram(bins = 20, fill = "orangered", color = 'grey30') +
-       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+       labs(title = "Mean Squared Error for 100 Rounds of 50%:50% Training:Testing Splits",
             x = "Mean Squared Error",
             y = "Frequency count of rounds") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
-
-
-
-
-
-
-Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
-
-* No transformation
-* Monotonic transformation
-* Polynomial regression
-* Step functions
-* Splines
-* Local regression
-
-Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
-
-
-
-
-
-
-
-
-
-
-
+We find that polynomial regression sometimes reduces MSE but can also sometimes increase it, depending on the random split of the data.
 
 # Part 3: College (GAM)
-
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
-
-* `Outstate` - Out-of-state tuition.
-* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
-* `Room.Board` - Room and board costs.
-* `PhD` - Percent of faculty with Ph.D.'s.
-* `perc.alumni` - Percent of alumni who donate.
-* `Expend` - Instructional expenditure per student.
-* `Grad.Rate` - Graduation rate.
-
 
 
 ```{r college_train_test_split}
@@ -863,17 +902,6 @@ ggplot(college_train70, mapping = aes(pred_train70, resid_train70)) +
             y = "Residual") +
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
-
-1. Split the data into a training set and a test set.
-1. Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-1. Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-1. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
-1. For which variables, if any, is there evidence of a non-linear relationship with the response?^[Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.]
-
-
-
-
-
 
 ```{r gam_college}
 
