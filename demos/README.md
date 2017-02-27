@@ -27,3 +27,8 @@ Demonstration scripts for MACS 30100
 
 * [Statistical learning: moving beyond linearity](http://cfss.uchicago.edu/persp007_nonlinear.html)
 * [Slides for non-linearity](http://cfss.uchicago.edu/extras/persp_nonlinear_slides.html)
+
+# Tree-based methods
+
+* [Statistical learning: tree-based methods](http://cfss.uchicago.edu/persp008_tree_methods.html)
+* [Slides for tree-based methods](http://cfss.uchicago.edu/extras/persp_tree_methods_slides.html)
