@@ -3,8 +3,8 @@ Problem set \#7: Resampling and non-linearity
 ChengYee Lim
 02/25/2017
 
--   [Part 1: Sexy Joe Biden (redux) \[4 points\]](#part-1-sexy-joe-biden-redux-4-points)
--   [Part 2: College (bivariate) \[3 points\]](#part-2-college-bivariate-3-points)
+-   [Part 1: Sexy Joe Biden \[4 points\]](#part-1-sexy-joe-biden-4-points)
+-   [Part 2: College (Bivariate) \[3 points\]](#part-2-college-bivariate-3-points)
 -   [Part 3: College (GAM) \[3 points\]](#part-3-college-gam-3-points)
     -   [Model Fit](#model-fit)
     -   [Non-linear relationship](#non-linear-relationship)
@@ -25,26 +25,17 @@ library(purrr)
 library(gam)
 
 theme_set(theme_minimal())
+set.seed(1234)
 ```
 
-Part 1: Sexy Joe Biden (redux) \[4 points\]
-===========================================
-
-`biden.csv` contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards Joe Biden. The variables are coded as follows:
-
--   `biden` - feeling thermometer ranging from 0-100[1]
--   `female` - 1 if respondent is female, 0 if respondent is male
--   `age` - age of respondent in years
--   `dem` - 1 if respondent is a Democrat, 0 otherwise
--   `rep` - 1 if respondent is a Republican, 0 otherwise
--   `educ` - number of years of formal education completed by respondent
-    -   `17` - 17+ years (aka first year of graduate school and up)
+Part 1: Sexy Joe Biden \[4 points\]
+===================================
 
 For this exercise we consider the following functional form:
 
 *Y* = *β*<sub>0</sub> + *β*<sub>1</sub>*X*<sub>1</sub> + *β*<sub>2</sub>*X*<sub>2</sub> + *β*<sub>3</sub>*X*<sub>3</sub> + *β*<sub>4</sub>*X*<sub>4</sub> + *β*<sub>5</sub>*X*<sub>5</sub> + *ϵ*
 
-where *Y* is the Joe Biden feeling thermometer, *X*<sub>1</sub> is age, *X*<sub>2</sub> is gender, *X*<sub>3</sub> is education, *X*<sub>4</sub> is Democrat, and *X*<sub>5</sub> is Republican.[2] Report the parameters and standard errors.
+where *Y* is the Joe Biden feeling thermometer, *X*<sub>1</sub> is age, *X*<sub>2</sub> is gender, *X*<sub>3</sub> is education, *X*<sub>4</sub> is Democrat, and *X*<sub>5</sub> is Republican.
 
 ``` r
 # import
@@ -67,8 +58,7 @@ joe_lm <- function(df){
 } 
 ```
 
-1.  Estimate the training MSE of the model using the traditional approach.
-    -   Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.
+**Estimate the training MSE of the model using the traditional approach.**
 
 ``` r
 pander(summary(joe_lm(joe)))
@@ -169,15 +159,9 @@ mse(joe_lm(joe), joe)
 
     ## [1] 395.2702
 
-1.  Estimate the test MSE of the model using the validation set approach.
-    -   Split the sample set into a training set (70%) and a validation set (30%).
-    -   Fit the linear regression model using only the training observations.
-    -   Calculate the MSE using only the test set observations.
-    -   How does this value compare to the training MSE from step 1?
+**Estimate the test MSE of the model using the validation set approach. How does this value compare to the training MSE from step 1?**
 
 ``` r
-set.seed(1234)
-
 #training-test data split 
 joe_split <- resample_partition(joe, c(test = 0.7, train = 0.3))
 joe_train <- joe_split$train %>%
@@ -208,45 +192,45 @@ pander(summary(joe_lm(joe_train))) #results of 70/30 training/test split
 <tbody>
 <tr class="odd">
 <td align="center"><strong>age</strong></td>
-<td align="center">0.05506</td>
-<td align="center">0.05417</td>
-<td align="center">1.016</td>
-<td align="center">0.3099</td>
+<td align="center">0.1066</td>
+<td align="center">0.04913</td>
+<td align="center">2.17</td>
+<td align="center">0.03045</td>
 </tr>
 <tr class="even">
 <td align="center"><strong>femaleFemale</strong></td>
-<td align="center">4.874</td>
-<td align="center">1.768</td>
-<td align="center">2.757</td>
-<td align="center">0.006034</td>
+<td align="center">3.538</td>
+<td align="center">1.69</td>
+<td align="center">2.094</td>
+<td align="center">0.03674</td>
 </tr>
 <tr class="odd">
 <td align="center"><strong>educ</strong></td>
-<td align="center">0.03847</td>
-<td align="center">0.3884</td>
-<td align="center">0.09906</td>
-<td align="center">0.9211</td>
+<td align="center">-0.3449</td>
+<td align="center">0.3531</td>
+<td align="center">-0.9767</td>
+<td align="center">0.3292</td>
 </tr>
 <tr class="even">
 <td align="center"><strong>demDemocrat</strong></td>
-<td align="center">15.02</td>
-<td align="center">2.047</td>
-<td align="center">7.34</td>
-<td align="center">7.955e-13</td>
+<td align="center">15.25</td>
+<td align="center">1.913</td>
+<td align="center">7.972</td>
+<td align="center">9.429e-15</td>
 </tr>
 <tr class="odd">
 <td align="center"><strong>repRepublican</strong></td>
-<td align="center">-15.67</td>
-<td align="center">2.444</td>
-<td align="center">-6.413</td>
-<td align="center">3.138e-10</td>
+<td align="center">-18.3</td>
+<td align="center">2.301</td>
+<td align="center">-7.951</td>
+<td align="center">1.103e-14</td>
 </tr>
 <tr class="even">
 <td align="center"><strong>(Intercept)</strong></td>
-<td align="center">53.01</td>
-<td align="center">6.049</td>
-<td align="center">8.763</td>
-<td align="center">2.5e-17</td>
+<td align="center">57.44</td>
+<td align="center">5.568</td>
+<td align="center">10.32</td>
+<td align="center">6.953e-23</td>
 </tr>
 </tbody>
 </table>
@@ -270,20 +254,27 @@ pander(summary(joe_lm(joe_train))) #results of 70/30 training/test split
 <tbody>
 <tr class="odd">
 <td align="center">543</td>
-<td align="center">20.39</td>
-<td align="center">0.2759</td>
-<td align="center">0.2691</td>
+<td align="center">19.42</td>
+<td align="center">0.3285</td>
+<td align="center">0.3223</td>
 </tr>
 </tbody>
 </table>
 
 ``` r
-signif(mse(joe_lm(joe_train), joe_test), digits = 6)
+mse(joe_lm(joe_train), joe_test)
 ```
 
-    ## [1] 389.999
+    ## [1] 407.7772
 
-1.  Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+The test MSE, 407.7772353, is larger than the training MSE from step 1, `mse(joe_lm(joe), joe)`. This is because the model trained with 100% of the observations so MSE at all points is minimized. On the other hand, second model trained with 70% of the observations, thus MSE on the test set is likely to be higher than the training MSE.
+
+| Model               |     MSE     |
+|---------------------|:-----------:|
+| 100% train          | 395.2701693 |
+| 70% train, 30% test | 407.7772353 |
+
+**Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.**
 
 ``` r
 for(i in 1:100){
@@ -310,7 +301,15 @@ mean(mse_list)
 
     ## [1] 401.4357
 
-1.  Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+When the validation set approach is repeated 100 times, the average MSE is 401.4357125. Expectedly, the average MSE is still larger than the training MSE as explained in part (b). The average MSE is also slightly smaller than test MSE, this shows that a different split to form the test and training sets will result in different MSE. Repeating the validation approach will result in a more robust MSE.
+
+| Model                          |     MSE     |
+|--------------------------------|:-----------:|
+| 100% train                     | 395.2701693 |
+| 70% train, 30% test            | 397.3651852 |
+| 70% train, 30% test, 100 times | 401.4357125 |
+
+**Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.**
 
 ``` r
 LOOCV <- function(df, n){
@@ -324,10 +323,20 @@ LOOCV <- function(df, n){
   mean(loocv_mse, na.rm = TRUE)
 } #function to calculate mse for k-fold loocv approach, where max k = nrow(df)
 
-loocv_joe <- LOOCV(joe, nrow(joe))
+LOOCV(joe, nrow(joe))
 ```
 
-1.  Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.
+    ## [1] 397.9555
+
+The test MSE of the model using LOOCV is 397.9555046. Since LOOCV trains with 99% of the observations, we expect the test MSE to be larger than the training MSE, and smaller than the MSE of the 70-30 validation set approach.
+
+| Model               |     MSE     |
+|---------------------|:-----------:|
+| 100% train          | 395.2701693 |
+| 70% train, 30% test | 397.3651852 |
+| LOOCV               | 397.9555046 |
+
+**Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.**
 
 ``` r
 LOOCV(joe, 10)
@@ -335,7 +344,16 @@ LOOCV(joe, 10)
 
     ## [1] 398.0729
 
-1.  Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained.
+The test MSE using the 10-fold cross-validation approach is 397.718387. Since 10-fold cross-validation approach uses 90% of the observations for training, the test MSE will be larger than the training MSE and the LOOCV MSE but smaller than the 70-30 validation set approach MSE. There is, however, no significant difference between LOOCV MSE and 10-fold CV MSE.
+
+| Model               |     MSE     |
+|---------------------|:-----------:|
+| 100% train          | 395.2701693 |
+| 70% train, 30% test | 397.3651852 |
+| LOOCV               | 397.9555046 |
+| 10-fold CV          | 397.6861377 |
+
+**Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained.**
 
 ``` r
 for(i in 1:100){
@@ -351,7 +369,17 @@ mean(cv_list)
 
     ## [1] 397.9661
 
-1.  Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (*n* = 1000).
+The average MSE for 10-fold CV approach is almost identical as the LOOCV approach, thus the accuracy of both approaches are similar. Since LOOCV approach is much more time-inefficient, we would choose the 10-fold CV approach over LOOCV approach in this case.
+
+| Model                 |     MSE     |
+|-----------------------|:-----------:|
+| 100% train            | 395.2701693 |
+| 70% train, 30% test   | 397.3651852 |
+| LOOCV                 | 397.9555046 |
+| 10-fold CV            | 399.8721821 |
+| 10-fold CV, 100 times | 397.9660989 |
+
+**Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (*n* = 1000).**
 
 ``` r
 #basic model 
@@ -469,7 +497,9 @@ joe %>%
 | femaleFemale  |    4.0880055|  0.9487960|
 | repRepublican |  -15.8743184|  1.4443321|
 
-Part 2: College (bivariate) \[3 points\]
+The estimated parameters using the bootstrap is almost identical as the estimated parameters from the original model. However, the estimated standard errors from the bootstrap are consistently larger than the standard errors from the original model.
+
+Part 2: College (Bivariate) \[3 points\]
 ========================================
 
 The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
@@ -511,7 +541,7 @@ college <- read.csv("./data/college.csv")
 Part 3: College (GAM) \[3 points\]
 ==================================
 
-We now fit a GAM to predict out-of-state tuition using natural spline functions of `Room.Board`, `PhD`, `perc.alumni`, `Expend`, `Grad.Rate` and treating `Private` as a qualitative predictor.
+We now fit a GAM to predict out-of-state tuition using spline functions of `Room.Board`, `PhD`, `perc.alumni`, `Expend`, `Grad.Rate` and treating `Private` as a qualitative predictor.
 
 -   `Outstate` - Out-of-state tuition.
 -   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
@@ -524,7 +554,8 @@ We now fit a GAM to predict out-of-state tuition using natural spline functions 
 We do so by extending the following multiple linear regression model
 
 *y*<sub>*i*</sub> = *β*<sub>0</sub> + *β*<sub>1</sub>*X*<sub>*i*1</sub> + *β*<sub>2</sub>*X*<sub>*i*2</sub> + *β*<sub>3</sub>*X*<sub>*i*3</sub> + *β*<sub>4</sub>*X*<sub>*i*4</sub> + *β*<sub>5</sub>*X*<sub>*i*5</sub> + *β*<sub>6</sub>*X*<sub>*i*6</sub> + *ϵ*<sub>*i*</sub>
- where *X*<sub>*i*1</sub> is `Private`, *X*<sub>*i*2</sub> is `Room.Board`, *X*<sub>*i*3</sub> is `PhD`, *X*<sub>*i*4</sub> is `perc.alumni`, *X*<sub>*i*5</sub> is `Expend`, and *X*<sub>*i*6</sub> is `Grad.Rate`
+
+where *X*<sub>*i*1</sub> is `Private`, *X*<sub>*i*2</sub> is `Room.Board`, *X*<sub>*i*3</sub> is `PhD`, *X*<sub>*i*4</sub> is `perc.alumni`, *X*<sub>*i*5</sub> is `Expend`, and *X*<sub>*i*6</sub> is `Grad.Rate`
 
 and allowing for non-linear relationships between each predictor and the response variable. Each linear component *β*<sub>*j*</sub>*x*<sub>*i**j*</sub> is replaced with a smooth, non-linear function *f*<sub>*j*</sub>(*x*<sub>*i**j*</sub>):
 
@@ -843,15 +874,10 @@ To determine if the predictors have a non-linear relationship with the response 
 college_base <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
 
 college_base <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = college_train)
-
 college_roomS <- gam(Outstate ~ Private + Room.Board + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-
 college_phdS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + PhD + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-
 college_alumS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + perc.alumni + bs(Expend, df = 5) + bs(Grad.Rate, df = 5), data = college_train)
-
 college_expS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + Expend + bs(Grad.Rate, df = 5), data = college_train)
-
 college_gradS <- gam(Outstate ~ Private + bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Grad.Rate, data = college_train)
 
 
@@ -933,7 +959,3 @@ anova(college_base, college_gradS, test = "F")
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
 Thus, the results of our ANOVA test shows that `Room.Board`, `PhD`, `perc.alumni` and `Grad.Rate` have a non-linear relationship with `Outstate`. Only `Expend` has a linear relationship with `Outstate`.
-
-[1] Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.
-
-[2] Independents must be left out to serve as the baseline category, otherwise we would encounter perfect multicollinearity.
