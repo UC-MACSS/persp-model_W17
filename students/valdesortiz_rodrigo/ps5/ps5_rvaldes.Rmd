@@ -1,0 +1,186 @@
+---
+title: "Problem set #5: linear regression"
+author: "Rodrigo Valdes-Ortiz"
+date: "**Due Monday February 13th at 11:30am**"
+output:
+  github_document:
+    toc: true
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+setwd("/Users/ruy/Documents/UChicago/Winter_2017/pcm/ps5")
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+```
+
+```{r, include = FALSE}
+# df = read.csv('../../../assignments/PS5/data/biden.csv')
+df <- read.csv("biden.csv")
+```
+
+# Task 1 - Describe the data
+
+According to the histogram, the warm attitudes towards Joe Biden are more numerous than the cold feelings, considering that warm is a feeling thermometer above fifty units. The variable appears to be discrete due to jumps of five units between the bars. 
+
+```{r}
+ggplot(df, mapping = aes(x = biden)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Distribution of Biden Feeling Thermometer",
+       x = "Feeling Thermometer",
+       y = "Frequency Count of Individuals")
+```
+
+# Task 2 - Simple linear regression
+
+```{r}
+biden1 <- lm(biden ~ age, data = df)
+summary(biden1)
+# tidy(biden1)
+
+grid <- df %>% 
+  data_grid(age) 
+
+grid <- grid %>% 
+  add_predictions(biden1) 
+
+```
+
+## 1. 
+There is a relationship. However, it is not significant, then, unimportant.
+
+## 2. 
+The relationship is feeble, only significant at the 10%. The zero is in the confidence interval. It is not strong, and the graph provides some insight of the limited effect of age on the perception of Joe Biden.
+
+## 3. 
+The relationship is positive. More years old means better opinion of Joe Biden. However, it is not significant at the traditional levels, 5%. Then, it is possible to argue that there is not a relationship.
+
+## 4. 
+The R^2 of the model is 0.002018. It represents the 0.2% percent of the variation. It is a wrong model.
+
+## 5. 
+The prediction for the perception of Joe Biden for an individual of an age of 45 is 62.0056, while the confidence interval is from 60.91177 to 63.09943
+
+```{r}
+newdata = data.frame(age = 45)
+predict(biden1, newdata, interval="confidence")
+```
+
+## 6.
+```{r}
+ggplot(df, aes(x = biden)) +
+  geom_point(aes(y = age)) +
+  geom_line(aes(y = pred, x = age), data = grid, color = "red", size = 1)
+```
+
+# Task 3 - Multiple linear regression
+
+```{r}
+biden2 <- lm(biden ~ age + female + educ, data = df)
+summary(biden2)
+# tidy(biden2)
+
+grid2 <- data.frame("age" = df$age,
+                    "female" = df$female,
+                    "educ" = df$educ,
+                    "rep" = df$rep,
+                    "dem" = df$dem,
+                    "biden" = df$biden)
+grid2 <- grid2 %>% 
+  add_predictions(biden2) 
+```
+## 1.
+Yes, the variables female and education are significant. Also, the F statistic indicates that the model has an overall significance. 
+
+## 2.
+It suggests that the feeling thermometer increases about six units against males with the same characteristics besides gender.
+
+## 3.
+The R^2 of the model is 0.02723, which represent 2.7% of the variation. It is a better model that the age-only model due to the R^2 is more than ten times bigger. However, it generates non-normal distributed errors, which are also big in magnitude.
+```{r}
+grid2$resid <- grid2$biden - grid2$pred
+hist(grid2$resid)
+```
+
+## 4.
+The problem is that the different views of democrats and republicans are not controlled in the model. As a result, the residuals for democrats are positive, while the residuals for republicans are negative. Add a variable for a party can increase the accuracy of the model.
+```{r}
+ggplot(grid2, aes(x=pred, y=resid, colour=factor(colour))) + 
+  geom_smooth(data=subset(grid2, dem == 1), method = "lm", color = "royalblue3") +
+  geom_smooth(data=subset(grid2, rep == 1), method = "lm", color = "brown3") +
+  geom_point(data=subset(grid2, dem == 1), color = "royalblue3") +
+  geom_point(data=subset(grid2, rep == 1), color = "brown3")
+```
+
+
+# Task 4 - Multiple linear regression model (with even more variables!)
+
+```{r}
+biden3 <- lm(biden ~ age + female + educ + dem + rep, data = df)
+summary(biden3)
+# tidy(biden3)
+
+grid3 <- data.frame("age" = df$age,
+                    "female" = df$female,
+                    "educ" = df$educ,
+                    "rep" = df$rep,
+                    "dem" = df$dem,
+                    "biden" = df$biden)
+grid3 <- grid3 %>% 
+  add_predictions(biden3) 
+
+
+grid3$resid <- grid3$biden - grid3$pred
+
+```
+
+## 1.
+Yes, after controlling for party, the coefficient of female decrease in magnitude and it increases its significance. The coefficient of female explains less variance in the model, but the model is better specified. 
+
+## 2.
+The R^2 is 0.28, which means that the model explains 28% of the variation in the data. Then, it is better than the former model in task 3, because age + gender + education only explains less than the 3% of the variance. 
+
+## 3.
+The errors are closer to zero in the mean for the three different cases, democrat, republican, and independent. As a result, the model is better than the former one, where it was a problem of specification due to the lack of party affiliation. However, maybe there is still an issue with the errors according to the histogram, the distribution is biased to positive errors.
+
+```{r}
+ggplot(grid3, aes(x=pred, y=resid, colour=factor(colour))) + 
+geom_smooth(data=subset(grid3, dem == 1), method = "lm", color = "royalblue3") +
+  geom_smooth(data=subset(grid3, rep == 1), method = "lm", color = "brown3") +
+  geom_point(data=subset(grid3, dem == 1), color = "royalblue3") +
+  geom_point(data=subset(grid3, rep == 1), color = "brown3") +
+  geom_point(data=subset(grid3, dem == 0, rep = 0), color = "bisque4") +
+  geom_point(data=subset(grid3, rep == 0, dem = 0), color = "bisque4")
+
+hist(grid3$resid)
+```
+
+
+# Task 5 - Interactive linear regression model
+
+```{r}
+newdf <- subset(df, rep == 1 | dem == 1, 
+                select=c(female, dem, rep, biden))
+
+biden4 <- lm(biden ~ female * dem, data = newdf)
+summary(biden4)
+# tidy(biden4)
+
+female = c(1, 1, 0, 0) 
+dem = c(1, 0, 1, 0) 
+eval_df = data.frame(female, dem)
+
+predict(biden4, eval_df, interval="confidence")
+```
+
+## 1.
+The results in the table represent: 1) female Democrats, 2) female Republicans, 3) male Democrats, and 4) male Republicans. 
+
+The results differ for females and males, including when the model control by party affiliation. Furthermore, being female increases the Biden warmth perception by about five units. 
+
+We conclude that there is a relationship between party affiliation and gender in the case of Biden warmth index. For instance, the difference between female Republicans and male Republicans is about six units, while the difference between female Democrats and male Democrats is only about 2.5 units. Then, the effect not only different for Democrats or Republicans but also there is an interaction between gender and party affiliation, then just a dummy control by party affiliation is not enough.

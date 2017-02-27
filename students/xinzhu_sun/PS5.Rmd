@@ -1,0 +1,151 @@
+---
+title: "PS5"
+author: "Xinzhu Sun"
+date: "2/12/2017"
+output:
+  github_document:
+    toc: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+```
+````{r library}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+```
+
+## Describe the data
+```{r biden}
+biden_table <- read_csv("biden.csv")
+ggplot(biden_table, aes(biden))+
+  geom_histogram(binwidth = 1)+
+  labs(x = "Biden Warmth",
+       y = "Count",
+       title  = 'Histogram of Biden warmth')
+```
+
+From the histogram we can see, in general people hold positive attitudes toward Biden while the highest frequency count is 50, which indicates that the group of people who hold indifferent attitude toward him is the largest.And also, even though the feeling thermometer is ranging from 1 to 100, people tend to choose a round number, that is, mutiples of 10.
+
+## Simple linear regression
+```{r biden_simple}
+biden_simple <- lm(biden ~ age, biden_table)
+summary(biden_simple)
+```
+1.Yes, there is a relationship between the prdictor and the response. The p-value is 0.0563, although it's a little bit higher than 0.05, but it's slight we can keep this predictor at this time point.
+
+2.The relationship between the predictor and the response is weak, for the coefficient is only 0.06241, which is really small. And as mentioned before, p-value is not small.
+
+3.The relationship between the predictor and the response is positive.
+
+4.The R-square of model is 0.002018. Only 0.2018 percent of the variation in Biden Warmth can be explained by the age alone. Thus this is a bad model.
+```{r predict biden_simple}
+biden_simple <- lm(biden ~ age, biden_table)
+age_predict <- augment(biden_simple, newdata = data.frame(age = c(45)))%>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96)
+print(age_predict)
+```
+5.The predicted score towards biden of age 45 is 62.0056. The 95% confidence interval is [60.91248, 63.09872].
+
+6.The plot is as following:
+```{r plot_biden_simple}
+biden_reg_line <- biden_table%>%
+  data_grid(age)%>%
+  add_predictions(biden_simple)
+ggplot(biden_reg_line, aes(x = age, y  = pred))+
+  geom_point(aes(y = biden), data = biden_table)+
+  geom_line(aes(colour = "Regression Line"), size = 1.5)+
+  scale_color_manual("", values = c("Regression Line" = "blue"))+
+  labs(x = 'Age',
+       y = 'Biden warmth',
+       title= 'Simple linear Regression')
+```
+
+## Multiple linear regression
+```{r biden_multiple}
+biden_multiple <- lm(biden ~ age + female + educ, biden_table)
+summary(biden_multiple)
+```
+1.Only predictors gender and education both display statiscally significant relationship toward the Biden Warmth, while age, in this case, has a large p-value and has little or no impact Biden Warmth.
+
+2.It suggests that when other predictors are the same, female on average give a 6.19607 point higher score towards Biden comparing to male. 
+
+3.The R-squre of this model is 0.02723. This means 2.723 percent of the variation in Biden Warmth can be explained by age,gender and education. This model is better than the age-only model.
+
+4.The plot is as following:
+```{r biden_multiple_graph}
+multiple_predict <- augment(biden_multiple, biden_table)
+multiple_dem = multiple_predict[multiple_predict$dem == 1, ]
+multiple_rep = multiple_predict[multiple_predict$rep == 1, ]
+multiple_no = multiple_predict[(multiple_predict$dem != 1) & (multiple_predict$rep != 1), ]
+ggplot(multiple_predict, aes(.fitted, .resid))+
+  geom_smooth(aes(color = "Democrat"), method = 'lm', data = multiple_dem)+
+  geom_smooth(aes(color = 'Republican'), method = 'lm', data = multiple_rep)+
+  geom_smooth(aes(color = 'Others'), method = 'lm', data = multiple_no)+
+  scale_colour_manual("", values = c("Democrat"="blue", "Republican"="red", "Others"="green"))+
+  theme(legend.position="right")+
+  geom_point()+
+  labs(x = "Predicted Values",
+       y = "Residual",
+       title = "Multiple linear regression")
+```
+
+The first problem suggested by the plot is that in general,the absolute values of residuals are too large. The second problem is the residual value is systematically different of different party identification types. For democrats, the regression model systematically underestiamtes their attitudes toward Biden (positive residuals). For republicans, the regression model systematically overestiamtes their attitudes toward Biden (negative residual). This means for people with different party affiliations, their average attitude towards Biden is different.
+
+## Multiple linear regression model
+```{r biden_multiple2}
+biden_multiple2 <- lm(biden ~ age + female + educ + dem + rep, biden_table)
+summary(biden_multiple2)
+```
+1.In general, the relationship between gender and Binden warmth didn't change to much. Although the magnitude does decrease but the sign of the relationship doesn't change. The estimator dcreseases from 6.19607 to 4.10323.
+
+2.The R-square of the model is 0.2815. This means 28.15 percent of the variation in Biden Warmth can be explained by age, gender education and party identification. This model is much better than the age+gender+education model.
+
+3.The plot is as folling:
+```{r biden_multiple_graph2}
+multiple_predict2 <- augment(biden_multiple2, biden_table)
+multiple_dem2 = multiple_predict2[multiple_predict$dem == 1, ]
+multiple_rep2 = multiple_predict2[multiple_predict2$rep == 1, ]
+multiple_no2 = multiple_predict2[(multiple_predict2$dem != 1) & (multiple_predict2$rep != 1), ]
+ggplot(multiple_predict2, aes(.fitted, .resid))+
+  geom_smooth(aes(color = "Democrat"), method = 'lm', data = multiple_dem2)+
+  geom_smooth(aes(color = 'Republican'), method = 'lm', data = multiple_rep2)+
+  geom_smooth(aes(color = 'Others'), method = 'lm', data = multiple_no2)+
+  scale_colour_manual("", values = c("Democrat"="blue", "Republican"="red", "Others"="green"))+
+  theme(legend.position="right")+
+  geom_point()+
+  labs(x = "Predicted Values",
+       y = "Residual",
+       title = "Multiple linear regression(with even more variables))")
+```
+
+By adding variables for party ID to the regression model, we fixed the previous problem. Now the residual values for people with different party affiliation all center around 0.
+
+## Interactive linear regression model
+```{r biden_inter}
+biden_filter <- biden_table[(biden_table$dem == 1)|(biden_table$rep == 1), ]
+biden_inter <- lm(biden ~ female * dem, biden_filter)
+summary(biden_inter)
+```
+```{r biden_inter_predict}
+inter_pred <- augment(biden_inter, newdata = data.frame(female = c(1, 0, 1, 0), dem = c(1, 1, 0, 0)))
+inter_pred <- inter_pred%>%
+  mutate(ymin = .fitted - 1.96 * .se.fit,
+         ymax = .fitted + 1.96 * .se.fit)
+inter_pred
+```
+Yes, the relationship between party ID and Biden warmth differs for male and female. On average, male democrats have 33.68752 higher Biden warmth than male republicans while female democrats have 29.74163 points higher Biden warmth than female republicans.
+
+Yes, the relationship between gender and Biden warmth differs for Democrats/Republicans. In general,difference between genders of democrats is smaller than that of republicans. On average,female democrats have 2.44929 points higher Biden warmth than male democrats while female republicans has 6.39518 points higher Biden warmth than male republicans. 
+
+
+
+
+
+

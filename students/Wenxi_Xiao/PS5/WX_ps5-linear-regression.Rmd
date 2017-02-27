@@ -1,0 +1,155 @@
+---
+title: "Problem set #5: linear regression"
+author: "Wenxi Xiao"
+date: "February 13th 2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, echo = FALSE, message = FALSE, warning = FALSE)  
+# to display the output of a code chunk but not the underlying R code: echo=FALSE.
+```
+
+```{r library}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+options(na.action = na.warn)
+set.seed(1234)
+theme_set(theme_minimal())
+```
+# Problem 1 - Describe the data
+```{r get_biden, echo = FALSE}
+# get biden data
+biden <- read_csv('biden.csv')
+ggplot(biden, mapping = aes(x = biden)) + 
+  geom_histogram(binwidth = 1) +
+  labs(title = "Histogram of Biden Warmth", x = "Biden Warmth", y = "Count")
+```
+
+The histogram shows a negatively skewed distribution, suggesting that more people in the 2008 survey showed relatively high feelings of warmth towards Joe Biden. The majority of the reported feeling thermometers in this dataset is greater than 50, with the peak in 50, which suggests that people who rated Joe Biden as neither warm nor cold are the largest subgroup. Also, I noticed that people's ratings are all multiples of 5, so I speculate that feeling thermometer options were given in such a fashion in the survey.
+
+# Problem 2 - Simple linear regression
+Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1$$
+where $Y$ is the Joe Biden feeling thermometer and $X_1$ is age.
+```{r simple_linear_reg, echo = FALSE}
+biden_problem2 <- lm(biden ~ age, data = biden) 
+summary(biden_problem2)
+age_45 <- augment(biden_problem2, newdata = data.frame(age = c(45)))%>%
+  mutate(ymin = .fitted - .se.fit * 1.96, 
+         ymax = .fitted + .se.fit * 1.96)
+age_45
+```
+
+Beta_0 is 59.19736, with a standard error of 1.64792. Beta_1 is 0.06241, with a standard error of 0.03267.
+
+1. Statistically speaking, at a 95% confidence level, there is no relationship between `age` and `Biden feeling thermometers` because the p-value is 0.0563 which is greater than 0.05. However, at a 90% confidence level, there is a relationship between `age` and `Biden feeling thermometers` because the p-value is 0.0563 which is less than 0.1.
+
+1. The relationship between `age` and `Biden feeling thermometers` is not strong because the absolute value of the correlation coefficient beta_1 is 0.06241, which is small. We can say that 1-year increase in `age` will produce on average only a 0.06241 unit increase in `Biden feeling thermometer score`.
+
+1. The relationship between the predictor and the response is positive because beta_1 is 0.06241, which is a positive number. The older the respondent, the higher the feeling thermometer score he or she will give.
+
+1. The $R^2$ of the model is 0.002018, which suggests that 0.2018 percent of the variation in `Biden warmth score` can be explained by `age` alone, so this model does not fit well. It'a bad model because the predictor does not explain much of the variations in `Biden warmth score`.
+
+1. The predicted `biden` associated with an `age` of 45 is 62.0056. The associated 95% confidence intervals are [60.91248, 63.09872].
+
+1. Plot the response and predictor and draw the least squares regression line:
+```{r plot_simple_linear_reg, echo = FALSE}
+biden_lsr_line <- biden%>%data_grid(age)%>%add_predictions(biden_problem2)
+ggplot(biden_lsr_line, aes(x = age, y  = pred)) + geom_point(aes(y = biden), data = biden) + geom_line(aes(colour = "lsr line"), size = 1) + scale_color_manual("", values = c("lsr line" = "red")) + labs(x = 'Age', y = 'Biden Warmth', title= 'Age vs Biden Warmth w/ Least Square Regression Line')
+```
+
+# Problem 3 - Multiple linear regression
+Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, and $X_3$ is education.
+    
+```{r multi_linear_reg, echo = FALSE}
+biden_problem3 <- lm(biden ~ age + female + educ, data = biden) 
+summary(biden_problem3)
+```
+
+Beta_0 is 68.62101, with a standard error of 3.59600. Beta_1 is 0.04188, with a standard error of 0.03249. Beta_2 is 6.19607, with a standard error of 1.09670. Beta_3 is -0.88871, with a standard error of 0.22469.
+
+1. When we take `age`, `gender`, and `education` into account to predict `Biden Warmth`, there is not a statistically significant relationship between `age` and `Biden Warmth` at a 95% confidence level, because the corresponding p-value is 0.198 which is greater than 0.05. However, there is a statistically significant relationship between `gender` and `Biden Warmth` because the corresponding p-value is 1.86e-08 which is less than 0.05, and there is a statistically significant relationship between `education` and `Biden Warmth` because the corresponding p-value is 7.94e-05 which is less than 0.05.
+
+1. The parameter for `female`, beta_2, is 6.19607, which suggests that holding `age` and `education` constant the predicted value of `Biden Warmth` is on average 6.19607 higher when the respondent is female.
+
+1. The $R^2$ of the model is 0.02723. 2.723 percent of the variation in `biden` can be explained by `age`, `gender`, and `education`. This model is a better model than the age-only model because the $R^2$ here is larger, which means that this model can explain more of the variations in Joe Biden feeling thermometer than the age-only model does, although not much.
+
+1. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type:
+
+```{r plot_multi_linear_reg, echo = FALSE}
+biden %>% add_predictions(biden_problem3) %>% add_residuals(biden_problem3) %>% {.} -> grid
+griddem <- filter(grid, dem == 1)
+gridrep <- filter(grid, rep == 1)
+gridother <- filter(grid, dem == 0 & rep == 0)
+ggplot(grid, aes(pred)) + geom_point(aes(y = resid)) + geom_smooth(aes(y = resid , color = 'Democratic'), data = griddem, size = 1.5) + geom_smooth(aes(y = resid, color = 'Republican'), data = gridrep, size = 1.5) + geom_smooth(aes(y = resid, color = 'Other'), data = gridother, size = 1.5) + scale_colour_manual("", values = c("Democratic"="blue","Republican"="red", "Other"="yellow")) + labs(title = "Biden Warmth and Residuals w/ Smooth Fit Lines for Each Party ID Type", x = "Biden Warmth Score", y = "Residuals")
+```
+  
+There is a problem with this model because the residuals are not randomly scattered around zero. We can see systematic structures in the residuals. We see that the residuals vary together with different party ID types. We can also see that the predicted warmth score for Democrats is generally larger than the data and the predicted warmth score for Republican is generally lower than the data. To solve this, we want to include party affiliation as a predictor in our model.
+
+# Problem 4 - Multiple linear regression model (with even more variables!) 
+Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican
+```{r multi_linear_reg2, echo = FALSE}
+biden_problem4 <- lm(biden ~ age + female + educ + dem + rep, data = biden) 
+summary(biden_problem4)
+```
+
+Beta_0 is 58.81126, with a standard error of 3.12444. Beta_1 is 0.04826, with a standard error of 0.02825. Beta_2 is 4.10323, with a standard error of 0.94823. Beta_3 is -0.34533, with a standard error of 0.19478. Beta_4 is 15.42426, with a standard error of 1.06803. Beta_5 is -15.84951, with a standard error of 1.31136.
+
+1. The Statistic significance of the relationship between `gender` and `Biden warmth` did not change. Here, at a 95% confidence level, there is still a significant relationship between `gender` and `Biden warmth` because the corresponding p-value is 1.59e-05, which is less than 0.05. Also, the sign of the relationship did not change. However, the strength of the relationshp decreased becuase here the correlation coefficient is 4.10323, which is less than that in problem3. Thus, when holding pary affiliaction, age, and education constant, the respondent being female makes the `Biden warmth` increase to a smaller amount compared with when holding only age and education constant.
+
+1. The $R^2$ of the model is 0.2815. 28.15 percent of the variation in `biden` can be explained by age, gender, education, and party identification. This is a better model than the age + gender + education model because this model can explain much more variations in `biden` than the previous model does.
+
+1. Generate a plot comparing the predicted values and residuals, drawing separate smooth fit lines for each party ID type: 
+```{r plot_multi_linear_reg2, echo = FALSE}
+biden %>% add_predictions(biden_problem4) %>% add_residuals(biden_problem4) %>% {.} -> grid2
+griddem2 <- filter(grid2, dem == 1)
+gridrep2 <- filter(grid2, rep == 1)
+gridother2 <- filter(grid2, dem == 0 & rep == 0)
+ggplot(grid2, aes(pred)) + geom_point(aes(y = resid)) + geom_smooth(aes(y = resid , color = 'Democratic'), data = griddem2, size = 1.5) + geom_smooth(aes(y = resid, color = 'Republican'), data = gridrep2, size = 1.5) + geom_smooth(aes(y = resid, color = 'Other'), data = gridother2, size = 1.5) + scale_colour_manual("", values = c("Democratic"="blue","Republican"="red", "Other"="yellow")) + labs(title = "Biden Warmth and Residuals w/ Smooth Fit Lines for Each Party ID Type", x = "Biden Warmth Score", y = "Residuals")
+```
+
+By adding variables for party ID to the regression model, we have somewhat fixed the previous problem because we see here the residuals for different party ID types are centered around zero and the smooth fit lines for different party ID types are also all hovering around zero. However, we can still see a systematic structure in residuals due to omitting other potentially important predictors such as any interactions between predictors.
+
+# Problem 5 - Interactive linear regression model
+Estimate the following linear regression:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_{1}X_{2}$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is gender, and $X_2$ is Democrat. 
+```{r multi_linear_reg3, echo = FALSE}
+bidenfilter <- filter(biden, dem == 1 | rep == 1)
+biden_problem5 <- lm(biden ~ female * dem, data = biden)
+summary(biden_problem5)
+ci_problem5 <- augment(biden_problem5, newdata = data.frame(female = c(1, 1, 0, 0), dem = c(1, 0, 1, 0)))
+ci_problem5 <- ci_problem5%>%mutate(ymin = .fitted - 1.96 * .se.fit, ymax = .fitted + 1.96 * .se.fit)
+ci_problem5
+```
+
+Beta_0 is 50.1976, with a standard error of 0.9219. Beta_1 is 5.0135, with a standard error of 1.2943. Beta_2 is 22.8719, with a standard error of 1.5079. Beta_3 is -2.5642, with a standard error of 1.9997.
+
+1. Female Democrats on average rated Biden's warmth highest, with an average rating of 75.51883 and a 95% confidence interval of [73.65979 77.37787]. Female Republicans on average rated Biden's warmth with a score of 55.21113 and the 95% confidence interval is [53.43046 56.99180]. Male Democrats on average rated Biden's warmth second to the highest, with an average rating of 73.06954 and a 95% confidence interval of [70.73071 75.40837]. Female Republicans on average rated Biden's warmth the lowest, with an average rating of 50.19763 and a 95% confidence interval of [48.39076 52.00450]. 
+
+The relationship between party ID and Biden warmth does not differ for males/females. Male Democrats generally gave Biden higher ratings than male Republicans did, and female Democrats generally gave Biden higher ratings than female Republicans did. 
+
+The relationship between gender and Biden warmth differs for Democrats/Republicans. Male Democrats generally gave Biden lower ratings than female Democrats did, while female Republicans generally gave Biden lower ratings than male Republicans did. 
+
+ 

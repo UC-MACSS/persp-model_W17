@@ -1,0 +1,174 @@
+---
+title: 'Perspectives on Computational Modeling: PS#5'
+author: "Xingyun Wu"
+date: "02/12/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load libraries
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+# Read-in the data
+mydata <- read.csv(file="biden.csv")
+mydata
+```
+
+
+
+## Problem 1: Describe the data (1 point)
+
+The histogram of the variable `biden` is shown as below.
+
+```{r problem1}
+ggplot(mydata, mapping = aes(x = biden)) +
+  geom_histogram(binwidth=1) +
+  labs(title = "Distribution of Joe Biden feeling thermometer",
+       x = "Feeling thermometer",
+       y = "Frequency count of individuals")
+```
+There are several interesting features shown by the histogram. First, the distribution seems to be left skewed, with more people have positive feeling thermometer towards Biden than have negative feeling thermometer. Second, the mode of this data is 50, which means the most frequent answer of feeling thermometer is neither positive nor negative. Third, we could roughly see the pattern that many answers are rounding numbers like 50, 60, 70, 90, instead of distributing through all the integers.
+
+## Problem 2: Simple linear regression (2 points)
+
+Statistics of the linear regression are shown as below.
+
+```{r problem2}
+problem2 <- lm(biden ~ age, data = mydata)
+summary(problem2)
+```
+
+1. These is a relationship between the predictor `age` and the response `biden`(feeling thermometer). One unit of increase in `age` could on average produce 0.06241 unit of increase in `biden`. But the relationship is not statistically significant, given the P-value of `age`. There is only a 90% chance to reject the hull hypothesis that `age` is irrelevant to `biden`.
+2. The relationship is very weak, not statistically significant enough. The P-value for `age` is 0.05626, which has not reached the 95% conficence interval.
+3. Positive, since the estimated parameter of `age` is 0.06241, positive in this regression model.
+4. $R^2$ = 0.002018, which means 0.2018% of variance in `biden` is explained by `age`. This is a bad model, because the predictor could not explain the variance of resonse well.
+```{r problem2_pred, echo = FALSE}
+age_45 <- augment(problem2, newdata = data.frame(age = c(45)))%>%
+  mutate(ymin = .fitted - .se.fit * 1.96,
+         ymax = .fitted + .se.fit * 1.96)
+print(age_45)
+```
+5. The predicted `biden` with an age of 45 is 62.0056. The associated 95% confidence intervals are (60.91248, 63.09872). There is approximately a 95% chance that `age` has the presented influence on `biden`.
+6. The plot is shown as below.
+
+```{r problem2_plot}
+grid <- mydata %>% 
+  data_grid(age) 
+grid <- grid %>% 
+  add_predictions(problem2) 
+ggplot(mydata, aes(x = age)) +
+  geom_point(aes(y = biden)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1)+
+  labs(x = 'Age',
+       y = 'Feeling Thermometer',
+       title= 'Feeling Thermometer and Age')
+```
+
+## Problem 3: Multiple linear regression (2 points)
+
+```{r problem3}
+problem3 <- lm(biden ~ age + female + educ, data = mydata)
+summary(problem3)
+```
+1. Yes, there is a statistically significant relationship between the predictors `age`, `gender` and `education` and the response `biden`, given their estimated parameters and P-values. Although the estimated parameter for `age` is only significant on the 0.1 level, the estimated parameters for `gender` and `education` are statistically significant to the 0.001 level.
+2. Compared to the male, the female averagely have 6.19607 higher feeling thermometer towards Biden.
+3. $R^2$ = 0.02561, since we need to look at adjusted $R^2$ for multiple linear regression. About 2.561% of variance in `biden` is explained by `age`, `gender` and `education`. The increase in $R^2$ means this is a better model than the age-only model. But it's still not good enough.
+4. The plot is shown as below. There is a problem: the residuals are not randomly distributed around 0 under all situations. Instead, there seems to be a grouped pattern. The Democrats and the Republicans seem to have different residuals distribution. While the model underestimates the feeling thermometer of the Democrats, it overestimates the feeling thermometer of the Republicans. This means the model should have included party ID.
+
+```{r prlblem3_plot, echo= FALSE}
+mydata %>%
+  add_predictions(problem3) %>%
+  add_residuals(problem3) %>%
+  {.} -> grid2
+griddem <- filter(grid2, dem == 1)
+gridrep <- filter(grid2, rep == 1)
+gridother <- filter(grid2, dem == 0 & rep == 0)
+
+demrsd <- lm(resid ~ pred, data = griddem)
+reprsd <- lm(resid ~ pred, data = gridrep)
+otherrsd <- lm(resid ~ pred, data = gridother)
+
+griddem <- griddem %>%
+  add_predictions(demrsd, var = 'pred1')
+gridrep <- gridrep %>%
+  add_predictions(reprsd, var = 'pred1')
+gridother <- gridother %>%
+  add_predictions(otherrsd, var = 'pred1')
+
+ggplot(grid2, aes(pred)) +
+  geom_point(aes(y = resid)) +
+  geom_line(aes(y = pred1 , color = 'Dem'), data = griddem, size = 1) +
+  geom_line(aes(y = pred1, color = 'Rep'), data = gridrep, size = 1) +
+  geom_line(aes(y = pred1, color = 'Other'), data = gridother, size = 1) +
+  scale_colour_manual("", values = c("Dem"="blue","Rep"="red", "Other"="green")) +
+  labs(title = "Predicted Value and Residuals",
+        x = "Predicted Biden Warmth Score",
+        y = "Residuals")
+```
+
+## Problem 4: Multiple linear regression model (with even more variables!) (3 points)
+```{r problem4}
+problem4 <- lm(biden ~ age + female + educ + dem + rep, data=mydata)
+summary(problem4)
+```
+
+1. Yes, its parameter changes from 6.19607 to 4.10323. This means its magnitude has decreased, although its influence on `biden` remains positive and its significant level remains the same.
+2. $R^2$ = 0.2795, since we need to look at adjusted $R^2$ for multiple linear regression. About 27.95% of variation in `biden` is explained by the predictors. This is a better model than the age + gender + education model, since the $R^2$ has greatly increased.
+3. The plot is shown as below. The problem found in the plot of previous model has been partly solved. Now all every group has residuals distributed around 0.
+```{r problem4_plot, echo = FALSE}
+mydata %>%
+  add_predictions(problem4) %>%
+  add_residuals(problem4) %>%
+  {.} -> grid3
+griddem1 <- filter(grid3, dem == 1)
+gridrep1 <- filter(grid3, rep == 1)
+gridother1 <- filter(grid3, dem == 0 & rep == 0)
+
+demrsd1 <- lm(resid ~ pred, data = griddem1)
+reprsd1 <- lm(resid ~ pred, data = gridrep1)
+otherrsd1 <- lm(resid ~ pred, data = gridother1)
+
+griddem1 <- griddem1 %>%
+  add_predictions(demrsd1, var = 'pred1')
+gridrep1 <- gridrep1 %>%
+  add_predictions(reprsd1, var = 'pred1')
+gridother1 <- gridother1 %>%
+  add_predictions(otherrsd1, var = 'pred1')
+
+ggplot(grid3, aes(pred)) +
+  geom_point(aes(y = resid)) +
+  geom_line(aes(y = pred1 , color = 'Dem'), data = griddem1, size = 1) +
+  geom_line(aes(y = pred1, color = 'Rep'), data = gridrep1, size = 1) +
+  geom_line(aes(y = pred1, color = 'Other'), data = gridother1, size = 1) +
+  scale_colour_manual("", values = c("Dem"="blue","Rep"="red", "Other"="green")) +
+  labs(title = "Predicted Value and Residuals",
+        x = "Predicted Biden Warmth Score",
+        y = "Residuals")
+```
+
+## Problem 5: Interactive linear regression model (2 points)
+```{r problem5}
+data_filter <- mydata[(mydata$dem == 1)|(mydata$rep == 1), ]
+problem5 <- lm(biden ~ female * dem, data_filter)
+summary(problem5)
+```
+1. 
+```{r problem5_a, echo = FALSE}
+inter_pred <- augment(problem5, newdata = data.frame(female = c(1, 1, 0, 0), dem = c(1, 0, 1, 0)))
+inter_pred <- inter_pred%>%
+  mutate(ymin = .fitted - 1.96 * .se.fit,
+         ymax = .fitted + 1.96 * .se.fit)
+inter_pred
+```
+a) For female Democrats: predicted feeling thermometer is 75.51883, with 95% confidence intervals (73.77813, 77.25953). 
+b) For female Republicans: predicted feeling thermometer is 45.77720, with 95% confidence intervals (43.03778, 48.51662).
+c) For male Democrats: predicted feeling thermometer is 73.06954, with 95% confidence intervals (70.87959, 75.25949).
+d) For male Republicans: predicted feeling thermometer is 39.38202 with 95% confidence intervals (36.52951, 42.23453).
+e) Yes, the relationship between party ID and `biden` differ by gender, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for males, the Democrats report on average 33.688 more feeling thermometers than the Republicans. But for females, the difference between Democrats and Republicans shrinkes to about 29.742.
+f) Yes, the relationship between gender and `biden` differ by party ID, although the interaction term is not statistically significant. Looking at the estimated parameter for the interaction term, for Republicans, female report on average 6.395 more feeling thermometer. But for Democrats, the difference between females and males shrinks to about 2.449.

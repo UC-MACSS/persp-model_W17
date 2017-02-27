@@ -1,0 +1,240 @@
+---
+title: 'Problem set #6: Generalized linear models'
+author: "Jingyuan Zhou"
+date: "2/16/2017"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+  github_document:
+    toc: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = TRUE)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(haven)
+library(nnet)
+
+options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+
+#loading data
+gss_data <- read.csv(file="gss2006.csv",head=TRUE)
+mh_data <- read.csv(file="mental_health.csv",head=TRUE)
+# mh_data <- mh_data[complete.cases(mh_data),]
+# gss_data <- gss_data[complete.cases(gss_data),]
+```
+
+
+# Part I: Modeling voter turnout
+## Describe the data
+```{r hist}
+hist(mh_data$vote96, main="Histogram of voter turnout", xlab="Voted or not",
+     ylab = 'Counts') 
+sum(mh_data$vote96, na.rm = TRUE)/length(mh_data$vote96)
+```
+The unconditional probability of a given individual turning out to vote is 0.6295904.
+
+```{R scatterplot}
+ggplot(mh_data, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = "lm")+
+  labs(title = 'Scatterplot of the relationship between mental health and observed voter turnout',
+        x = 'Mental health indicator',y = 'Voted or not')
+```
+
+1.The line shows that as Mental health indicator increases, meaning people's depression mood becomes more severe, they are less likely to vote.
+
+2.The problem with this line is that the y axis, whether people voted or not, is a discrete variable; however, the smooth line gives us values between 0 and 1. It's hard for us to interpret this result.
+
+## Basic model
+```{R Basic model}
+# logistic regression model of the relationship between mental health and voter turnout.
+log_model <- glm(formula = vote96 ~ mhealth_sum, family = binomial, data = mh_data)
+tidy(log_model)
+```
+1.The relationship between mental health and voter turnout is statistically significant because p-value of mhealth_sum is 3.133883e-13 which is approximately zero and much smaller than 0.025, the critical level for a two-tail test at a 95% confidence interval.
+
+2.Interpret the estimated parameter for mental health in terms of log-odds: When you estimate a logistic regression model the log-odds function is actually the function for which you are estimating parameters. Since the estimated parameter of mhealth_sum is -0.1434752. This means that for every one-unit increase in depression mood, we expect the log-odds of voting to decrease by 0.143.
+
+Generate a graph of the relationship between mental health and the log-odds of voter turnout.
+```{R Basic model 2}
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds <- function(x){
+  x / (1 - x)
+}
+
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+vm_pred <- mh_data %>%
+  add_predictions(log_model,  var = 'pred') %>%
+  # predicted values are in the log-odds form - convert to probabilities
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+
+# graph it- logodds
+ggplot(vm_pred, aes(x=mhealth_sum)) +
+  geom_line(aes(y = logodds), color = "blue", size = 1) +
+  labs(title = 'Relationship between mental health and Log-odds of voter turnout',
+       x = "Mental health indicator",
+       y = "Log-odds of voting")
+```
+
+3.Interpret the estimated parameter for mental health in terms of odds: Since the estimated parameter of mhealth_sum is -0.1434752 showing that per unit log-odds is -0.143, we can calculate that per unit odds is 0.8663423. This means that for every unit increase in depression mood, we expect the odds of voting to increase by 0.8663423.
+
+```{R plot odds}
+ggplot(vm_pred, aes(x=mhealth_sum)) +
+  geom_line(aes(y = odds), color = "blue", size = 1) +
+  labs(title = 'Relationship between mental health and odds of voter turnout',
+       x = "Mental health indicator",
+       y = "Log-odds of voting")
+```
+
+
+4.Interpret the estimated parameter for mental health in terms of probabilities: with each unit increase in depression mood, the probability of voting is increasing by 0.4641914.
+
+```{R plot prob}
+ggplot(vm_pred, aes(x=mhealth_sum)) +
+  geom_line(aes(y = prob), color = "blue", size = 1) +
+  labs(title = 'Relationship between mental health and probability of voter turnout',
+       x = "Mental health indicator",
+       y = "Log-odds of voting")
+
+b0 <- 1.1392097
+b1 <- -0.1434752
+df12 <- exp(b0 + (2 * b1)) / (1 + exp(b0 + (2 * b1)))- exp(b0 + (1 * b1)) / (1 + exp(b0 + (1 * b1)))
+df56 <- exp(b0 + (6 * b1)) / (1 + exp(b0 + (6 * b1)))- exp(b0 + (5 * b1)) / (1 + exp(b0 + (5 * b1)))
+df12
+df56
+```
+
+The first difference for an increase in the mental health index from 1 to 2 is -0.02917824.
+The first difference for an increase in the mental health index from 5 to 6 is -0.03477821.
+
+5.Estimate the accuracy rate, proportional reduction in error (PRE), and the AUC for this model. Do you consider it to be a good model?
+```{R eval}
+x_accuracy <- mh_data %>%
+  add_predictions(log_model) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+mean(x_accuracy$vote96 == x_accuracy$pred, na.rm = TRUE)
+
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+PRE(log_model)
+
+library(pROC)
+auc <- auc(x_accuracy$vote96, x_accuracy$prob)
+auc
+```
+The accuracy rate of this model is 0.677761. The proportional reduction in error (PRE) is 0.01616628. The AUC for this model is 0.6243. It's not a very good model because the accuracy rate is not significantly larger than 0.5, and its PRE is very little. The AUC also shows that it's only 12% higher than the baseline, which would be 50%.
+
+
+
+## Multiple variable model
+1.Three components of the GLM 
+
+- Probability distribution (random component): the conditional distribution of vote96 given information of age, education, black, female, married and inc10 is a Bernoulli distribution. P$(Y_i = y_i | p)$ = $p^{y_i}(1 - p)^{1-y_i}$
+
+- Linear predictor: $\eta_i = \beta_0 + \beta_1 age_i + \beta_2 educ_i + \beta_3 black_i + \beta_4 female_i + \beta_5 married_i + \beta_6 inc10_i$
+
+- Link function: $p_i=e^{\eta_i}/ (1 + e^{\eta_i})$
+
+2.Estimate the model and report your results.
+```{r multiple variable model}
+mglm_model <- glm(vote96 ~ age+educ+black+female+married+inc10, data=mh_data, family=binomial())
+tidy(mglm_model)
+```
+Looking at the p-values of these variables, we can see that *black*, *female* and *married* have p-values larger than 0.025. Their p-values are 1.723803e-01, 5.938901e-01 and 2.998157e-02. So I'll rebuild the model by removing these variables. The linear predictor then becomes $\eta_i = \beta_0 + \beta_1 age_i + \beta_2 educ_i + \beta_4 inc10_i$
+
+```{r multiple variable model 2}
+mglm_model <- glm(vote96 ~ age+educ+inc10, data=mh_data, family=binomial())
+tidy(mglm_model)
+#summary(mglm_model)
+
+m_accuracy <- mh_data %>%
+  add_predictions(mglm_model) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+mean(m_accuracy$vote96 == m_accuracy$pred, na.rm = TRUE)
+
+PRE(mglm_model)
+
+#library(pROC)
+auc <- auc(m_accuracy$vote96, m_accuracy$prob)
+auc
+```
+
+3.Compare to the basic model, the model has considerably better performance. The proportional reduction in error (PRE) increases from 0.01616628 to 0.09292649; accuracy rate also increases from 0.677761 to 0.7170056; auc increases from 0.6243 to 0.7331.
+
+Interpreting the model, we can see that all three variables, *age*, *inc10* and *educ* have p-values that are approximating zeo, which shows that they are all statistically significant. Out of these three, *educ* has the most significant effect because its estimate parameter is 0.21207984, which is more than three times as effect of each of the other two variables. Intuitively, it's reasonable because as people have more years of education, they have more desire to participate in politics and try to make a difference with their votes. Thus, they are more likely to vote than people with less education. Estimate parameters of age and income show that as people have more income and grow older, they are more likely to vote. These findings all correspond to our observation in real life and common sense.
+
+# Part II: Modeling TV consumption
+## Estimate a regression model
+1.Three components of the GLM 
+
+- Probability distribution (random component):the conditional distribution of vote96 given information of other variables follows Poisson distribution. P$(tvhours = k | \lambda) = \lambda^{k} e^{-\lambda} / k!$
+- Linear predictor: $tvhours_i = \beta_0 + \beta_1 age_i + \beta_2 childs_i + \beta_3 educ_i + \beta_4 female_i + \beta_5 grass_i + \beta_6 hrsrelax_i + \beta_7 black + \beta_8 socialconnect_i + \beta_9 voted04_i + \beta_{10} xmovie_i + \beta_{11} zodiac + \beta_{12} dem_i + \beta_{13} rep_i + \beta_{14} ind_i$
+- Link function: $g(\lambda)=log(tvhours_i)$
+
+```{R TV consumption}
+tv_model <- glm(tvhours ~ ., data=gss_data, family=poisson)
+tidy(tv_model)
+```
+After including all variables, it seems that only three variables, namely *educ*, *hrsrelax* and *black*, are statistically significant because their p-values, 2.075594e-02, 5.175205e-06 and 3.122653e-08 are all less than 0.025. Thus, I rebuilt the model with only these three variables. The linear predictor then becomes: $tvhours_i = \beta_0 + \beta_1 educ_i + \beta_2 hrsrelax_i + \beta_3 black_i$
+
+2.Model and results
+```{R tv model 2}
+tv_model <- glm(tvhours ~ educ+ hrsrelax + black, data=gss_data, family=poisson)
+tidy(tv_model)
+
+tv_accuracy <- gss_data %>%
+  data_grid(tvhours, educ, hrsrelax, black, .model = tv_model)%>%
+  add_predictions(tv_model)%>%
+  mutate(pred = exp(pred))
+
+ggplot(tv_accuracy, aes(x = black, y = pred))+
+  #geom_point(aes(y = tvhours), alpha = 0.5)
+  geom_line(aes(x = black, y = pred))+
+  labs(title = 'Relationship between black and predicted tv consumption',
+    x = 'black', y = 'Predicted tv consumption')
+
+```
+
+3.Inspecting the estimate parameters for different variables, we can see that *black* has the most significant effect on tv consumption among all variables. The estimate parameter, 0.44631367, shows that being black will on average increase log of the tv consumption by 0.44631367 unit. We can visualize that effect from the graph. 
+
+Interpretting the other aspects of our model, we can realize that age, gender, number of children and party affilication all have no statistically significant influcence on TV consumption. One could argue that hours of relaxation and years of education could reflect some of these variables, but they are also intuitively directly related to tv consumption. Note that *educ* has a negatvie estimate parameter, so as years of education increase by one, the log of amount of TV assumption will decrease by around 0.0420 on avergae.
+
+What's absurd/interesting about this model is that it shows the incredible effect of *black*. Comparing its estimate parameter to those of educ and hrsrelax, we can see that it has more than 10 times of the effect on TV consumption as each of the other two. Is there an systematic error in the data collection? Are there other variables that result in this result not included in the survey? What might be the statistically or sociological reasons behind this finding could be an interesting question to answer.
