@@ -1,129 +1,365 @@
 Problem set \#7: resampling and nonlinearity
 ================
-MACS 30100 - Perspectives on Computational Modeling
-**Due Monday February 27th at 11:30am**
+Soo Wam Kim
+February 25, 2017
 
 -   [Part 1: Sexy Joe Biden (redux) \[4 points\]](#part-1-sexy-joe-biden-redux-4-points)
--   [Part 2: College (bivariate) \[3 points\]](#part-2-college-bivariate-3-points)
--   [Part 3: College (GAM) \[3 points\]](#part-3-college-gam-3-points)
--   [Submission instructions](#submission-instructions)
-    -   [If you use R](#if-you-use-r)
-    -   [If you use Python](#if-you-use-python)
+    -   [Original model estimates](#original-model-estimates)
+    -   [Bootstrap estimates](#bootstrap-estimates)
 
 Part 1: Sexy Joe Biden (redux) \[4 points\]
 ===========================================
 
-![](http://i.giphy.com/5of8ya8s34JQA.gif)
+1.  **Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.**
 
-[Joe Biden](https://en.wikipedia.org/wiki/Joe_Biden) was the 47th Vice President of the United States. He was the subject of [many memes](http://distractify.com/trending/2016/11/16/best-of-joe-and-obama-memes), [attracted the attention of Leslie Knope](https://www.youtube.com/watch?v=NvbMB_GGR6s), and [experienced a brief surge in attention due to photos from his youth](http://www.huffingtonpost.com/entry/joe-young-hot_us_58262f53e4b0c4b63b0c9e11).
+``` r
+#function to calculate MSE
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
 
-This sounds like a repeat, because it is. You previously estimated a series of linear regression models based on the Biden dataset. Now we will revisit that approach and implement resampling methods to validate our original findings.
+#estimate model
+glm_trad <- glm(biden ~ age + female + educ + dem + rep, data = biden)
+pander(tidy(glm_trad))
+```
 
-`biden.csv` contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards Joe Biden. The variables are coded as follows:
+<table style="width:78%;">
+<colgroup>
+<col width="16%" />
+<col width="15%" />
+<col width="16%" />
+<col width="16%" />
+<col width="12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">term</th>
+<th align="center">estimate</th>
+<th align="center">std.error</th>
+<th align="center">statistic</th>
+<th align="center">p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">(Intercept)</td>
+<td align="center">58.81</td>
+<td align="center">3.124</td>
+<td align="center">18.82</td>
+<td align="center">2.694e-72</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">0.04826</td>
+<td align="center">0.02825</td>
+<td align="center">1.708</td>
+<td align="center">0.08773</td>
+</tr>
+<tr class="odd">
+<td align="center">female</td>
+<td align="center">4.103</td>
+<td align="center">0.9482</td>
+<td align="center">4.327</td>
+<td align="center">1.593e-05</td>
+</tr>
+<tr class="even">
+<td align="center">educ</td>
+<td align="center">-0.3453</td>
+<td align="center">0.1948</td>
+<td align="center">-1.773</td>
+<td align="center">0.07641</td>
+</tr>
+<tr class="odd">
+<td align="center">dem</td>
+<td align="center">15.42</td>
+<td align="center">1.068</td>
+<td align="center">14.44</td>
+<td align="center">8.145e-45</td>
+</tr>
+<tr class="even">
+<td align="center">rep</td>
+<td align="center">-15.85</td>
+<td align="center">1.311</td>
+<td align="center">-12.09</td>
+<td align="center">2.157e-32</td>
+</tr>
+</tbody>
+</table>
 
--   `biden` - feeling thermometer ranging from 0-100[1]
--   `female` - 1 if respondent is female, 0 if respondent is male
--   `age` - age of respondent in years
--   `dem` - 1 if respondent is a Democrat, 0 otherwise
--   `rep` - 1 if respondent is a Republican, 0 otherwise
--   `educ` - number of years of formal education completed by respondent
-    -   `17` - 17+ years (aka first year of graduate school and up)
+``` r
+entire_mse <- mse(glm_trad, biden) #calculate MSE
+```
 
-For this exercise we consider the following functional form:
+The MSE for the model trained on the entire dataset is 395.2701693.
 
-*Y* = *β*<sub>0</sub> + *β*<sub>1</sub>*X*<sub>1</sub> + *β*<sub>2</sub>*X*<sub>2</sub> + *β*<sub>3</sub>*X*<sub>3</sub> + *β*<sub>4</sub>*X*<sub>4</sub> + *β*<sub>5</sub>*X*<sub>5</sub> + *ϵ*
+1.  **Estimate the test MSE of the model using the validation set approach. How does this value compare to the training MSE from step 1?**
 
-where *Y* is the Joe Biden feeling thermometer, *X*<sub>1</sub> is age, *X*<sub>2</sub> is gender, *X*<sub>3</sub> is education, *X*<sub>4</sub> is Democrat, and *X*<sub>5</sub> is Republican.[2] Report the parameters and standard errors.
+``` r
+biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+biden_train <- biden_split$train %>% 
+  tbl_df()
+biden_test <- biden_split$test %>% 
+  tbl_df()
 
-1.  Estimate the training MSE of the model using the traditional approach.
-    -   Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.
+biden_train_lm <- glm(biden ~ age + female + educ + dem + rep, data = biden_train) #estimate model on training set
+pander(tidy(biden_train_lm))
+```
 
-2.  Estimate the test MSE of the model using the validation set approach.
-    -   Split the sample set into a training set (70%) and a validation set (30%). **Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.**
-    -   Fit the linear regression model using only the training observations.
-    -   Calculate the MSE using only the test set observations.
-    -   How does this value compare to the training MSE from step 1?
+<table style="width:78%;">
+<colgroup>
+<col width="16%" />
+<col width="15%" />
+<col width="16%" />
+<col width="16%" />
+<col width="12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">term</th>
+<th align="center">estimate</th>
+<th align="center">std.error</th>
+<th align="center">statistic</th>
+<th align="center">p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">(Intercept)</td>
+<td align="center">57.34</td>
+<td align="center">3.698</td>
+<td align="center">15.51</td>
+<td align="center">9.235e-50</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">0.03728</td>
+<td align="center">0.03362</td>
+<td align="center">1.109</td>
+<td align="center">0.2677</td>
+</tr>
+<tr class="odd">
+<td align="center">female</td>
+<td align="center">4.172</td>
+<td align="center">1.127</td>
+<td align="center">3.703</td>
+<td align="center">0.0002223</td>
+</tr>
+<tr class="even">
+<td align="center">educ</td>
+<td align="center">-0.2602</td>
+<td align="center">0.2322</td>
+<td align="center">-1.12</td>
+<td align="center">0.2628</td>
+</tr>
+<tr class="odd">
+<td align="center">dem</td>
+<td align="center">16.33</td>
+<td align="center">1.277</td>
+<td align="center">12.79</td>
+<td align="center">2.657e-35</td>
+</tr>
+<tr class="even">
+<td align="center">rep</td>
+<td align="center">-14.61</td>
+<td align="center">1.558</td>
+<td align="center">-9.375</td>
+<td align="center">3.086e-20</td>
+</tr>
+</tbody>
+</table>
 
-3.  Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
-4.  Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
-5.  Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.
-6.  Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained.
-7.  Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (*n* = 1000).
+``` r
+validation_mse <- mse(biden_train_lm, biden_test) #calculate MSE using test set
+```
 
-Part 2: College (bivariate) \[3 points\]
-========================================
+The MSE using the validation approach is 399.8303029. This is slightly higher than the MSE calculated using the traditional approach (395.2701693). The model fitted using the validation approach only used 70% of the observations, so it is somewhat worse at predicting the results observed in the dataset than the model fitted on all the data.
 
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
+1.  **Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.**
 
--   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
--   `Apps` - Number of applications received.
--   `Accept` - Number of applications accepted.
--   `Enroll` - Number of new students enrolled.
--   `Top10perc` - Percent of new students from top 10% of H.S. class.
--   `Top25perc` - Percent of new students from top 25% of H.S. class.
--   `F.Undergrad` - Number of fulltime undergraduates.
--   `P.Undergrad` - Number of parttime undergraduates.
--   `Outstate` - Out-of-state tuition.
--   `Room.Board` - Room and board costs.
--   `Books` - Estimated book costs.
--   `Personal` - Estimated personal spending.
--   `PhD` - Percent of faculty with Ph.D.'s.
--   `Terminal` - Percent of faculty with terminal degrees.
--   `S.F.Ratio` - Student/faculty ratio.
--   `perc.alumni` - Percent of alumni who donate.
--   `Expend` - Instructional expenditure per student.
--   `Grad.Rate` - Graduation rate.
+``` r
+mse_list <- vector(, 100) #set up empty vector of 100 items
 
-Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
+#function to calculate the validation set MSE a certain number of times
+validation_mse <- function(data, model, reps) {
+  count <- 0
+  while (count < reps) {
+    split <- resample_partition(biden, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+    train <- tbl_df(split$train) 
+    test <- dplyr::tbl_df(split$test)
+    train_lm <- lm(model, data = data) #estimate model
+    validation_mse <- mse(train_lm, test) #calculate MSE
+    mse_list[count + 1] <- validation_mse #append MSE values into vector
+    count <- count + 1
+  }
+  return(mse_list)
+}
 
--   No transformation
--   Monotonic transformation
--   Polynomial regression
--   Step functions
--   Splines
--   Local regression
+#vector of results from repeating validation approach 100 times
+mse_list <- validation_mse(biden, biden ~ age + female + educ + dem + rep, 100)
 
-Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
+summary(mse_list)
+```
 
-Part 3: College (GAM) \[3 points\]
-==================================
+    ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+    ##   338.0   385.7   396.8   398.1   412.7   450.2
 
-The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
+``` r
+mse_sd <- sd(mse_list)
+```
 
--   `Outstate` - Out-of-state tuition.
--   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
--   `Room.Board` - Room and board costs.
--   `PhD` - Percent of faculty with Ph.D.'s.
--   `perc.alumni` - Percent of alumni who donate.
--   `Expend` - Instructional expenditure per student.
--   `Grad.Rate` - Graduation rate.
+The MSEs vary quite a bit, ranging from 338 to 450. The standard deviation of MSE estimates is 20.6102169. This shows that the results are highly variable depending on which observations are picked for the training set. The average of these values is very close to the MSE obtained using the entire dataset.
 
-1.  Split the data into a training set and a test set.
-2.  Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-3.  Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-4.  Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
-5.  For which variables, if any, is there evidence of a non-linear relationship with the response?[3]
+1.  **Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.**
 
-Submission instructions
-=======================
+``` r
+loocv_data <- crossv_kfold(biden, k = nrow(biden)) #divide data into k folds where k = number of observations
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .)) #estimate model
+loocv_mse_map <- map2_dbl(loocv_models, loocv_data$test, mse) #calculate MSEs
+loocv_mse <- mean(loocv_mse_map, na.rm = TRUE) #get mean of MSEs
+```
 
-Assignment submission will work the same as earlier assignments. Submit your work as a pull request before the start of class on Monday. Store it in the same locations as you've been using. However the format of your submission should follow the procedures outlined below.
+The MSE calculated using the LOOCV approach is 397.9555046. This is similar to the MSE obtained using the entire dataset and the validation approach, and particularly to the mean of the MSEs obtained by repeating the validation approach 100 times.
 
-If you use R
-------------
+1.  **Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.**
 
-Submit your assignment as a single [R Markdown document](http://rmarkdown.rstudio.com/). R Markdown is similar to Juptyer Notebooks and compiles all your code, output, and written analysis in a single reproducible file.
+``` r
+biden_cv10 <- crossv_kfold(biden, k = 10) %>% #divide data set into 10 folds
+  mutate(model = map(train, ~ lm(biden ~ age + female + educ + dem + rep, data = .)), #estimate model
+         mse = map2_dbl(model, test, mse)) #calculate MSEs
+cv10_mse <- mean(biden_cv10$mse, na.rm = TRUE) #get mean MSE
+```
 
-If you use Python
------------------
+The MSE calculated using the 10-fold cross-validation approach is 398.0728532. Again, this is similar to the other values. It is especially very close to the LOOCV MSE and the mean of the MSEs from repeating the validation set approach 100 times.
 
-Either:
+1.  **Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained.**
 
-1.  Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a $\\LaTeX$ generated PDF document with your results and substantive analysis.
-2.  Submit your assignment as a single Jupyter Notebook with your code, output, and written analysis compiled there.
+``` r
+cv10_mse_list <- vector(, 100) #create vector of length 100
 
-[1] Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.
+#function
+cv10_mse <- function(data, model, reps) {
+  count <- 0
+  while (count < reps) {
+    folded <- crossv_kfold(data, k = 10) #divide data set into 10 folds
+    folded$mod <- map(folded$train, ~lm(model, data = .)) #estimate model
+    folded$mse <- map2_dbl(folded$mod, folded$test, mse) #calculate MSEs
+    cv10_mse <- mean(folded$mse, na.rm = TRUE) #get mean of MSEs
+    cv10_mse_list[count + 1] <- cv10_mse #store in vector
+    count <- count + 1
+  }
+  return(cv10_mse_list)
+}
 
-[2] Independents must be left out to serve as the baseline category, otherwise we would encounter perfect multicollinearity.
+cv10_mse_list <- cv10_mse(biden, biden ~ age + female + educ + dem + rep, 100)
+summary(cv10_mse_list)
+```
 
-[3] Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.
+    ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+    ##   396.3   397.6   397.9   398.0   398.3   400.3
+
+``` r
+mse_sd <- sd(cv10_mse_list)
+```
+
+This time, the estimates vary very little, with a standard deviation of only 0.5394957. This shows that the 10-fold cross validation method produces estimates much more reliable and unbiased than that of the validation set approach. However, the mean of the estimates using this method is almost identical to the mean of the MSEs from repeating the validation set approach 100 times.
+
+1.  **Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (*n* = 1000).**
+
+#### Original model estimates
+
+``` r
+pander(tidy(glm_trad))
+```
+
+<table style="width:78%;">
+<colgroup>
+<col width="16%" />
+<col width="15%" />
+<col width="16%" />
+<col width="16%" />
+<col width="12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">term</th>
+<th align="center">estimate</th>
+<th align="center">std.error</th>
+<th align="center">statistic</th>
+<th align="center">p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">(Intercept)</td>
+<td align="center">58.81</td>
+<td align="center">3.124</td>
+<td align="center">18.82</td>
+<td align="center">2.694e-72</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">0.04826</td>
+<td align="center">0.02825</td>
+<td align="center">1.708</td>
+<td align="center">0.08773</td>
+</tr>
+<tr class="odd">
+<td align="center">female</td>
+<td align="center">4.103</td>
+<td align="center">0.9482</td>
+<td align="center">4.327</td>
+<td align="center">1.593e-05</td>
+</tr>
+<tr class="even">
+<td align="center">educ</td>
+<td align="center">-0.3453</td>
+<td align="center">0.1948</td>
+<td align="center">-1.773</td>
+<td align="center">0.07641</td>
+</tr>
+<tr class="odd">
+<td align="center">dem</td>
+<td align="center">15.42</td>
+<td align="center">1.068</td>
+<td align="center">14.44</td>
+<td align="center">8.145e-45</td>
+</tr>
+<tr class="even">
+<td align="center">rep</td>
+<td align="center">-15.85</td>
+<td align="center">1.311</td>
+<td align="center">-12.09</td>
+<td align="center">2.157e-32</td>
+</tr>
+</tbody>
+</table>
+
+#### Bootstrap estimates
+
+``` r
+#estimate model using bootstrap, display in tidy format
+boot <- biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ glm(biden ~ age + female + educ + dem + rep, data = .)), 
+         coef = map(model, tidy))
+
+boot_est <- boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+boot_est
+```
+
+    ## # A tibble: 6 × 3
+    ##          term     est.boot    se.boot
+    ##         <chr>        <dbl>      <dbl>
+    ## 1 (Intercept)  58.91337251 2.97814255
+    ## 2         age   0.04770968 0.02883481
+    ## 3         dem  15.43020645 1.10724812
+    ## 4        educ  -0.34950530 0.19214401
+    ## 5      female   4.08800549 0.94879605
+    ## 6         rep -15.87431840 1.44433208
+
+The estimates for parameters and standard errors are very nearly the same for the two approaches.
