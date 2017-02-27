@@ -211,7 +211,6 @@ loocv_biden_mse = as.data.frame(loocv_biden_mse_list)
 
 Each round of the leave-one-out process returns a mean-squared error.  We take the mean of these and find it to be `r loocv_biden_mean_mse`, which is slightly higher than the MSE obtained using the full dataset (`r mse_full_dataset`) or using 100 rounds of testing sets (`r mse_100_test30`), but lower than the testing dataset (`r mse_test30`) in a single round.
 
-
 We pool all the mean squared errors returned by LOOCV and plot their distribution:
 
 ```{r, LOOCV_MSE_histogram, echo=FALSE}
@@ -227,7 +226,7 @@ ggplot(loocv_biden_mse, aes(x = loocv_biden_mse_list)) +
        scale_x_continuous(breaks = c(0,1000,2000,3000,4000,5000,6000))
 ```
 
-We can see that while most of the MSEs are small, some are quite high and approach 5800.  This indicates that while most of the model fits resonably well for most of the values, it fits quite poorly for some.
+We can see that while most of the MSEs are small, some are quite high and approach 5800.  This indicates that while the model fits reasonably well for most of the values, it fits quite poorly for some.
 
 We use the 10-fold cross validation approach:
 
@@ -249,25 +248,25 @@ We plot a histogram of the distribution of MSEs found using 10-fold cross valida
 ```{r, 10fold_MSE_histogram, echo=FALSE}
 
 ggplot(biden_cv_mse, aes(x = biden_cv10_mse)) +
-       geom_histogram(bins = 20, fill = "darkturquoise", color='grey30') +
+       geom_histogram(bins = 10, fill = "darkturquoise", color='grey30') +
          labs(title = "Mean Squared Error for 10-fold Cross Validation",
             x = "Mean Squared Error",
             y = "Frequency count of validation rounds") +
        theme(plot.title = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1),
              panel.grid.minor.y = element_blank()) +
-       scale_y_continuous(breaks = c(0,1,2))
+       scale_y_continuous(breaks = c(0,1,2,3))
 ```
 
+We see that for ten rounds, most of the MSEs are centered around 400, though one round produced an MSE below 300.
 
 
 
 1. Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
 
+We run 100 rounds of 10-fold cross-validation, each round with different splits:
 
-
-
-```{r 10fold_cv_100_rounds}
+```{r 10fold_cv_100_rounds, warning=FALSE}
 
 mse_list_10fold_100 = vector("list", rounds)
 
@@ -307,10 +306,11 @@ for(i in 1:100){
 
 biden_100_10fold_mse_all = as.data.frame(mse_list_10fold_100_all)
 biden_100_10fold_mse_means = as.data.frame(mse_list_100_means)
-
 ```
-  
 
+Each round of the 100 returns 10 MSEs; we take the mean of all of these and find it to be `r mean(biden_100_10fold_mse_all$mse_list_10fold_100_all)`, which is comparable to the MSEs reported earlier.
+
+We pool all the MSEs from the 100 rounds of 10-fold cross validation and plot their distribution:
 
 ```{r, 100_rounds_10fold_MSE_all_histogram, echo=FALSE}
 
@@ -324,6 +324,9 @@ ggplot(biden_100_10fold_mse_all, aes(x = mse_list_10fold_100_all)) +
        scale_y_continuous(breaks = c(0,25,50,75,100,125)) + 
        scale_x_continuous(breaks = seq(200,650,by=50))
 ```
+
+The MSEs are normally distributed with 
+
 
 ```{r, 100_rounds_10fold_MSE_means_histogram, echo=FALSE}
 
