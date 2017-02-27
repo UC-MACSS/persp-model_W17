@@ -610,6 +610,7 @@ college %>%
 We then affirm the non-transformation of `Top10perc` with a 10-fold cross validation on the number of polynomial. From the results of the 10-fold cross validation, it appears that 10-fold CV MSE is minimized with a second ordered polynomial. Since MSE is only reduced by 0.2%, we will still use the non-transformed `Top10perc` model.
 
 **Summary of the Findings**
+
 A percent increase in percentage of new students from the top 10% of the H.S. cohort corresponds to an increase of $128.2 in out-of-state tuition.
 
 #### Student Faculty Ratio and Tuition
@@ -927,9 +928,6 @@ college_exp %>%
 
 We then affirm the use of non-linear techniques with a 10-fold cross validation on the number of polynomial. From the results of the 10-fold cross validation, it appears that 10-fold CV MSE is minimized with a fourth ordered polynomial. However, higher order polynomials are often harder to interpret and MSE is only reduced by 7% from first order polynomial to fourth order polynomial. Thus, we choose to retain the ease in interpreting our results with a log(`Expend`) model.
 
-**Summary of Findings**
-From the results of the log(`Expend`) model, a one percent increase in instructional expenditure per student corresponds with with a 7.482 increase in out-of-state tuition.
-
 ``` r
 college_kfold <- crossv_kfold(college, k = 10)
 cv_error_fold10 <- vector("numeric", 7)
@@ -941,12 +939,6 @@ for(i in terms){
   cv_error_fold10[[i]] <- mean(cv10_mse)
 }
 
-cv_error_fold10
-```
-
-    ## [1] 6885033 6867260 6432525 6369127 6434193 6376210 6386851
-
-``` r
 data_frame(terms = terms, 
            fold10mse = cv_error_fold10) %>%
   ggplot(aes(x = terms, y = fold10mse)) +
@@ -958,6 +950,9 @@ data_frame(terms = terms,
 ```
 
 ![](ps7-resample-nonlinear_files/figure-markdown_github/expend_cv-1.png)
+
+**Summary of Findings**
+From the results of the log(`Expend`) model, a one percent increase in instructional expenditure per student corresponds with with a 7.482 increase in out-of-state tuition.
 
 Part 3: College (GAM) \[3 points\]
 ==================================
