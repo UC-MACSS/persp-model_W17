@@ -9,8 +9,7 @@ output:
 
 ```{r setup, include = FALSE}
 
-knitr::opts_chunk$set(cache = TRUE, fig.align = 'center')
-
+knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', warning = FALSE)
 # install.packages("ISLR")
 # install.packages("splines")
 # getwd()
@@ -120,7 +119,7 @@ mse_loocv <- mean(biden_mses)
 
 ```
 
-The estimated test MSE of the model using the LOOCV approach is `r mse_loocv`. This value is much closer to the training MSE of the model (`r round(mean(train_only),2)`) we obtained in the section 1.1. Given that the LOOCV method doesn't depend on the sampling process for training/test sets, it is a much more steady methods. However, this method is rather time consuming.
+The estimated test MSE of the model using the LOOCV approach is `r mse_loocv`. This value is much closer to the training MSE of the model (`r round(mean(train_only),2)`) we obtained in the section 1.1. Given that the LOOCV method doesn't depend on the sampling process for training/test sets, it is a much more steady method. However, this method is rather time consuming.
 
 5)Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
 
@@ -134,7 +133,7 @@ mse_10fold <- mean(biden_10mses, na.rm = TRUE)
 
 ```
 
-Using 10-fold cross-validation approach,  `r round(mse_10fold, 2)` is gained, which is slightly smaller than leave-one-out approach. Since this approach repeats the validation approach for 10 times rather than the count of observations, the flexibility decreases. However, the computational efficiency increases.
+Using 10-fold cross-validation approach,  MSE = `r round(mse_10fold, 2)` is gained, which is slightly smaller than leave-one-out approach. Since this approach repeats the validation approach for 10 times rather than the count of observations, the flexibility decreases. However, the computational efficiency increases.
 
 
 6)Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
@@ -274,7 +273,7 @@ data_frame(terms = terms,
 
 Form the above graph, the 10-fold MSE is actually lower for a third degree polynomial of Expend than it is for the log(Expend). However, sine MSE decreases only by `r round(((ex_error_fold10[3] - mse_exlog10)/mse_exlog10), 2)`, I decided to use this Y~log(X) model.  
 
-```{r 2.1}
+```{r 2.1-3}
 pander(summary(log_exp))
 ```
 
@@ -507,28 +506,208 @@ Because interpretation is more tractable for a regression on log(Expend), I choo
 
 # Part 3: College (GAM) [3 points]
 
-1)Split the data into a training set and a test set.
+1)Split the data into a training set and a test set:
 
 ```{r 3.1}
-
-
-
+set.seed(1234)
+split <- resample_partition(college, c(test = 0.3, train = 0.7))
 ```
 
 
+2)Estimate an OLS model on the training data:
+
+```{r 3.2}
+college_train <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+                       data = split$train)
+
+pander(summary(college_train))
+
+```
+
+As the table shown above, this model's R-square is 0.7263, implying it could explain about 72.63% of the variance in the training data. Based on the p-value reported in the table above, all the six independent variabls are statistically significant. I will interpret the co-effecients on each independent variable as below:
+a)PrivateYes: Holding the other variables constant, private university will have averagely 2575 dollars higher in its tuition than other non-private university.
+b)Roo,.Board: Holding the other variables constant, with room-board costs increasing by 1 dollar, the out-of-state tuition would increase 0.9927 dollar. 
+c)PhD percentage: Holding the other variables constant, as the portion of facaulty with Ph.D. increase by 1 percent,averagely the tuition would get higher by 36.53 dollars. 
+d)percentage of alumni: Holding the other variables constant, as the portion of alumni who donates increase by 1 percent, the tuition would be 53.39 dollars higher. 
+e)Expend: Holding the other variables constant, as the expenditure per student increase by 1 dollar, the tuition will increase by 0.2067 dollars, on average.
+f)graduation rate: Holding the other variables constant, the tuition would be 30.73 dollars more if the graduation rate increases by 1 unit.
+
+In the following graph, I make the residual plot for this linear model. Except the range with larger predicted values,it appears that the predicted value is not in correlation with the residuals. 
+
+```{r 3.2-2}
+college[unlist(split$train["idx"], use.names = FALSE),] %>%
+  add_predictions(college_train) %>%
+  add_residuals(college_train) %>%
+  ggplot(aes(pred, resid)) +
+  geom_point()+
+  theme_bw()+
+  labs(title = "Predicted Value and Residuals of linear regression",
+        x = "Predicted Value",
+        y = "Residuals")
+  
+```
+
+3)GAM model:
+I will use a GAM model that regresses Outstate on the binary predictor Private, a 2nd degree polynomial of Room.Board (from in part 2), local regressions for PhD and perc.alumni, the log(Expend) (from part 2), and a fourth degree polynomial for Grad.Rate (from part 2).
+
+```{r 3.3}
+gam <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) + log(Expend) + poly(Grad.Rate, 4),data = split$train)
+summary(gam)
+```
+
+As the simple linear model, all the independent variables in this model have statistically significant association with the Out-of-state tuition. While all of them have (at the 0 level) F-values for parametric effects, only `Ph.D.` has statistically significant (at the $\alpha = .05$ level) nonparametric F-value, indicating that there is likely to be a nonparametric effect on `Outstate`. 
+In the next step, I present the relation between the depedent variable with each of six independent variables as below:  
 
 
+```{r 3.3-2}
+clg_gam_terms <- preplot(gam, se = TRUE, rug = FALSE)
+
+# PhD
+data_frame(x = clg_gam_terms$`lo(PhD)`$x,
+           y = clg_gam_terms$`lo(PhD)`$y,
+           se.fit = clg_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "PHD",
+       y = expression(f[3](PhD)))
+
+# perc.alumni
+data_frame(x = clg_gam_terms$`lo(perc.alumni)`$x,
+           y = clg_gam_terms$`lo(perc.alumni)`$y,
+           se.fit = clg_gam_terms$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "perc.alumni",
+       y = expression(f[4](perc.alumni)))
+
+# Expend
+data_frame(x = clg_gam_terms$`log(Expend)`$x,
+           y = clg_gam_terms$`log(Expend)`$y,
+           se.fit = clg_gam_terms$`log(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Log Transformation",
+       x = "Expend",
+       y = expression(f[5](expend)))
+
+# Grad.Rate
+data_frame(x = clg_gam_terms$`poly(Grad.Rate, 4)`$x,
+           y = clg_gam_terms$`poly(Grad.Rate, 4)`$y,
+           se.fit = clg_gam_terms$`poly(Grad.Rate, 4)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "4th Degree Polynominal",
+       x = "Grad.Rate",
+       y = expression(f[6](Grad.Rate)))
+
+# Private
+data_frame(x = clg_gam_terms$Private$x,
+           y = clg_gam_terms$Private$y,
+           se.fit = clg_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = "Is Private School or Not",
+       y = expression(f[1](private)))
+
+# Room.Board
+data_frame(x = clg_gam_terms$`poly(Room.Board, 2)`$x,
+           y = clg_gam_terms$`poly(Room.Board, 2)`$y,
+           se.fit = clg_gam_terms$`poly(Room.Board, 2)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Linear Regression",
+       x = "Room.Board",
+       y = expression(f[2](Room.Board))) 
+```
+
+According to the plots above, it appears that all these six variables have  have substantial and significant relationships with out-of-state tuition.
+a)`PhD`:The wide confidence intervals for values of PhD below 30% indicate that the effect of the portion of facaulty with PhD is not so strong in that range. However, the confidence interval decreases in size as PhD grows larger, eventually showing us that as PhD increases, Out-of-state tuition does as well.
+b)`perc.alumni`: It appears that the effect of the portion of alumni who donate on the out-of-state tuition will be weaker when it is larger than 40% or smaller than 15%.  
+c)`Expend`:The plot shows as the expenditure increases, the positive effect of it on the out-of state tuition will be weaker, since the cofeident intervals become more broad at the higher value of `expend`. 
+d)`Grad.Rate`:From the lower values of graduation rate, the effect is hard to determine. As it increases past these values, however, it starts to increase out-of-state tuition until the higher levels of graduation rate in which the confidence interval becomes wider again. 
+e)`Private`: From the plot, we see being private or not has very strong relation with the amount of tuitions.Non-private universities are more likely to have lower tuition than the private universities. 
+f)Room.Board: There is strong and positive relation between the room and board costs with the tuitions. In addition, the strength of this effect of board costs on the tution only persists in a middle range from 4000 to 6000 dollars.  
+
+4)Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+
+```{r 3.4}
+
+mse_1 <- calc_mse(college_train, split$test)
+mse_2 <- calc_mse(gam, split$test)
+
+```
+
+The MSE for the OLS is 3652035, larger than that of the GAM (3595260), indicating that the GAM model more accurately fit the test data. 
 
 
+5)For which variables, if any, is there evidence of a non-linear relationship with the response?
+
+I test three variables in the model, Ph.D., Expend, and Grad.Rate to see whether they are really in non-linear relationship with the dependent variable. I examine the p-value for the models without the variable, with the variable as a linear form, and with the variable in the non-linear form.
+
+```{r 3.4-phd}
+#PhD
+gam_PhD_rm<-gam(Outstate ~ Private + poly(Room.Board, 2) + lo(perc.alumni) + log(Expend) + poly(Grad.Rate, 4), data = split$train)
+
+gam_PhD_lm<-gam(Outstate ~ Private + poly(Room.Board, 2) + PhD+ lo(perc.alumni) + log(Expend) + poly(Grad.Rate, 4), data = split$train)
+
+pander(anova(gam_PhD_rm, gam_PhD_lm, gam, test = "F"))
+```
+
+Since the p-value for both linear model and the non-linear model in terms of `PhD` are not statistically significant, larger than 0.01. It is hard to determine whether the PhD has a linear relationship with the dependent variable or not. 
 
 
+```{r 3.4-expend}
+
+#expend
+
+gam_exp_rm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) +  poly(Grad.Rate, 4),data = split$train)
+
+gam_exp_lm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) +  poly(Grad.Rate, 4) + Expend,data = split$train)
+
+pander(anova(gam_exp_rm, gam_exp_lm, gam, test = "F"))
+```
+In the examination of `Expend`, I found the p-value for the linear model for it is very small, indicating that it is more appopriate to adopt the linear relationship between expenditure with the out-of-state tuition. 
 
 
-1. Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-1. Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
-1. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
-1. For which variables, if any, is there evidence of a non-linear relationship with the response?^[Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.]
+```{r 3.4-grad}
 
+#Grad.Rate
+gam_gr_rm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) + log(Expend) ,data = split$train)
+gam_gr_lm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) + log(Expend) + Grad.Rate,data = split$train)
 
+pander(anova(gam_PhD_rm, gam_PhD_lm, gam, test = "F"))
+```
 
-
+The result for `Grad.Rate` is similar to that in `PhD`, the p-value of linear or non-linear relationship is not statistically significant and close to each other, so there is no strong evidence to refute or confirm the GAM model in the section 3.2, by using this approach. 
