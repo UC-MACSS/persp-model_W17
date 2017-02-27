@@ -82,7 +82,9 @@ pander(m)
 </tbody>
 </table>
 
-1)As the table shown above, the unconditional probability of a given individual turning out to vote is 68.24%. 2)The scatterplot with the linear smoothing line indicates, in general, people who are more depressive (with higher value of mental health index) will be less likely to vote. Therefore, there is certain association between mental health with the action of voting based on this plotting. However, this graph is very misleading when considering the relationship between voting status (binary variable) and the mental health index (discrete variable): 1) most importantly,the voter turnout follows the binorminal distribution, whose feature cannot be captured by the linear relationship. Since voter turnout is dichotomous, with no possile outcomes in between, the regression line is misleading. 2) Even though we consider the predicted value by the regression line between 0 and 1 as the predicted probability, there are still other problems: because the regression line is linear and continuous, it extends infinitely in both directions of the mental health index. But as we know, the predictions based on the mental health value, lower than 0 or higher than 9, do not make any sense. 3) According to this linear regression, there is no upper and lower bound for the predicted voting probability, the prediction may exceed 1.0 or may be lower than 0, which do not comply with the definition that the probability is between 0 and 1.
+1)As the table shown above, the unconditional probability of a given individual turning out to vote is 68.24%.
+
+2)The scatterplot with the linear smoothing line indicates, in general, people who are more depressive (with higher value of mental health index) will be less likely to vote. Therefore, there is certain association between mental health with the action of voting based on this plotting. However, this graph is very misleading when considering the relationship between voting status (binary variable) and the mental health index (discrete variable): 1) most importantly,the voter turnout follows the binorminal distribution, whose feature cannot be captured by the linear relationship. Since voter turnout is dichotomous, with no possile outcomes in between, the regression line is misleading. 2) Even though we consider the predicted value by the regression line between 0 and 1 as the predicted probability, there are still other problems: because the regression line is linear and continuous, it extends infinitely in both directions of the mental health index. But as we know, the predictions based on the mental health value, lower than 0 or higher than 9, do not make any sense. 3) According to this linear regression, there is no upper and lower bound for the predicted voting probability, the prediction may exceed 1.0 or may be lower than 0, which do not comply with the definition that the probability is between 0 and 1.
 
 2) Basic Model
 ==============
@@ -171,7 +173,7 @@ basic_pred<-df %>%
   mutate(odds = prob2odds(prob))
 ```
 
-1)We find a statistically significant relationship at the p &lt; .0005 level between depression score and voting behavior. The relationship is negative and the coefficient is -0.1435. Therefore, we can conclude that there is a statistically significant. The co-effecient on `mhealth_sum` is -0.1435, indicating that one-unit increase in depression score could result in the decrease of log-odds of voting by 0.1435. Thus, the association between these two variable is moderately substantive and negative.
+1)We find a statistically significant relationship at the p &lt; .0005 level between depression score and voting behavior. The relationship is negative ,and the co-effecient on `mhealth_sum` is -0.1435, indicating that one-unit increase in depression score could result in the decrease of log-odds of voting by 0.1435. Thus, the association between these two variable is moderately substantive and negative.
 
 ``` r
 # log odds plotting
@@ -201,7 +203,7 @@ ggplot(basic_pred, aes(mhealth_sum)) +
 
 ![](ps6_files/figure-markdown_github/basic%20model%203-1.png)
 
-3)Interpretation of the estimated parameter for mental health in terms of odds: as each one unit increase in mental health score, we expect to see 86.63% (note: it is calculated from exp(-0.1435) ) decrease of the odds of voting.
+3)Interpretation of the estimated parameter for mental health in terms of odds: as each one unit increase in mental health score, we expect to see 86.63% (note: it is calculated from exp(-0.1435) ) decrease of the odds of voting. ( note: A one-unit increase in `mhealth_sum` corresponds to a differential decrease in the odds of voter turnout. The amount of the change in the odds of voter turnout depends on the initial value of `mhealth_sum`; In addition, the 86.63% means "decrease to 95.88% of the initial odds")
 
 ``` r
 # probability plotting
@@ -409,7 +411,9 @@ pander(summary(logit_m))
 
 3)Based on the summarized table above, three variables in this model have statistically significant associations (p-value &lt; 0.005) with voting variable: p-value for age, education, and income are 2.125e-20 , 3.052e-16 , and 0.002008. For variable of married status has only moderately statistical significance with voting rurnout, p-value is around 0.03051. In addition, all four independent variables have positive relation with voter turnout, and the co-effecient on age, education, maritial status and income are 0.04388, 0.3279, 0.08077, separately.
 
-Interpretation of co-effecients in terms of log odds, odds: As each one year increase in age, we expect the log-odds of voting status to increase by 0.04388;and expect to see see 104.49% increase in the odds of voting, when holding other variables constant. As each one year increase in education year, we expect the log-odds of voting status to increase by 0.2384; and expect to see see 126.93% increase in the odds of voting, when holding other variables constant. As each 10k increase in annual income, we expect the log-odds of voting status to increase by 0.08077; and expect to see see 108.41% increase in the odds of voting, when holding other variables constant. Married people has higher log odds of voting than unmarried ones by factor of 0.3279; or say, Married people has increased their odds of voting by 138.81% than those unmarried ones, when controlling all the other variables.
+Interpretation of co-effecients in terms of log odds, odds and probability: (Note:The amount of the change in the odds of voter turnout depends on the initial values. So in this section, when I talk about the odds change, I compare the odds variation before and after one unit change in independent variables)
+
+As each one year increase in age, we expect the log-odds of voting status to increase by 0.04388;and expect to see 104.49% increase in the odds of voting, when holding other variables constant.(Note: the 104.49% means "increase to 104.49% of the initial odds". All the following percentages have the similar meaning.) As each one year increase in education year, we expect the log-odds of voting status to increase by 0.2384; and expect to see 126.93% increase in the odds of voting, when holding other variables constant. As each 10k increase in annual income, we expect the log-odds of voting status to increase by 0.08077; and expect to see 108.41% increase in the odds of voting, when holding other variables constant. Married people has higher log odds of voting than unmarried ones by factor of 0.3279; or say, Married people have 138.81% fold odds than those unmarried ones, when controlling all the other variables.
 
 Holding the income and education year as their means, the probability of voting is estimated by age and maritial status. The result is plotted as below, which indicates that as the age increases, the probability of being a viter will increase, and the married people are more likely to vote than those who are unmarried. Taken together, people who are elder and married have higher possibility to vote than those younger and unmarried. For example, At age 20, the turnout rate is 5% higher for married people than unmarried people; at age 80, the difference shrinks to around 2.5%. This result is consistent with the literature's hypothesis.
 
@@ -424,7 +428,7 @@ pred_1<- df %>%
 ggplot (pred_1 , aes(age, prob, color = ifelse(married == 1, 'Married', 'Unmarried')))+
   theme_bw()+
   geom_line() +
-  scale_color_discrete(name = "Marital status") +
+  scale_color_discrete(name = "Marital status ") +
   labs(title = "Probability of voter turnout",
        subtitle = "by age and marital status, controlling education and income",
        x = "Age",
@@ -446,14 +450,16 @@ pred_2<- df %>%
 ggplot (pred_2 , aes(educ, prob, color = ifelse(married == 1, 'Married', 'Unmarried')))+
   theme_bw()+
   geom_line() +
-  scale_color_discrete(name = "Marital status") +
+  scale_color_discrete(name = "Marital status ") +
   labs(title = "Probability of voter turnout",
        subtitle = "by education and marital status, controlling age and income",
        x = "Education years",
        y = "Probability of voter turnout")
 ```
 
-![](ps6_files/figure-markdown_github/multi%203-1.png) These two plots have shown there are positive relationship between age or education year with the probability to vote. In addition, married people are more likely to vote than those unmarried.
+![](ps6_files/figure-markdown_github/multi%203-1.png)
+
+These two plots have shown there are positive relationships between age or education year with the probability to vote. In addition, married people are more likely to vote than those unmarried.
 
 4) Modeling TV Consumption
 ==========================
@@ -469,3 +475,130 @@ Linear predictor: The linear preditor is the following log-linear regression mod
 Link function: The link function for the Poisson distribution is the log function:
 
 ![](data/4-3.png)
+
+2)Estimate the model and report results:
+
+``` r
+#Fit model
+poisson_1 <- glm(tvhours ~ educ + hrsrelax + black, data = gss, family = quasipoisson)
+pander(summary(poisson_1))
+```
+
+<table style="width:86%;">
+<colgroup>
+<col width="25%" />
+<col width="15%" />
+<col width="18%" />
+<col width="13%" />
+<col width="13%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center"> </th>
+<th align="center">Estimate</th>
+<th align="center">Std. Error</th>
+<th align="center">t value</th>
+<th align="center">Pr(&gt;|t|)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center"><strong>educ</strong></td>
+<td align="center">-0.04208</td>
+<td align="center">0.008189</td>
+<td align="center">-5.139</td>
+<td align="center">3.317e-07</td>
+</tr>
+<tr class="even">
+<td align="center"><strong>hrsrelax</strong></td>
+<td align="center">0.03702</td>
+<td align="center">0.006772</td>
+<td align="center">5.466</td>
+<td align="center">5.807e-08</td>
+</tr>
+<tr class="odd">
+<td align="center"><strong>black</strong></td>
+<td align="center">0.4463</td>
+<td align="center">0.05084</td>
+<td align="center">8.779</td>
+<td align="center">7.032e-18</td>
+</tr>
+<tr class="even">
+<td align="center"><strong>(Intercept)</strong></td>
+<td align="center">1.257</td>
+<td align="center">0.1207</td>
+<td align="center">10.41</td>
+<td align="center">3.7e-24</td>
+</tr>
+</tbody>
+</table>
+
+(Dispersion parameter for quasipoisson family taken to be 1.176556 )
+
+<table style="width:61%;">
+<colgroup>
+<col width="26%" />
+<col width="34%" />
+</colgroup>
+<tbody>
+<tr class="odd">
+<td align="center">Null deviance:</td>
+<td align="left">1229 on 1005 degrees of freedom</td>
+</tr>
+<tr class="even">
+<td align="center">Residual deviance:</td>
+<td align="left">1062 on 1002 degrees of freedom</td>
+</tr>
+</tbody>
+</table>
+
+Through examination of the models with variables provided forward and backward,education, relaxed hours,and black (or not) are chosen as the predictors estimating the voter turnout, since these three show stronger relationships in the tested models with the tv hours than others do. The model is estimated and reported as in the table above.
+
+3)As shown in the above table, all of three variables have statistically significant relationship with tv hours, the p-value for education, relaxed hours, and `black` are 3.317e-07, 5.807e-08, and 7.032e-18, respectively.Relaxed hours and `black` have positive relation with tv consumption, while education has a negative relation with it. The coeffeicent on each variable predicted by this model can be interpreted as below:
+
+As each one year increase in education year, we expect the log-counts of tv consumption to decrease by 0.04208 on average, when holding other variables constant; As each one hour increase in relax time, we expect the log-counts of tv consumption to increase by 0.03702 on average, when holding other variables constant; As for the coeffecient on `black`: On average, black people have higher log-counts of tv consumption than non-black ones by factor of 0.4463, when holding other variables constant.
+
+Since the estimated count of tv consumption hours is not in a linear relation with the independent varaibles, we cannot simply interpret the co-effecients in terms of the counts without regarding the initial count in comparison. First, I hold the education as its average value, and then examine how the ethinicity and relaxed hour can effect hours of tv consumption. According to the graph below, it is obvious that the predicted TV hours will increase as the relaxed hours extend, which indicates there is a strong and positive relationship between TV hours and relaxed hours. Also, the red curve (black people) is above the green curve (non-black people), indicating that there would be higher probability for black people to consume more TV than those non-black people, given the fixed relaxed hours and education background. Further, we can observe the interactive relationships between the independent variables in the model. As relaxed hours increase, the distance between the red and green lines are larger, indicating the larger difference between black and non-black people at higher levels of relaxing hours, regarding the time spending on watching TV.
+
+``` r
+# Add predicted prob and odds
+tv_poisson<- gss %>%
+  data_grid(educ= mean(educ, na.rm = TRUE), hrsrelax, black) %>%
+  add_predictions(poisson_1) %>%
+  mutate(count = exp(pred))
+
+
+ggplot(tv_poisson, aes(hrsrelax, count, color = ifelse (black == 1, 'Black', 'Non-black'))) +
+  theme_bw()+
+  geom_line() +
+  scale_color_discrete(name = "Ethnicity") +
+  labs(title = "Predicted Hours of TV consumption per day",
+       subtitle = "by relaxed hours and black (or not),holding years of education fixed at its mean ",
+       x = "Relaxed Hours",
+       y = "Predicted TV consumption hours")
+```
+
+![](ps6_files/figure-markdown_github/4-2-1.png)
+
+In the second plot (below),given the fixed relaxed hours at its average, there is a strong and negative association between TV consumption hours and education years. It suggests that people with more education would spend less time in TV consumption than those with less education, when holding the other varaibles fixed. It suggests that there is a strong and negative relationship between TV hours and relaxed hours. Also, the red curve (black people) is above the green curve (non-black people), indicating that there would be higher probability for black people to consume more TV than those non-black people, given the fixed relaxed hours and education background. Further, as education years increase, the distance between the red and green lines are smaller, indicating the smaller difference between black and non-black people at higher levels of education years, regarding the time spending on watching TV.
+
+``` r
+# Add predicted prob and odds
+tv_poisson<- gss %>%
+  data_grid(educ, hrsrelax=mean(hrsrelax, na.rm = TRUE), black) %>%
+  add_predictions(poisson_1) %>%
+  mutate(count = exp(pred))
+
+ggplot(tv_poisson, aes(educ, count, color = ifelse (black == 1, 'Black', 'Non-black'))) +
+  theme_bw()+
+  geom_line() +
+  scale_color_discrete(name = "Ethnicity") +
+  labs(title = "Predicted Hours of TV consumption per day",
+       subtitle = "by education and black (or not),holding relaxed hours fixed at its mean ",
+       x = "Education years",
+       y = "Predicted TV consumption hours")
+```
+
+![](ps6_files/figure-markdown_github/4-3-1.png)
+
+Taken together,
