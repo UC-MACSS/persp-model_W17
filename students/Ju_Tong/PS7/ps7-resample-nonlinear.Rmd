@@ -525,11 +525,17 @@ pander(summary(college_train))
 ```
 
 As the table shown above, this model's R-square is 0.7263, implying it could explain about 72.63% of the variance in the training data. Based on the p-value reported in the table above, all the six independent variabls are statistically significant. I will interpret the co-effecients on each independent variable as below:
+
 a)PrivateYes: Holding the other variables constant, private university will have averagely 2575 dollars higher in its tuition than other non-private university.
+
 b)Roo,.Board: Holding the other variables constant, with room-board costs increasing by 1 dollar, the out-of-state tuition would increase 0.9927 dollar. 
+
 c)PhD percentage: Holding the other variables constant, as the portion of facaulty with Ph.D. increase by 1 percent,averagely the tuition would get higher by 36.53 dollars. 
+
 d)percentage of alumni: Holding the other variables constant, as the portion of alumni who donates increase by 1 percent, the tuition would be 53.39 dollars higher. 
+
 e)Expend: Holding the other variables constant, as the expenditure per student increase by 1 dollar, the tuition will increase by 0.2067 dollars, on average.
+
 f)graduation rate: Holding the other variables constant, the tuition would be 30.73 dollars more if the graduation rate increases by 1 unit.
 
 In the following graph, I make the residual plot for this linear model. Except the range with larger predicted values,it appears that the predicted value is not in correlation with the residuals. 
@@ -653,11 +659,17 @@ data_frame(x = clg_gam_terms$`poly(Room.Board, 2)`$x,
 ```
 
 According to the plots above, it appears that all these six variables have  have substantial and significant relationships with out-of-state tuition.
+
 a)`PhD`:The wide confidence intervals for values of PhD below 30% indicate that the effect of the portion of facaulty with PhD is not so strong in that range. However, the confidence interval decreases in size as PhD grows larger, eventually showing us that as PhD increases, Out-of-state tuition does as well.
-b)`perc.alumni`: It appears that the effect of the portion of alumni who donate on the out-of-state tuition will be weaker when it is larger than 40% or smaller than 15%.  
-c)`Expend`:The plot shows as the expenditure increases, the positive effect of it on the out-of state tuition will be weaker, since the cofeident intervals become more broad at the higher value of `expend`. 
+
+b)`perc.alumni`: It appears that the effect of the portion of alumni who donate on the out-of-state tuition will be weaker when it is larger than 40% or smaller than 15%. 
+
+c)`Expend`:The plot shows as the expenditure increases, the positive effect of it on the out-of state tuition will be weaker, since the cofeident intervals become more broad at the higher value of `expend`.
+
 d)`Grad.Rate`:From the lower values of graduation rate, the effect is hard to determine. As it increases past these values, however, it starts to increase out-of-state tuition until the higher levels of graduation rate in which the confidence interval becomes wider again. 
-e)`Private`: From the plot, we see being private or not has very strong relation with the amount of tuitions.Non-private universities are more likely to have lower tuition than the private universities. 
+
+e)`Private`: From the plot, we see being private or not has very strong relation with the amount of tuitions.Non-private universities are more likely to have lower tuition than the private universities.
+
 f)Room.Board: There is strong and positive relation between the room and board costs with the tuitions. In addition, the strength of this effect of board costs on the tution only persists in a middle range from 4000 to 6000 dollars.  
 
 4)Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
