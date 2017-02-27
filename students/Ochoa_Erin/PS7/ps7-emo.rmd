@@ -1,0 +1,1035 @@
+---
+title: "MACS 30100 PS6"
+author: "Erin M. Ochoa"
+
+
+date: "2017 February 27"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+
+library(ggplot2)
+library(modelr)
+library(dplyr)
+library(purrr)
+library(broom)
+library(tidyr)
+library(gam)
+library(splines)
+#library(ISLR)#
+#library(lattice)#
+#library(tidyverse)#
+
+#options(na.action = na.warn)
+set.seed(1234)
+```
+
+We define a function that will be used later:
+
+```{r function}
+
+mse = function(model, data) {
+  x = modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+# Part 1: Joe Biden (redux)
+
+We read in the data and create a categorical three-level variable for Party.
+
+```{r read_data_biden}
+
+df = read.csv('data/biden.csv')
+df$Party[df$dem == 1] = 'Democrat'
+df$Party[df$dem == 0 & df$rep == 0] = 'No Affiliation'
+df$Party[df$rep == 1] = 'Republican'
+```
+
+We estimate the following multiple regression model:
+![](./eq1.png)
+
+```{r eq1, include=FALSE}
+#$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5 + \epsilon$$
+```
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.
+
+```{r full_dataset}
+
+lm_full_dataset = lm(biden ~ age + female + educ + dem + rep, data = df)
+summary(lm_full_dataset)
+```
+
+We find \beta_0, the y-intercept, to be `r tidy(lm_full_dataset)[1,2]` with a standard error of `r tidy(lm_full_dataset)[1,3]`.
+
+We find \beta_1, the coefficient for age, to be `r tidy(lm_full_dataset)[2,2]` with a standard error of `r tidy(lm_full_dataset)[2,3]`.
+
+We find \beta_2, the coefficient for female, to be `r tidy(lm_full_dataset)[3,2]` with a standard error of `r tidy(lm_full_dataset)[3,3]`.
+
+We find \beta_3, the coefficient for education, to be `r tidy(lm_full_dataset)[4,2]` with a standard error of `r tidy(lm_full_dataset)[4,3]`.
+
+We find \beta_4, the coefficient for Democrat, to be `r tidy(lm_full_dataset)[5,2]` with a standard error of `r tidy(lm_full_dataset)[5,3]`.
+
+We find \beta_5, the coefficient for Republican, to be `r tidy(lm_full_dataset)[6,2]` with a standard error of `r tidy(lm_full_dataset)[6,3]`.
+
+When all the predictors are considered jointly, female, Democrat, and Republican are statistically significant (p<.001) while age and education approach significance at the \alpha = .05 level but do not reach it (p<.10).
+
+```{r mse_full_model}
+
+mse_full_dataset = mse(lm_full_dataset,df)
+```
+
+Using all the observations and the stated predictors, we find the mean squared error of the multiple-regression model to be `r mse_full_dataset`.
+
+We plot the residuals for the full model against the predicted values:
+
+```{r full_dataset_residuals_plot, echo = FALSE}
+
+predictions_full_dataset = add_predictions(df, lm_full_dataset, var = "pred")
+df$pred_full_dataset = predictions_full_dataset$pred
+df$resid_full_dataset = df$biden - df$pred_full_dataset
+
+ggplot(df, mapping = aes(pred_full_dataset, resid_full_dataset)) +
+       geom_point(alpha = .15, size = 1.5, aes(color=Party)) +
+       geom_smooth(method = "lm", color = 'black') +
+       geom_smooth(method = "lm", aes(color = Party)) +
+       labs(title = "Warmth Toward Joe Biden (2008) as Explained by Age, Gender,\nEducation, & Party: Residuals vs. Predicted Values (Full Dataset)",
+            subtitle = "with Smooth-fit Lines by Respondent Party Affiliation",
+            x = "Predicted Warmth",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+While the general regression line is flat and the local per-party lines are close to flat, the wide spread above and below zero indicates that there is high variability among the residuals.  This suggests that the model does not explain 
+
+Next, we split the dataset into training and validation sets in a ratio of 7:3.  
+
+```{r 70_30_split}
+
+set.seed(1234)
+
+biden_split7030 = resample_partition(df, c(test = 0.3, train = 0.7))
+biden_train70 = biden_split7030$train %>%
+                tbl_df()
+biden_test30 = biden_split7030$test %>%
+               tbl_df()
+
+lm_train70 = lm(biden ~ age + female + educ + dem + rep, data = biden_train70)
+summary(lm_train70)
+
+mse_test30 = mse(lm_train70,biden_test30)
+```
+
+We fit a multiple-regression model using only the training observations and then calculate the MSE using only the validation set to be `r mse_test30`.  This MSE is slightly higher than the MSE calculated with the full dataset (`r mse_full_dataset`).  This is not surprising because the validation dataset is 30% the size of the full dataset and there is likely to be higher variance for a smaller sample.
+
+We plot the residuals for the model developed with the training set but fitted to the testing set:
+
+```{r train70_residuals_plot, echo = FALSE}
+
+predictions_test30 = add_predictions(biden_test30, lm_train70, var = "pred")
+biden_test30$pred_test30 = predictions_test30$pred
+biden_test30$resid_test30 = biden_test30$biden - biden_test30$pred_test30
+
+ggplot(biden_test30, mapping = aes(pred_test30, resid_test30)) +
+       geom_point(alpha = .15, size = 1.5, aes(color=Party)) +
+       geom_smooth(method = "lm", color = 'black') +
+       geom_smooth(method = "lm", aes(color = Party)) +
+       labs(title = "Warmth Toward Joe Biden (2008) as Explained by Age, Gender,\nEducation, & Party: Residuals vs. Predicted Values (Training Set)",
+            subtitle = "with Smooth-fit Lines by Respondent Party Affiliation",
+            x = "Predicted Warmth",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+We see that while the general regression line is flat, the per-party regression lines are inclined, indicating poor fit.
+
+We repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set:
+
+```{r biden_split_7030_100_rounds}
+
+rounds = 100
+
+mse_list_100 = vector("numeric", rounds)
+
+set.seed(1234)
+
+for(i in 1:rounds) {
+  
+  split7030 = resample_partition(df, c(test = 0.3, train = 0.7))
+  train70 = split7030$train %>%
+            tbl_df()
+  test30 = split7030$test %>%
+           tbl_df()
+
+  lm_100_train70 = lm(biden ~ age + female + educ + dem + rep, data = train70)
+
+  mse_100_test30 = mse(lm_100_train70,test30)
+  mse_list_100[[i]] = mse_100_test30
+}
+
+mse_df_100 = as.data.frame(mse_list_100)
+```
+
+
+
+```{r, 70_30_100_rounds_MSE_histogram, echo=FALSE}
+
+ggplot(mse_df_100, aes(x = mse_list_100)) +
+       geom_histogram(bins = 15, fill = "darkturquoise", color='grey30') +
+       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+            x = "Mean Squared Error",
+            y = "Frequency count of rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1),
+             panel.grid.minor.x = element_blank()) #+
+       #scale_y_continuous(breaks = c(0,4,8,12,16,20,24,28)) + # + xlim(347,452)
+       #scale_x_continuous(breaks = c(345,355,365,375,385,395,405,415,425,435,445,455))
+```
+
+
+1. Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+
+
+
+
+
+
+```{r loocv_biden}
+
+loocv_biden_data <- crossv_kfold(df, k = nrow(df))
+loocv_biden_models <- map(loocv_biden_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+
+loocv_biden_mse_list <- map2_dbl(loocv_biden_models, loocv_biden_data$test, mse)
+loocv_biden_mean_mse = (loocv_biden_mse_list)
+
+loocv_biden_mse = as.data.frame(loocv_biden_mse_list)
+```
+
+```{r, LOOCV_MSE_histogram, echo=FALSE}
+
+ggplot(loocv_biden_mse, aes(x = loocv_biden_mse_list)) +
+       geom_histogram(binwidth = 100, fill = "darkturquoise", color='grey30') +
+       labs(title = "Mean Squared Error for Leave-One-Out Cross-Validation",
+            x = "Mean Squared Error",
+            y = "Frequency count of validation rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_y_continuous(breaks = c(0,150,300,450)) + # + xlim(347,452)
+       scale_x_continuous(breaks = c(0,1000,2000,3000,4000,5000,6000))
+```
+
+
+
+
+
+
+
+
+
+
+
+1. Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
+
+
+```{r 10_fold_cv}
+
+biden_cv10_data = crossv_kfold(df, k = 10)
+
+biden_cv10_model = map(biden_cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+biden_cv10_mse = map2_dbl(biden_cv10_model, biden_cv10_data$test, mse)
+biden_cv_error_10fold = mean(biden_cv10_mse)
+
+biden_cv_error_10fold
+
+biden_cv_mse = as.data.frame(biden_cv10_mse)
+```
+
+```{r, 10fold_MSE_histogram, echo=FALSE}
+
+ggplot(biden_cv_mse, aes(x = biden_cv10_mse)) +
+       geom_histogram(breaks = seq(285,470),fill = "darkturquoise") +
+         labs(title = "Mean Squared Error for 10-fold Cross Validation",
+            x = "Mean Squared Error",
+            y = "Frequency count of validation rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1),
+             panel.grid.minor.y = element_blank()) +
+       scale_y_continuous(breaks = c(0,1,2,3,4)) + 
+       scale_x_continuous(breaks = seq(250,500,by=50))
+```
+
+
+
+
+1. Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
+
+
+
+
+```{r 10fold_cv_100_rounds}
+
+mse_list_10fold_100 = vector("list", rounds)
+
+set.seed(1234)
+
+for(i in 1:rounds) {
+  
+  biden100_cv10_data = crossv_kfold(df, k = 10)
+
+  biden100_cv10_model = map(biden100_cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+
+  biden100_cv10_mse = map2_dbl(biden100_cv10_model, biden100_cv10_data$test, mse)
+  biden100_cv_error_10fold = mean(biden100_cv10_mse)
+
+  biden100_cv_mse = as.data.frame(biden_cv10_mse)
+  
+  mse_list_10fold_100[[i]] = biden100_cv10_mse
+}
+
+k = 0
+mse_list_10fold_100_all = vector("numeric", rounds * 10)
+
+for(i in 1:100){
+  for(j in 1:10){
+    mse_list_10fold_100_all[[j + k]] = mse_list_10fold_100[[i]][[j]]
+  }
+  k = k + 10
+}
+
+mse_list_100_means = vector("numeric", rounds)
+
+for(i in 1:100){
+  avg = mean(mse_list_10fold_100[[i]])
+  mse_list_100_means[[i]] = avg
+}
+
+
+biden_100_10fold_mse_all = as.data.frame(mse_list_10fold_100_all)
+biden_100_10fold_mse_means = as.data.frame(mse_list_100_means)
+
+```
+  
+
+
+```{r, 100_rounds_10fold_MSE_all_histogram, echo=FALSE}
+
+ggplot(biden_100_10fold_mse_all, aes(x = mse_list_10fold_100_all)) +
+       geom_histogram(bins=30, fill = "darkturquoise", color='grey30') +
+         labs(title = "Mean Squared Errors for 100 Rounds of 10-fold Cross Validation",
+            x = "Mean Squared Error",
+            y = "Frequency count of validation rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_y_continuous(breaks = c(0,25,50,75,100,125)) + 
+       scale_x_continuous(breaks = seq(200,650,by=50))
+```
+
+```{r, 100_rounds_10fold_MSE_means_histogram, echo=FALSE}
+
+ggplot(biden_100_10fold_mse_means, aes(x = mse_list_100_means)) +
+       geom_histogram(bins=30, fill = "darkturquoise", color='grey30') +
+         labs(title = "Mean(Mean Squared Errors) for 100 Rounds of 10-fold Cross Validation",
+            x = "Mean(Mean Squared Error) per round",
+            y = "Frequency count of validation rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_y_continuous(breaks = c(0,2,4,6,8,10,12,14)) + 
+       scale_x_continuous(breaks = c(396,396.5,397,397.5,398,398.5,399,399.5,400))
+```
+
+
+
+
+
+
+
+1. Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).
+
+
+```{r biden_bootstrapping}
+
+set.seed(1234)
+
+biden_bstrap = df %>%
+               modelr::bootstrap(1000) %>%
+               mutate(model = map(strap, ~ lm(biden ~ age + female + educ + dem + rep, data = .)),
+                      coef = map(model, tidy))
+
+biden_bstrap %>%
+             unnest(coef) %>%
+             group_by(term) %>%
+             summarize(est.boot = mean(estimate),
+                       se.boot = sd(estimate, na.rm = TRUE))
+```
+
+
+
+
+
+
+
+
+
+
+
+# Part 2: College (bivariate)
+
+```{r read_data_college}
+
+df2 = read.csv('data/College.csv')
+```
+
+
+```{r bivariate_LMs}
+lm_outstate_expend = lm(Outstate ~ Expend, data = df2)
+lm_outstate_terminal = lm(Outstate ~ Terminal, data = df2)
+lm_outstate_pers = lm(Outstate ~ Personal, data = df2)
+
+mse_outstate_expend = mse(lm_outstate_expend,df2)
+summary(lm_outstate_expend)
+
+mse_outstate_terminal = mse(lm_outstate_terminal,df2)
+summary(lm_outstate_terminal)
+
+mse_outstate_pers = mse(lm_outstate_pers,df2)
+summary(lm_outstate_pers)
+
+```
+
+
+
+```{r, scatter_plot_outstate_expend, echo=FALSE}
+ggplot(df2, mapping = aes(x = Expend, y = Outstate)) +
+       geom_point(color = "deeppink", alpha = .2) +
+       geom_smooth(method = "lm", color = "grey30") +
+       labs(title = "Out-of-state Tuition vs. Instructional Expenditure per Student",
+            x = "Instructional expenditure per student",
+            y = "Out-of-state tuition") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+```{r pred_outstate_expend}
+
+pred_expend = add_predictions(df2, lm_outstate_expend, var = "predExpend")
+df2$predExpend = pred_expend$predExpend
+df2$residExpend = df2$Outstate - df2$predExpend
+
+ggplot(df2, mapping = aes(predExpend, residExpend)) +
+       geom_point(alpha = .15, color = 'deeppink', size = 1.5) +
+       geom_smooth(color = 'grey30', method = 'loess') +
+       labs(title = "Out-of-state Tuition based on Instructional Expenditure per Student:\nResiduals vs. Predicted Values",
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+Plot shows heteroscedasticity of residuals vs. predicted values
+
+``` {r polynomial_outstate_expend}
+
+glm_outstate_expend = glm(Outstate ~ I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend ** 4) + I(Expend ** 5), data = df2)
+
+summary(glm_outstate_expend)
+
+outstate_expend_pred = augment(glm_outstate_expend, newdata = data_grid(df2, Expend)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+```
+
+```{r polynomial_outstate_expend_plot, echo=FALSE}
+
+ggplot(outstate_expend_pred, aes(Expend)) +
+  geom_point(data = df2, aes(Expend, Outstate), alpha = .15, color = 'deeppink', size = 1.5) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  labs(title = "Out-of-state Tuition based on Instructional Expenditure per Student:\nFifth-degree Polynomial Regression",
+       x = "Instructional Expenditure per Student",
+       y = "Out-of-state tuition") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+```{r pred_outstate_expend_polynomial_plot_resid, echo=FALSE}
+
+pred_expend_poly5 = add_predictions(df2, glm_outstate_expend, var = "predExpendPoly5")
+df2$predExpendPoly5 = pred_expend_poly5$predExpendPoly5
+df2$residExpendPoly5 = df2$Outstate - df2$predExpendPoly5
+
+ggplot(df2, mapping = aes(predExpendPoly5, residExpendPoly5)) +
+       geom_point(alpha = .15, color = 'deeppink', size = 1.5) +
+       geom_smooth(color = 'grey30', method = 'loess') +
+       labs(title = "Out-of-state Tuition based on Institutional Expenditure per Student", subtitle = 'Residuals vs. Predicted Values',
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+
+
+```
+
+
+
+```{r expend_split_7030_100_rounds}
+
+expend_mse_list_100 = vector("numeric", rounds)
+
+set.seed(1234)
+
+for(i in 1:rounds) {
+  split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
+  train70 = split7030$train %>%
+            tbl_df()
+  test30 = split7030$test %>%
+           tbl_df()
+
+  glm_100_train70 = glm(Outstate ~ I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend ** 4) + I(Expend ** 5), data = train70)
+
+  expend_mse_100_test30 = mse(glm_100_train70,test30)
+  expend_mse_list_100[[i]] = expend_mse_100_test30
+}
+
+expend_mse_df_100 = as.data.frame(expend_mse_list_100)
+```
+
+```{r, 70_30_100_rounds_MSE_histogram_expend, echo=FALSE}
+
+ggplot(expend_mse_df_100, aes(x = expend_mse_list_100)) +
+       geom_histogram(fill = "deeppink", color='grey70') +
+       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+            x = "Mean Squared Error",
+            y = "Frequency count of rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, scatter_plot_outstate_terminal, echo=FALSE}
+ggplot(df2, mapping = aes(x = Terminal, y = Outstate)) +
+       geom_point(color = "purple1", alpha = .2) +
+       geom_smooth(method = "lm", color = "grey30") +
+       labs(title = "Out-of-state Tuition vs. Percent of Faculty with Terminal Degrees",
+            x = "Percent of faculty with terminal degrees",
+            y = "Out-of-state tuition") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+```{r pred_outstate_terminal}
+
+pred_terminal = add_predictions(df2, lm_outstate_terminal, var = "predTerminal")
+df2$predTerminal = pred_terminal$predTerminal
+df2$residTerminal = df2$Outstate - df2$predTerminal
+
+ggplot(df2, mapping = aes(predTerminal, residTerminal)) +
+       geom_point(alpha = .15, color = 'purple1', size = 1.5) +
+       geom_smooth(color = 'grey30', method = 'loess') +
+     labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nResiduals vs. Predicted Values",
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+``` {r polynomial_outstate_terminal}
+
+glm_outstate_terminal = glm(Outstate ~ I(Terminal) + I(Terminal ** 2) + I(Terminal ** 3) + I(Terminal ** 4), data = df2)
+
+#glm_outstate_terminal = glm(Outstate ~ I(Terminal ** 4), data = df2)
+
+summary(glm_outstate_terminal)
+
+outstate_terminal_pred = augment(glm_outstate_terminal, newdata = data_grid(df2, Terminal)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+```
+
+```{r polynomial_outstate_terminal_plot, echo=FALSE}
+
+ggplot(outstate_terminal_pred, aes(Terminal)) +
+  geom_point(data = df2, aes(Terminal, Outstate), alpha = .15, color = 'purple1', size = 1.5) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nFourth-degree Polynomial Regression",
+       x = "Percent of faculty with terminal degrees",
+       y = "Out-of-state tuition") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+```{r pred_outstate_terminal_polynomial_plot_resid, echo=FALSE}
+
+pred_terminal_poly4 = add_predictions(df2, glm_outstate_terminal, var = "predTerminalPoly4")
+df2$predTerminalPoly4 = pred_terminal_poly4$predTerminalPoly4
+df2$residTerminalPoly4 = df2$Outstate - df2$predTerminalPoly4
+
+ggplot(df2, mapping = aes(predTerminalPoly4, residTerminalPoly4)) +
+       geom_point(alpha = .15, color = 'purple1', size = 1.5) +
+       geom_smooth(color = 'grey30', method = 'loess') +
+        labs(title = "Out-of-state Tuition based on Percent of Faculty with Terminal Degrees:\nFourth-degree Polynomial Regression", subtitle = 'Residuals vs. Predicted Values',
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+
+```{r terminal_split_7030_100_rounds}
+
+set.seed(1234)
+
+terminal_mse_list_100 = vector("numeric", rounds)
+
+for(i in 1:rounds) {
+  split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
+  train70 = split7030$train %>%
+            tbl_df()
+  test30 = split7030$test %>%
+           tbl_df()
+
+  glm_100_train70 = glm(Outstate ~ I(Terminal) + I(Terminal ** 2) + I(Terminal ** 3) + I(Terminal ** 4), data = train70)
+
+  terminal_mse_100_test30 = mse(glm_100_train70,test30)
+  terminal_mse_list_100[[i]] = terminal_mse_100_test30
+}
+
+terminal_mse_df_100 = as.data.frame(terminal_mse_list_100)
+```
+
+```{r, 70_30_100_rounds_MSE_histogram_terminal, echo=FALSE}
+
+ggplot(terminal_mse_df_100, aes(x = terminal_mse_list_100)) +
+       geom_histogram(bins = 10, fill = "purple1", color = 'grey30') +
+       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+            x = "Mean Squared Error",
+            y = "Frequency count of rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+
+
+
+
+```{r, scatter_plot_outstate_pers, echo=FALSE}
+ggplot(df2, mapping = aes(x = Personal, y = Outstate)) +
+       geom_point(color = "orangered", alpha = .2) +
+       geom_smooth(method = "lm", color = "grey30") +
+       labs(title = "Out-of-state Tuition vs. Personal Spending",
+            x = "Personal spending",
+            y = "Out-of-state tuition") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+```{r pred_outstate_pers}
+
+pred_pers = add_predictions(df2, lm_outstate_pers, var = "predPers")
+df2$predPers = pred_pers$predPers
+df2$residPers = df2$Outstate - df2$predPers
+
+ggplot(df2, mapping = aes(predPers, residPers)) +
+       geom_point(alpha = .15, color = 'orangered', size = 1.5) +
+       geom_smooth(color = 'grey30', method = 'loess') +
+       labs(title = "Out-of-state Tuition based on Personal Spending:\nResiduals vs. Predicted Values",
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+
+
+``` {r polynomial_outstate_pers}
+
+glm_outstate_pers = glm(Outstate ~ I(Personal) + I(Personal ** 2) + I(Personal ** 3) , data = df2)
+
+outstate_pers_pred = augment(glm_outstate_pers, newdata = data_grid(df2, Personal)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+```
+
+```{r polynomial_outstate_pers_plot, echo=FALSE}
+
+ggplot(outstate_pers_pred, aes(Personal)) +
+  geom_point(data = df2, aes(Personal, Outstate), alpha = .15, color = 'orangered', size = 1.5) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  labs(title = "Out-of-state Tuition based on Personal Spending:\nThird-degree Polynomial Regression",
+       x = "Personal Spending",
+       y = "Out-of-state tuition") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+```{r pred_outstate_pers_polynomial_plot_resid, echo=FALSE}
+
+pred_pers_poly3 = add_predictions(df2, glm_outstate_pers, var = "predPersPoly3")
+df2$predPersPoly3 = pred_pers_poly3$predPersPoly3
+df2$residPersPoly3 = df2$Outstate - df2$predPersPoly3
+
+ggplot(df2, mapping = aes(predPersPoly3, residPersPoly3)) +
+       geom_point(alpha = .15, color = 'orangered', size = 1.5) +
+       geom_smooth(color = 'grey30', method = 'loess') +
+        labs(title = "Out-of-state Tuition based on Personal Spending:\nFourth-degree Polynomial Regression", subtitle = 'Residuals vs. Predicted Values',
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+
+```
+
+
+
+
+```{r pers_split_7030_100_rounds}
+
+pers_mse_list_100 = vector("numeric", rounds)
+
+set.seed(1234)
+
+for(i in 1:rounds) {
+  split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
+  train70 = split7030$train %>%
+            tbl_df()
+  test30 = split7030$test %>%
+           tbl_df()
+
+  glm_100_train70 = glm(Outstate ~ I(Personal) + I(Personal ** 2) + I(Personal ** 3), data = train70)
+
+  pers_mse_100_test30 = mse(glm_100_train70,test30)
+  pers_mse_list_100[[i]] = pers_mse_100_test30
+}
+
+pers_mse_df_100 = as.data.frame(pers_mse_list_100)
+```
+
+```{r, 70_30_100_rounds_MSE_histogram_pers, echo=FALSE}
+
+ggplot(pers_mse_df_100, aes(x = pers_mse_list_100)) +
+       geom_histogram(bins = 20, fill = "orangered", color = 'grey30') +
+       labs(title = "Mean Squared Error for 100 Rounds of 70%:30% Training:Testing Splits",
+            x = "Mean Squared Error",
+            y = "Frequency count of rounds") +
+       theme(plot.title = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+
+
+
+
+
+
+The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
+
+
+* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
+* `Apps` - Number of applications received.
+* `Accept` - Number of applications accepted.
+* `Enroll` - Number of new students enrolled.
+* `Top10perc` - Percent of new students from top 10% of H.S. class.
+* `Top25perc` - Percent of new students from top 25% of H.S. class.
+* `F.Undergrad` - Number of fulltime undergraduates.
+* `P.Undergrad` - Number of parttime undergraduates.
+* `Outstate` - Out-of-state tuition.
+* `Room.Board` - Room and board costs.
+* `Books` - Estimated book costs.
+* `Personal` - Estimated personal spending.
+* `PhD` - Percent of faculty with Ph.D.'s.
+* `Terminal` - Percent of faculty with terminal degrees.
+* `S.F.Ratio` - Student/faculty ratio.
+* `perc.alumni` - Percent of alumni who donate.
+* `Expend` - Instructional expenditure per student.
+* `Grad.Rate` - Graduation rate.
+
+Explore the bivariate relationships between some of the available predictors and `Outstate`. You should estimate at least 3 **simple** linear regression models (i.e. only one predictor per model). Use non-linear fitting techniques in order to fit a flexible model to the data, **as appropriate**. You could consider any of the following techniques:
+
+* No transformation
+* Monotonic transformation
+* Polynomial regression
+* Step functions
+* Splines
+* Local regression
+
+Justify your use of linear or non-linear techniques using cross-validation methods. Create plots of the results obtained, and write a summary of your findings.
+
+
+
+
+
+
+
+
+
+
+
+
+# Part 3: College (GAM)
+
+The `College` dataset in the `ISLR` library (also available as a `.csv` or [`.feather`](https://github.com/wesm/feather) file in the `data` folder) contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report. The variables we are most concerned with are:
+
+* `Outstate` - Out-of-state tuition.
+* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
+* `Room.Board` - Room and board costs.
+* `PhD` - Percent of faculty with Ph.D.'s.
+* `perc.alumni` - Percent of alumni who donate.
+* `Expend` - Instructional expenditure per student.
+* `Grad.Rate` - Graduation rate.
+
+
+
+```{r college_train_test_split}
+
+df2$PrivateRC[df2$Private == 'Yes'] = 1
+df2$PrivateRC[df2$Private == 'No'] = 0
+
+set.seed(1234)
+
+college_split7030 = resample_partition(df2, c(test = 0.3, train = 0.7))
+college_train70 = college_split7030$train %>%
+                  tbl_df()
+college_test30 = college_split7030$test %>%
+                 tbl_df()
+```
+
+
+```{r college_mr}
+
+lm_college_train70 = lm(Outstate ~ PrivateRC + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = college_train70)
+summary(lm_college_train70)
+```
+
+
+```{r college_train70_residuals_plot, echo = FALSE}
+
+college_predictions_train70 = add_predictions(college_train70, lm_college_train70, var = "pred")
+college_train70$pred_train70 = college_predictions_train70$pred
+college_train70$resid_train70 = college_train70$Outstate - college_train70$pred_train70
+
+ggplot(college_train70, mapping = aes(pred_train70, resid_train70)) +
+       geom_point(alpha = .15, size = 1.5, aes(color=Private)) +
+       geom_smooth(method = 'loess', color = 'grey30') + 
+       labs(title = "Out-of-state Tuition as Explained by Private Status, Room & Board Costs, Percent of\nFaculty with PhDs, Percent Alumni who Donate, Instructional Expenditure per Student,\nand Graduation Rate: Residuals vs. Predicted Values (Training Set)",
+            subtitle = "with LOESS Smoother Line",
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
+```
+
+1. Split the data into a training set and a test set.
+1. Estimate an OLS model on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+1. Estimate a GAM on the training data, using out-of-state tuition (`Outstate`) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+1. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+1. For which variables, if any, is there evidence of a non-linear relationship with the response?^[Hint: Review Ch. 7.8.3 from ISL on how you can use ANOVA tests to determine if a non-linear relationship is appropriate for a given variable.]
+
+
+
+
+
+
+```{r gam_college}
+
+college_gam = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(PhD, df=5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)#df2)
+summary(college_gam)
+
+college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
+```
+```{r college_gam_private_plot}
+data_frame(x = college_gam_terms$PrivateRC$x,
+           y = college_gam_terms$PrivateRC$y,
+           se.fit = college_gam_terms$PrivateRC$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x, levels = 0:1, labels = c("Public", "Private"))) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar(aes(color=x)) +
+  geom_point(aes(color=x)) +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = NULL,
+       y = expression(f[1](Private))) + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none')
+```
+
+
+
+```{r college_gam_room.board_plot}
+data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
+           y = college_gam_terms$`bs(Room.Board, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Room.Board, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line(color = 'deeppink', size = 1) +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) + geom_point(alpha = .03) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Cubic spline",
+       x = 'Room & Board',
+       y = expression(f[2](RoomAndBoard))) + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none')
+```
+
+
+```{r college_gam_phd_plot}
+data_frame(x = college_gam_terms$`bs(PhD, df = 5)`$x,
+           y = college_gam_terms$`bs(PhD, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(PhD, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line(color = 'darkturquoise', size = 1) +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) + geom_point(alpha = .03) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Cubic spline",
+       x = 'Percentage of Professors with PhDs',
+       y = expression(f[3](PhD))) + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none')
+```
+
+
+
+```{r college_gam_alumni_plot}
+data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
+           y = college_gam_terms$`bs(perc.alumni, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(perc.alumni, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line(color = 'purple1', size = 1) +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) + geom_point(alpha = .03) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Cubic spline",
+       x = 'Percentage Alumni who Donate',
+       y = expression(f[4](PercentageAlumni))) + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none')
+```
+
+
+
+```{r college_gam_expend_plot}
+data_frame(x = college_gam_terms$`I(Expend^5)`$x,
+           y = college_gam_terms$`I(Expend^5)`$y,
+           se.fit = college_gam_terms$`I(Expend^5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line(color = 'orangered', size = 1) +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) + geom_point(alpha = .03) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Cubic spline",
+       x = 'Instructional Expenditures per Student',
+       y = expression(f[5](PerStudentInstructionalExpenditures))) + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none')
+```
+
+
+```{r college_gam_gradrate_plot}
+data_frame(x = college_gam_terms$`bs(Grad.Rate, df = 5)`$x,
+           y = college_gam_terms$`bs(Grad.Rate, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Grad.Rate, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line(color = 'springgreen1', size = 1) +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) + geom_point(alpha = .03) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Cubic spline",
+       x = 'Graduation Rate',
+       y = expression(f[6](GraduationRate))) + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none')
+```
+
+
+
+```{r testing_college_gam, warning=FALSE}
+
+college_mse_test30 = mse(lm_college_train70,college_test30)
+```
+
+```{r ANOVA_rmbd}
+
+gam_college_ex_rmbd = gam(Outstate ~ PrivateRC + bs(PhD, df=5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
+gam_college_lin_rmbd = gam(Outstate ~ PrivateRC + Room.Board + bs(PhD, df=5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
+anova_rmbd = anova(gam_college_ex_rmbd, gam_college_lin_rmbd, college_gam, test="F")
+anova_rmbd
+```
+
+The results of the ANOVA indicate that while both the GAM with the linear term for room & board and the GAM with the cubic spline term for room & board are both statistically significant (at the p<.001 and p<.01 levels, respectively), the former has a much higher F-statistic (`r sum(tidy(anova_rmbd)[2,5])`) compared to sum(`r sum(tidy(anova_rmbd)[3,5])`) and therefore has a higher ratio of explained to unexplained variance compared to the latter.  This is evidence that the relationship between room & board and out-of-state tuition is linear.
+
+
+
+```{r ANOVA_minus_phd, warning=FALSE}
+
+gam_college_ex_phd = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
+gam_college_lin_phd = gam(Outstate ~ PrivateRC + bs(Room.Board, df=5) + PhD + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
+anova_phd = anova(gam_college_ex_phd, gam_college_lin_phd, college_gam, test="F")
+anova_phd
+```
+
+Here, the ANOVA results indicate that the linear model differs significantly from the others (p<.05).  The F-statistics are low, though that of the GAM model with the linear term for PhD is higher (`r sum(tidy(anova_phd)[3,5])`) compared to `r sum(tidy(anova_phd)[2,5])`).  The test indicates that the relationship between PhD and out-of-state tuition is linear.
+
+```{r ANOVA_minus_alumni}
+
+gam_college_ex_alumni = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(PhD, df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
+gam_college_lin_alumni = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(PhD, df=5) + perc.alumni + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + bs(Grad.Rate,df=5), data = college_train70)
+anova_alumni = anova(gam_college_ex_alumni, gam_college_lin_alumni, college_gam, test="F")
+anova_alumni
+```
+
+The GAM model with the linear term for percentage alumni who donate is statistically significantly different (p<.001) from the model that excludes the term and the model that uses a spline term.  Additionally, that model's F-statistic is higher than the model including the spline term (`r tidy(anova_alumni)[2,5]` compared to `r tidy(anova_alumni)[3,5]`), which indicates that the relationship between percentage of alumni who donate and out-of-state tuition is linear.
+
+
+
+```{r ANOVA_minus_expend}
+
+gam_college_ex_expend = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(PhD, df=5) + bs(perc.alumni,df=5) +  bs(Grad.Rate,df=5), data = college_train70)
+gam_college_lin_expend = gam(Outstate ~ PrivateRC + bs(Room.Board, df=5) + bs(PhD, df=5) + bs(perc.alumni,df=5) + Expend + bs(Grad.Rate,df=5), data = college_train70)
+anova_expend = anova(gam_college_ex_expend, gam_college_lin_expend, college_gam, test="F")
+anova_expend
+```
+The ANOVA results indicate that while both the GAM models including Expend are statistically significantly different (p<.001) from the model that excludes it, the model including the linear term has a higher F-statistic than the model with the fifth-order polynomial term (`r tidy(anova_expend)[2,5]` compared to `r tidy(anova_expend)[3,5]`, respectively).  This is evidence that the relatinoship between instructional expenditures per student and out-of-state tuition is actually linear.  This is contrary to our earlier explorations, in which the fifth-order term resulted in homoscedastic residuals while the simple bivariate regression resulted in heteroscedastic residuals, indicating that the fit of the fifth-order polynomial model was better than that of the simple bivariate model.  The greater F-statistic for the model with the linear expenditure term suggests that once the other covariates are taken into account, the relationship between expenditure and out-of-state tuition becomes linear.
+
+
+```{r ANOVA_minus_gradrate}
+
+gam_college_ex_grad = gam(Outstate ~ PrivateRC + bs(Room.Board, df = 5) + bs(PhD, df=5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5), data = college_train70)
+gam_college_lin_grad = gam(Outstate ~ PrivateRC + bs(Room.Board, df=5) + bs(PhD, df=5) + bs(perc.alumni,df=5) + I(Expend) + I(Expend ** 2) + I(Expend ** 3) + I(Expend **4) + I(Expend ** 5) + Grad.Rate, data = college_train70)
+anova_gradrate = anova(gam_college_ex_grad, gam_college_lin_grad, college_gam, test="F")
+anova_gradrate
+```
+The ANOVA results indicate that the relationship between graduation rate and out-of-state tuition is linear; this is because the GAM model with the linear term is statistically signifcantly different (p<.001) from the others and has a much higher F-statistic (`r tidy(anova_gradrate)[2,5]` compared to `r tidy(anova_gradrate)[3,5]`).
