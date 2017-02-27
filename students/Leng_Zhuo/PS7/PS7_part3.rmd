@@ -16,21 +16,17 @@ knitr::opts_chunk$set(cache = TRUE,
 ``` {r, include=FALSE}
 set.seed(1234)
 options(digits = 3)
-install.packages('tidyverse')
 library(tidyverse)
-install.packages('modelr')
 library(modelr)
-install.packages('broom')
 library(broom)
-install.packages('gam')
 library(gam)
 
 
-GAM_college_data <- read.csv(file = "College.csv", header = T)
+GAM_college_data <- read.csv(file = "data/College.csv", header = T)
 ```
 
 ##Estimate an OLS model 
-```{r gam-ols, include = True}
+```{r gam-ols, include = TRUE}
 attach(GAM_college_data)
 ##1.split the data
 
@@ -45,7 +41,7 @@ summary(part3.model1)
 As the summary table above, we could see that the OLS model coefficients are as above. From their p-value, we could see all the six predictors are statistics significant. The Adjusted R-squared:  0.738, which is close to 1, means the model fit the data well. 
 
 ##3.GAM model
-```{r gam-gam, include = True}
+```{r gam-gam, include = TRUE}
 require(mgcv)
 part3.model2 <- gam(Outstate ~  Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + poly(Expend, 4) + poly(Grad.Rate, 3), data = part3_split$train)
 summary(part3.model2)
@@ -54,7 +50,7 @@ summary(part3.model2)
 
 For my gam model, I use linear regression on private and 4 degree polynomial on Grad.Rate, 3 degree polynomial on Expend. For other variables, I use local regression. From the summary table, we could see that the almost all variables are statistically significant.
 
-```{r gam-plot, include=TRUE}
+```{r  , include=TRUE}
 
 clg_gam_terms <- preplot(part3.model2, se = TRUE, rug = FALSE)
 
@@ -74,7 +70,7 @@ data_frame(x = clg_gam_terms$Private$x,
 ```
 
 
-```{r gam-plot, include=TRUE}
+```{r  , include=TRUE}
 # Room.Board
 data_frame(x = part3.model2.terms$`lo(Room.Board)`$x,
            y = part3.model2.terms$`lo(Room.Board)`$y,
@@ -93,7 +89,7 @@ data_frame(x = part3.model2.terms$`lo(Room.Board)`$x,
 
 
 
-```{r gam-plot, include=TRUE}
+```{r  , include=TRUE}
 
 # PhD
 data_frame(x = clg_gam_terms$`lo(PhD)`$x,
@@ -113,7 +109,7 @@ data_frame(x = clg_gam_terms$`lo(PhD)`$x,
 
 
 
-```{r gam-plot, include=TRUE}
+```{r  , include=TRUE}
 # perc.alumni
 data_frame(x = clg_gam_terms$`lo(perc.alumni)`$x,
            y = clg_gam_terms$`lo(perc.alumni)`$y,
@@ -132,7 +128,7 @@ data_frame(x = clg_gam_terms$`lo(perc.alumni)`$x,
 
 
 
-```{r gam-plot, include=TRUE}
+```{r  , include=TRUE}
 # Expend
 data_frame(x = clg_gam_terms$`bs(Expend, degree = 4)`$x,
            y = clg_gam_terms$`bs(Expend, degree = 4)`$y,
@@ -150,7 +146,7 @@ data_frame(x = clg_gam_terms$`bs(Expend, degree = 4)`$x,
 ```
 
 
-```{r gam-plot, include=TRUE}
+```{r  , include=TRUE}
 # Grad.Rate
 data_frame(x = clg_gam_terms$`bs(Grad.Rate, degree = 3)`$x,
            y = clg_gam_terms$`bs(Grad.Rate, degree = 3)`$y,
@@ -183,7 +179,7 @@ mse_model2
 The mse from OLS is 3787199, and the mse from gam is 3750909. So the mse from gam is smaller, we could know that the gam modal fit the data better. However, the difference is not very big, so perhaps the model has overfitting problem.
 
 ## 5. Non-linear Relationship with the response
-```{r anova-test, include=TRUE}
+```{r  , include=TRUE}
 
 # Room.Board
 gam_no_rb <- gam(Outstate ~  Private + lo(PhD) + lo(perc.alumni) + poly(Expend, 4) + poly(Grad.Rate, 3), data = part3_split$train)
@@ -214,7 +210,7 @@ gam_lin_gr <- gam(Outstate ~ Private + lo(Room.Board) + PhD + lo(perc.alumni) + 
 ```
 We need to know the new model that omits predictor and the GAM model that have the linear predictor. We will not include the Private here because it's binary. Then we conduct ANOVA test among the three model: 1.full model 2. linear predictor model 3. omits predictor model
 
-```{r anova-test, include=TRUE}
+```{r  , include=TRUE}
 anova(gam_no_rb, gam_lin_rb, part3.model2)
 anova(gam_no_phd, gam_lin_phd, part3.model2)
 anova(gam_no_pa, gam_lin_pa, part3.model2)
@@ -222,12 +218,7 @@ anova(gam_no_expend, gam_lin_expend, part3.model2)
 anova(gam_no_gr, gam_lin_gr, part3.model2)
 ```
 
-After the anova test, 
-for Room.Board predictor:
-for PhD predictor:
-for perc.alumni predictor:
-for Expend predictor:
-for Grad.Rate predictor:
+After the anova test, we could conclude that the Phd,and Grad.Rate are statistically significant in 2th model, so they have linear relationship. Phd and perc.alumni and Expend have non-linear relationshionship.
 
 
 
