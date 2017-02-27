@@ -151,58 +151,22 @@ data_frame(terms = terms,
        color = "CV Method")
 ```
 
-6. 
+6. Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds, we get the results below. The mean MSE I got is 398.1786. And according to the histogram I got, most of the MSEs are located between 397 and 399, which are lower than the single 10-fold cross-validation approach. So the 100-time 10-fold cross-validation approach is more reliable.
 ```{r problem1_6, echo=FALSE}
-fold10_100 <- data.frame(one=c(NA), two=c(NA), three=c(NA), four=c(NA), five=c(NA))
-
-i <- 0
-
-while (i<100){
-  i <- i + 1
+cv_mse <- c()
+for (i in 1:100){
   cv10_data <- crossv_kfold(bidenData, k = 10)
-
-    cv_error_fold10 <- vector("numeric", 5)
-    terms <- 1:5
-
-    for(i in terms){
-      cv10_models <- map(cv10_data$train, ~ lm(biden ~ poly(age+female+educ+dem+rep, i), data = .))
-      cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
-      cv_error_fold10[[i]] <- mean(cv10_mse)
-    }
-
-    fold10_100 <- rbind(fold10_100, cv_error_fold10) 
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_mse[[i]] <- mean(cv10_mse)
 }
+mean(cv_mse)
 
-fold10_100
-```
-
-```{r problem1_6, ehco=FALSE}
-# set random seed
-set.seed(1234)
-
-# repeat 100 times
-fold10_100 <- replicate(100, {
-  biden_10fold <- crossv_kfold(bidenData, k = 10)
-  biden_10models <- map(biden_10fold$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
-  biden_10mses <- map2_dbl(biden_10models,
-                           biden_10fold$test, mse)
-  mse_10fold <- mean(biden_10mses, na.rm = TRUE)
-})
-
-fold10_100 <- mean(fold10_100)
-
-ggplot(mapping = aes(fold10_100)) + 
-   geom_histogram(color = 'black', fill = 'white') +
-   labs(title = "Distribution of MSE using 10-fold Cross-Validation Approach 100 times",
-        x = "MSE values",
-        y = "Frequency")+
-  geom_vline(aes(xintercept = fold10_100, color = '100-times 10-fold')) +
-  geom_vline(aes(xintercept = mse_10fold, color = '1-time 10-fold')) +
-  geom_vline(aes(xintercept = mseorigin, color = 'Origin Linear Regression')) + 
-  scale_color_manual(name = NULL, breaks = c("100-times 10-fold", "1-time 10-fold","Origin Linear Regression"),values = c("blue", "green", "orange")) +
-  theme(legend.position = 'bottom')
-
-fold10_100
+ggplot(mapping=aes(x=cv_mse))+
+  geom_histogram(binwidth = 0.1, fill=I('blue'), col=I('black'))+
+  labs(title="The distribution of MSEs",
+         x="MSE",
+         y="Frequency")
 ```
 
 
@@ -585,10 +549,13 @@ data_frame(x = problem3_gam_terms$Private$x,
 ```
 
 
-4. The test MSE for OLS model and the test MSE for GAM model are shown as below.
+4. The test MSE for OLS model and the test MSE for GAM model are shown as below. We could see that the GAM model produces less errors than the OLS model.
 ```{r problem3_4_evaluation}
 lin_mse <- mse(problem3_lm, college_split$test)
-gam_mse <- mse(problem3_gam, college_split$test)
+lin_mse
+
+gam_mse <- mse(problem3_gam, college_split$train)
+gam_mse
 ```
 
 
