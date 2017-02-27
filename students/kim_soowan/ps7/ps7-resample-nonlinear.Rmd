@@ -28,7 +28,7 @@ biden <- read.csv("data/biden.csv")
 
 # Part 1: Sexy Joe Biden (redux) [4 points]
 
-####Question  1. 
+####Question  1 
 **Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.**
 
 ```{r entire_set_MSE}
@@ -47,7 +47,8 @@ entire_mse <- mse(glm_trad, biden) #calculate MSE
 
 The MSE for the model trained on the entire dataset is `r entire_mse`.
 
-  2. **Estimate the test MSE of the model using the validation set approach. How does this value compare to the training MSE from step 1?**
+####Question 2
+**Estimate the test MSE of the model using the validation set approach. How does this value compare to the training MSE from step 1?**
 
 ```{r validation_set_MSE}
 biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
@@ -64,7 +65,8 @@ validation_mse <- mse(biden_train_lm, biden_test) #calculate MSE using test set
 
 The MSE calculated using the validation approach is `r validation_mse`. This is slightly higher than the MSE calculated using the traditional approach (`r entire_mse`). The model fitted using the validation approach only used 70% of the observations, so it is somewhat worse at predicting the results observed in the dataset than the model fitted on all the data.
 
-  3. **Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.**
+####Question 3
+**Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.**
   
 ```{r validation_MSE_100}
 mse_list <- vector(, 100) #set up empty vector of 100 items
@@ -93,7 +95,8 @@ mse_sd <- sd(mse_list)
 
 The MSEs vary quite a bit, ranging from 338 to 450. The standard deviation of MSE estimates is `r mse_sd`. This shows that the results are highly dependent on which observations are picked for the training set. The average of these values is very close to the MSE obtained using the entire dataset.
 
-  4. **Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.**
+####Question 4
+**Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.**
 
 ```{r LOOCV_MSE, cache=TRUE}
 loocv_data <- crossv_kfold(biden, k = nrow(biden)) #divide data into k folds where k = number of observations
@@ -104,7 +107,8 @@ loocv_mse <- mean(loocv_mse_map, na.rm = TRUE) #get mean of MSEs
 
 The MSE calculated using the LOOCV approach is `r loocv_mse`. This is similar to the MSE obtained using the entire dataset and the validation approach, and particularly to the mean of the MSEs obtained by repeating the validation approach 100 times. 
 
-  5. **Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.**
+####Question 5
+**Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.**
 
 ```{r 10-fold_CV_MSE}
 biden_cv10 <- crossv_kfold(biden, k = 10) %>% #divide data set into 10 folds
@@ -115,7 +119,8 @@ cv10_mse <- mean(biden_cv10$mse, na.rm = TRUE) #get mean MSE
 
 The MSE calculated using the 10-fold cross-validation approach is `r cv10_mse`. Again, this is similar to the other MSE estimates. It is especially very close to the LOOCV MSE and the mean of the MSEs from repeating the validation set approach 100 times.
 
-  6. **Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.**
+####Question 6
+**Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.**
   
 ```{r 10-fold_CV_MSE_100, cache=TRUE}
 cv10_mse_list <- vector(, 100) #create vector of length 100
@@ -141,7 +146,8 @@ mse_sd <- sd(cv10_mse_list)
 
 This time, the estimates vary very little, with a standard deviation of only `r mse_sd`. This shows that the 10-fold cross validation method produces estimates much more reliable and unbiased than that of the validation set approach. However, the mean of the estimates using this method is almost identical to the mean of the MSEs from repeating the validation set approach 100 times. 
 
-  7. **Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).**
+####Question 7
+**Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).**
 
 **Original model estimates**
 
@@ -167,3 +173,437 @@ boot_est
 ```
 
 The estimates for parameters and standard errors are very nearly the same across the two approaches.
+
+# Part 2: College (bivariate) [3 points]
+
+```{r college_import}
+college <- read.csv("data/College.csv")
+```
+
+####Private or public
+
+Since `Private` is a categorical variable with only two values, I fit a linear model with no transformation, as follows:
+
+```{r private_lm}
+private_mod <- glm(Outstate ~ Private, data = college)
+pander(tidy(private_mod))
+```
+
+The factor of a university being private is highly statistically significant, and has a large estimated effect as well. A private university is expected to have out-of-state tuition rates around $5000 higher than a public university.
+
+```{r private_plot}
+private_mod_pred <- college %>%
+  add_predictions(private_mod) %>%
+  add_residuals(private_mod)
+
+ggplot(private_mod_pred, aes(resid)) +
+  geom_freqpoly(aes(color = Private)) + 
+  labs(title ="Distribution of residuals for private/public-only model", 
+       subtitle = "Outstate ~ Private")
+```
+
+The residuals peak around 0 for both private and public universities, but residuals are more negative for private universities and there appear to be some clustering in different areas, suggesting that other factors have important effects.
+
+####Room and board costs
+
+```{r roomboard_exp_plot}
+ggplot(college, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Room and board costs vs. Out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Room and board costs ($)",
+       y = "Out-of-state tuition ($)")
+```
+
+The relationship appears fairly linear, but it looks like the relationship could be quadratic or cubic for some ranges of the x value. I will fit a more flexible model using splines.
+
+```{r roomboard_splines}
+# function to simplify things
+RB_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(Room.Board, df = df, degree = degree),
+                                  data = .))
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+college_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+RB_degree_mse <- data_frame(degrees = 1:10,
+                                    mse = map_dbl(degrees, ~ RB_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+RB_df_mse <- data_frame(df = 1:10,
+                                mse = map_dbl(df, ~ RB_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+```
+
+The optimal number of degrees and knots (df) for a spline regression are 2 and 6, respectively, as shown below:
+
+```{r roomboard_splines_optimal_charts}
+RB_degree_mse
+RB_df_mse
+```
+
+Using the optimal number of degrees and knots, the regression estimates are as follows:
+
+```{r roomboard_splines_optim_model}
+RB_optim <- glm(Outstate ~ bs(Room.Board, df = 6, degree = 2), data = college)
+summary(RB_optim)
+```
+
+The relationship is highly statistically significant for all knots other than the first, possibly due to lack of data The p-value is also relatively small for the last knot, suggesting the observations were more sparse for the lower and higher ends of the predictor value. The parameter estimates increase as as `Room.Board` increases, but start to fall after the fifth knot, where it peaks. Given more data, the overall relationship could be linear, but it could also be that the effect of `Room.Board` is different at the highest values. On the whole, it looks like higher room and board costs are associated with higher tuition rates.
+
+```{r roomboard_splines_optim_plot}
+augment(RB_optim, newdata = data_grid(college, Room.Board)) %>%
+  mutate(.fitted_low = .fitted - 1.96 * .se.fit,
+         .fitted_high = .fitted + 1.96 * .se.fit) %>%
+  ggplot(aes(Room.Board, .fitted)) +
+  geom_point(data = college, aes(y = Outstate), alpha = .1) +
+  geom_line() +
+  geom_line(aes(y = .fitted_low), linetype = 2) +
+  geom_line(aes(y = .fitted_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(college$Room.Board, df = 6, degree = 2), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Second-order polynomial spline of out-of-state tuition",
+       subtitle = "Knots = 6",
+       x= "Room and board costs ($)",
+       y = "Predicted out-of-state tuition ($)")
+```
+
+####Percent of faculty with Ph.D.'s
+
+```{r phd_exp_plot}
+ggplot(college, aes(PhD, Outstate)) +
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Percent of faculty with PhDs vs. Out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Percent of faculty with PhDs",
+       y = "Out-of-state tuition ($)")
+```
+
+Based on the plot, it looks like the relationship between `PhD` and `Outstate` could be cubic. I first fit a model with monotonic transformation, then a spline regression.
+
+```{r phd_monotonic}
+college <- college %>%
+  mutate(logoutstate = log(Outstate)) #take log of Outstate
+
+ggplot(college, aes(x = PhD, y = logoutstate)) + 
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Percent of faculty with PhDs vs. Log out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Square of percent of faculty with PhDs",
+       y = "Log of out-of-state tuition in dollars")
+```
+
+The smoothing line is flatter, but still follows a curve rather than a straight line. It does not look like there are different patterns for different ranges of `PhDsq`, and the curve is fairly smooth. To confirm, I calculate the optimal conditions for a spline regression below.
+
+```{r phd_splines}
+# function to simplify things
+phd_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(PhD, df = df, degree = degree),
+                                  data = .))
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+college_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+phd_degree_mse <- data_frame(degrees = 1:10,
+                                    mse = map_dbl(degrees, ~ phd_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+phd_df_mse <- data_frame(df = 1:10,
+                                mse = map_dbl(df, ~ phd_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+```
+
+The optimal number of degrees and knots (df) for a spline regression are both 1. 
+
+```{r phd_splines_optimal_charts}
+phd_degree_mse
+phd_df_mse
+```
+
+Thus, I apply another transformation to allow for a linear regression.
+
+```{r phd_monotonic2}
+college <- college %>%
+  mutate(PhDsq = PhD^2) #take square of PhD
+
+phd_optim <- glm(logoutstate ~ PhDsq, data = college)
+summary(phd_optim)
+```
+
+The relationship is statistically significant, but the parameter estimate is close to zero. The estimate suggests that a one-unit increase in the square of the percentage of faculty with PhDs increases the out-of-state tuition by less than 1%.
+
+```{r phd_optim_plot}
+ggplot(college, aes(x = PhDsq, y = logoutstate)) + 
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Percent of faculty with PhDs (squared) vs. Log out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Square of percent of faculty with PhDs",
+       y = "Log of out-of-state tuition in dollars")
+```
+
+####Percent of alumni who donate
+
+```{r perc_exp_plot}
+ggplot(college, aes(perc.alumni, Outstate)) +
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Percent of alumni who donate vs. Out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Percent of alumni who donate",
+       y = "Out-of-state tuition ($)")
+```
+
+The relation appears strikingly linear. Indeed, the optimal number of degrees and knots (df) for a spline regression are both 1, as shown below:
+
+```{r perc_spline}
+# function to simplify things
+perc_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(perc.alumni, df = df, degree = degree),
+                                  data = .))
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+college_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+perc_degree_mse <- data_frame(degrees = 1:10,
+                                    mse = map_dbl(degrees, ~ perc_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+perc_df_mse <- data_frame(df = 1:10,
+                                mse = map_dbl(df, ~ perc_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+
+perc_degree_mse
+perc_df_mse
+```
+
+Thus, I estimate a linear model with no transformation.
+
+```{r perc_optim_mod}
+perc_optim <- glm(Outstate ~ perc.alumni, data = college)
+summary(perc_optim)
+```
+
+The relationship is highly statistically significant and the effect appears to be substantial. A one-percent increase in the percent of alumni who donate is associated with an increase of about $180 in out-of-state tuition. This seems counterintuitive, as more donations would increase funds for subsidizing tuition. 
+
+####Instructional expenditure per student
+
+```{r}
+ggplot(college, aes(Expend, Outstate)) +
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Expenditure per student vs. Out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Instructional expenditure per student ($)",
+       y = "Out-of-state tuition ($)")
+```
+
+The relationship looks like it follows a cube root or log pattern overall, but there appears to be some discontinuity at the lower end. 
+
+The optimal number of degrees and knots (df) for a spline regression are 3 and 2 (or 3), respectively.
+
+```{r exp_spline}
+# function to simplify things
+exp_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(Expend, df = df, degree = degree),
+                                  data = .))
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+college_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+exp_degree_mse <- data_frame(degrees = 1:10,
+                                    mse = map_dbl(degrees, ~ exp_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+exp_df_mse <- data_frame(df = 1:10, mse = map_dbl(df, ~ exp_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+
+exp_degree_mse
+exp_df_mse
+```
+
+Using the optimal number of degrees and knots, the regression estimates are as follows:
+
+```{r exp_splines_optim_model}
+exp_optim <- glm(Outstate ~ bs(Expend, df = 2, degree = 3), data = college)
+summary(exp_optim)
+```
+
+The relationship is highly statistically significant and substantial at all knots. This suggests an increase in expenditure per student substantially raises tuition costs on average, which makes sense given that tuition rates help cover the costs of instruction.
+
+```{r exp_splines_optim_plot}
+augment(exp_optim, newdata = data_grid(college, Expend)) %>%
+  mutate(.fitted_low = .fitted - 1.96 * .se.fit,
+         .fitted_high = .fitted + 1.96 * .se.fit) %>%
+  ggplot(aes(Expend, .fitted)) +
+  geom_point(data = college, aes(y = Outstate), alpha = .1) +
+  geom_line() +
+  geom_line(aes(y = .fitted_low), linetype = 2) +
+  geom_line(aes(y = .fitted_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(college$Expend, df = 2, degree = 3), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Third-order polynomial spline of out-of-state tuition",
+       subtitle = "Knots = 2",
+       x= "Expenditure per student ($)",
+       y = "Predicted out-of-state tuition ($)")
+```
+
+####Graduation rate
+
+```{r grad_exp_plot}
+#clean data
+college$Grad.Rate[college$Grad.Rate > 100] <- NA
+ 
+ggplot(filter(college, !is.na(Grad.Rate)), aes(Grad.Rate, Outstate)) +
+  geom_point() +
+  geom_smooth() + 
+  labs(title = "Graduation rate vs. Out-of-state tuition",
+       subtitle = "Fitted with smoothing line",
+       x = "Graduation rate",
+       y = "Out-of-state tuition ($)")
+```
+
+The smoothing line follows an interesting curve that decreases and increases. It looks like the relationship could be linear with better data. In fact, the optimal number of degrees and knots (df) for a spline regression are both 1.
+
+```{r grad_spline}
+# function to simplify things
+grad_spline_cv <- function(data, degree = 3, df = NULL){
+  # estimate the model on each fold
+  models <- map(data$train, ~ glm(Outstate ~ bs(Grad.Rate, df = df, degree = degree),
+                                  data = .))
+  # calculate mse for each test fold
+  models_mse <- map2_dbl(models, data$test, mse)
+  
+  return(mean(models_mse, na.rm = TRUE))
+}
+
+# fold the data
+college_kfold <- crossv_kfold(college, k = 10)
+
+# estimate mse for polynomial degrees in 1:10
+grad_degree_mse <- data_frame(degrees = 1:10,
+                                    mse = map_dbl(degrees, ~ grad_spline_cv(college_kfold, degree = ., df = 3 + .))) %>%
+  arrange(mse)
+
+# estimate mse for degrees of freedom (aka knots)
+grad_df_mse <- data_frame(df = 1:10, mse = map_dbl(df, ~ grad_spline_cv(college_kfold, df = 3 + .))) %>%
+  arrange(mse)
+
+grad_degree_mse
+grad_df_mse
+```
+
+Thus, I fit a linear model with no transformation, as follows:
+
+```{r grad_optim_mod}
+grad_optim <- glm(Outstate ~ Grad.Rate, data = college)
+summary(grad_optim)
+```
+
+The effect is both substantial and highly significant. A one-percent increase in the graduation rate is expected to raise out-of-state tuition by around $135. This is probably because the tuition rate is calculated based on the value of the education, which includes the probability of graduating with a degree.
+
+```{r grad_optim_plot}
+#clean data
+college$Grad.Rate[college$Grad.Rate > 100] <- NA
+ 
+ggplot(filter(college, !is.na(Grad.Rate)), aes(Grad.Rate, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") + 
+  labs(title = "Graduation rate vs. Out-of-state tuition",
+       subtitle = "Fitted with OLS regression line",
+       x = "Graduation rate",
+       y = "Out-of-state tuition ($)")
+```
+
+# Part 3: College (GAM) [3 points]
+
+####Questions 1 & 2
+
+**Split the data into a training set and a test set.**
+
+```{r college_split}
+college_split <- resample_partition(college, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+college_train <- college_split$train %>% 
+  tbl_df()
+college_test <- college_split$test %>% 
+  tbl_df()
+```
+
+**Estimate an OLS model on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).**
+
+```{r college_train_OLS}
+college_train_lm <- glm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+                       data = college_train) #estimate model on training set
+summary(college_train_lm)
+```
+
+All of the predictors have a statistically significant relationship with out-of-state tuition. Room and board costs and expenditure per student have very small effects, however. The biggest impact comes from whether the university is private. Out-of-state tuition is expected to be higher by more than $2000 dollars if the university is private rather than public. Percent of alumni who donate, the percent of faculty with PhDs, and the graduation rate have much smaller but still tangible effects, all in the positive direction. 
+
+As the variance-covariance matrix below shows, the relationships are probably not independent. For example, The percent of faculty with PhDs has a high positive correlation with whether the university is private, possibly because private universities are more likely to have the financial resources to attract more highly trained faculty. The percent of alumni who donate is highly negatively correlated with whether the university is private, again possibly because private universities tend to be wealthier. Interestingly, graduation rate is negatively correlated with the university being private as well. The effect of the university being private or public likely biases the separate effects of these factors with the model used. To better account for the independent effects of other factors, the model should incorporate interaction effects between predictors.
+
+```{r college_OLS_cov}
+vcov(college_train_lm)
+```
+
+####Question 3
+
+**Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).**
+
+```{r}
+```
+
+####Question 4
+
+**Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.**
+
+```{r}
+OLS_validation_mse <- mse(college_train_lm, college_test) #calculate MSE using test set
+#[1] 3595260
+```
+
+####Question 5
+
+**For which variables, if any, is there evidence of a non-linear relationship with the response?**
+
+```{r}
+
+```
+
+```{r session_info, include=FALSE}
+devtools::session_info()
+```
