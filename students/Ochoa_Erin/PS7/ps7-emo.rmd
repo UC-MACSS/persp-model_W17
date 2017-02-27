@@ -325,8 +325,9 @@ ggplot(biden_100_10fold_mse_all, aes(x = mse_list_10fold_100_all)) +
        scale_x_continuous(breaks = seq(200,650,by=50))
 ```
 
-The MSEs are normally distributed with 
+The MSEs are normally distributed with right skew; the mean, as reported above, is `r mean(biden_100_10fold_mse_all$mse_list_10fold_100_all)` and the median is `r median(biden_100_10fold_mse_all$mse_list_10fold_100_all)`.
 
+We plot a histogram of the mean of the MSEs for each of the 100 rounds:
 
 ```{r, 100_rounds_10fold_MSE_means_histogram, echo=FALSE}
 
@@ -341,10 +342,7 @@ ggplot(biden_100_10fold_mse_means, aes(x = mse_list_100_means)) +
        scale_x_continuous(breaks = c(396,396.5,397,397.5,398,398.5,399,399.5,400))
 ```
 
-
-
-
-
+We can see that when considered in the context of the round in which they were returned, there is little variation in the MSEs; all are comparable to the MSEs found and reported earlier.
 
 
 1. Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).
@@ -862,6 +860,7 @@ summary(college_gam)
 
 college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
 ```
+
 ```{r college_gam_private_plot}
 data_frame(x = college_gam_terms$PrivateRC$x,
            y = college_gam_terms$PrivateRC$y,
