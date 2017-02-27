@@ -1,0 +1,238 @@
+---
+title: "Problem set 7"
+author: "Jingyuan Zhou"
+date: "2/25/2017"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+sansfont: Garamond
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = TRUE)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(haven)
+library(nnet)
+
+#options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+
+biden_data <- read.csv(file="biden.csv",head=TRUE)
+
+```
+
+# Part 1: Sexy Joe Biden (redux)
+```{R biden 1}
+blm <- lm(biden ~ age + female + educ + dem + rep, data = biden_data)
+tidy(blm)
+
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse(blm, biden_data)
+```
+
+1.After fitting the linear regression model, the mse of the entire data set is 395.2702.
+
+2.After fitting a linear model using only 70% of the data, the mse of the testing dataset is 399.8303, which is a little bit larger than the previous value.
+```{R biden 2}
+biden_split <- resample_partition(biden_data, c(test = 0.3, train = 0.7))
+tlm <-lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+mse(tlm, biden_split$test)
+```
+
+```{R biden 3}
+mse_variable <- function(biden_data){
+  biden_split <- resample_partition(biden_data, c(test = 0.7, train = 0.3))
+  biden_train <- biden_split$train %>%
+    tbl_df()
+  biden_test <- biden_split$test %>%
+    tbl_df()
+
+  result <- mse(tlm <-lm(biden ~ age + female + educ + dem + rep, data = biden_split$train), biden_split$test)
+
+  return(result)
+}
+
+results <- unlist(rerun(100, mse_variable(biden_data)))
+summary(results)
+```
+3. Looking at the distribution of mean squared errors of 100 iterations, the 3rd quantile is 14 higher than the 1st quantile value. This shows that this approach is highly unstable and that validation estimates of the test MSE can be highly depending on the observations sampled into the training and test sets.
+
+```{R biden 4}
+loocv_data <- crossv_kfold(biden_data, k = nrow(biden_data))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+4.Using leave-one-out cross-validation (LOOCV) approach, we get a mean value that's close to 401.7, the average of MSEs of 100 iterations.
+```{R biden 5}
+cv10_data <- crossv_kfold(biden_data, k = 10)
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+mean(cv10_mse)
+```
+5.Using 10-fold cross validation, the mean mse we get is 398.1127, which is extremely close to the value that we get using leave-one-out cross-valiation approach.
+
+```{R biden 6}
+cv_mse <- c()
+for (i in 1:100){
+  cv10_data <- crossv_kfold(biden_data, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_mse[[i]] <- mean(cv10_mse)
+}
+mean(cv_mse)
+```
+6.Repeating the 10-fold cross-validation approach 100 times using 100 different splits of the observations into 10-folds, the mean mse we get is 398.0694, which is extremely similar to our results from 10-fold cross validation. Thus, in practice, we can safely depend on 10-fold cross validation to get the highest efficiency.
+
+```{R biden 7}
+# bootstrapped estimates of the parameter estimates and standard errors
+biden_boot <- biden_data%>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~  lm(biden ~ age + female + educ + dem + rep, data = .)),
+         coef = map(model, tidy))
+
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+tidy(blm)
+````
+Bootstrapped estimate of intercept is 58.69711076 with sd of 3.07088573, 
+original model estimate of intercept is 58.81125899 with sd of 3.1244366.
+
+Bootstrapped estimate of age is 0.04754621 with sd of 0.02929158,
+original model estimate of age is 0.04825892 with sd of 0.0282474.
+
+Bootstrapped estimate of dem is 15.43735011 with sd of 1.08848988,
+original model estimate of dem is 15.42425563 with sd of 1.0680327.
+
+Bootstrapped estimate of educ is -0.33391564 with sd of 0.19947285,
+original model estimate of educ is -0.34533479 with sd of 0.1947796.
+
+Bootstrapped estimate of female is 4.08901065 with sd of 0.94314140,
+original model estimate of female is 4.10323009	 with sd of 0.9482286.
+
+Bootstrapped estimate of rep is -15.85370969 with sd of 1.42368299,
+original model estimate of rep is -15.84950614 with sd of 1.3113624.
+
+By comparing values, we can see that both two approaches get very similar estimates. Original model generally has smaller standard deviations for these estimates than the bootstrapped estimates. The reason might be that the true relationship between biden scores and the parameters is indeed linear, and we do not make any assumptions of the distribution with this bootstrap approach. 
+
+
+# Part 2: College (bivariate)
+```{R College (bivariate)}
+c_data <- read.csv(file="College.csv",head=TRUE)
+glm <-  lm(Outstate~ ., data = c_data)
+tidy(glm)
+
+#the three parameters with smallest p-values are: Private, Room.Board,Accept
+lm1 <- lm(Outstate~ Room.Board, data = c_data)
+tidy(lm1)
+lm2 <- lm(Outstate~ Private, data = c_data)
+tidy(lm2)
+lm3 <- lm(Outstate~ Accept, data = c_data)
+tidy(lm3)
+```
+# Part 3: College (GAM)
+```{R College(GAM) 1}
+c_split <- resample_partition(c_data, c(test = 0.7, train = 0.3))
+```
+1.Split the data into a training set and a test set.
+
+```{R College(GAM) 2}
+ols <- lm(Outstate~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = c_split$train)
+tidy(ols)
+
+train <- as.data.frame(c_split$train)
+
+# grid <- train %>%
+#   add_predictions(ols)%>%
+#   add_residuals(ols)
+# 
+# #plot
+# ggplot(grid, aes(x = pred, y = resid)) +
+#   geom_point() +
+#   geom_line(aes(y = pred), data = grid, color = "red", size = 1)
+#labs(title = 'Plot of Biden score against age with Least Squares Regression Line',x = 'Age',y = 'BidenScore')
+```
+2.Estimate an OLS model on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+
+```{R College(GAM) 3}
+library(gam)
+c_gam <- gam(Outstate ~ Private + lo(Apps) + lo(Accept) + lo(Enroll) + lo(Top10perc) + lo(Top25perc) +  lo(F.Undergrad) + lo(P.Undergrad) + lo(Room.Board), data = train)
+tidy(c_gam)
+
+#top three statistically significant variables are lo(Apps), lo(Room.Board), lo(Top10perc)
+# get graphs of each term
+ c_gam_terms <- preplot(c_gam, se = TRUE, rug = FALSE)
+
+## lo(Apps)
+data_frame(x = c_gam_terms$`lo(Apps)`$x,
+           y = c_gam_terms$`lo(Apps)`$y,
+           se.fit =  c_gam_terms$`lo(Apps)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       subtitle = "Cubic spline",
+       x = "App",
+       y = expression(f[1](App)))
+
+## lo(Room.Board)
+data_frame(x = c_gam_terms$`lo(Room.Board)`$x,
+           y = c_gam_terms$`lo(Room.Board)`$y,
+           se.fit =  c_gam_terms$`lo(Room.Board)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       subtitle = "Cubic spline",
+       x = "Room.Board",
+       y = expression(f[1](Room.Board)))
+
+
+## lo(Top10perc)
+data_frame(x = c_gam_terms$`lo(Top10perc)`$x,
+           y = c_gam_terms$`lo(Top10perc)`$y,
+           se.fit =  c_gam_terms$`lo(Top10perc)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       subtitle = "Cubic spline",
+       x = 'Top10perc',
+       y = expression(f[1](Top10perc)))
+
+```
+3.Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+
+```{R College(GAM) 4}
+mse(ols, c_split$test) 
+mse(c_gam, c_split$test)
+```
+4.Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+
+```{R College(GAM) 5}
+
+```
+5. For which variables, if any, is there evidence of a non-linear relationship with the response?
