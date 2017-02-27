@@ -13,8 +13,8 @@ Yuqing Zhang
     -   [Problem1.Split the data](#problem1.split-the-data)
     -   [Problem2: OLS](#problem2-ols)
     -   [Problem 3 Estimate a GAM on the training data](#problem-3-estimate-a-gam-on-the-training-data)
--   [Problem 4 Use the test set to evaluate the model fit of the estimated OLS and GAM models](#problem-4-use-the-test-set-to-evaluate-the-model-fit-of-the-estimated-ols-and-gam-models)
--   [Problem 5 Non-linear?](#problem-5-non-linear)
+    -   [Problem 4 Use the test set to evaluate the model fit of the estimated OLS and GAM models](#problem-4-use-the-test-set-to-evaluate-the-model-fit-of-the-estimated-ols-and-gam-models)
+    -   [Problem 5 Non-linear?](#problem-5-non-linear)
 
 Part 1: Sexy Joe Biden (redux)
 ------------------------------
@@ -467,8 +467,6 @@ The 6 predictors and intercept are all significant. Being a private university w
 ### Problem 3 Estimate a GAM on the training data
 
 ``` r
-library(gam)
-
 # estimate model for splines on age and education plus dichotomous female
 college_gam <- gam(Outstate ~ lo(PhD)+perc.alumni +Room.Board + lo(Expend)+bs(Grad.Rate, degree=3,df = 4) + Private , data = college)
 summary(college_gam)
@@ -636,8 +634,7 @@ data_frame(x = college_gam_terms$Private$x,
 
 For whether the school is a private or public school, the tuition difference is significant and substantial.From the graph we can tell that clearly private school requires more out of state tuition than public school.
 
-Problem 4 Use the test set to evaluate the model fit of the estimated OLS and GAM models
-----------------------------------------------------------------------------------------
+### Problem 4 Use the test set to evaluate the model fit of the estimated OLS and GAM models
 
 ``` r
 mse_ols <- mse(outstate_ols, college_split$test)
@@ -655,8 +652,7 @@ mse_gam
 
 GAM's MSE,3.26710^{6} is smaller than ols's mse, 3.59510^{6}, meaning that GAM fits the data better. This is because instead of using linearality for all predictors, we included various non-linear relationship in the model, which is closer to reality. This makes GAM's prediction more accurate.
 
-Problem 5 Non-linear?
----------------------
+### Problem 5 Non-linear?
 
 From the discussion above we may say that percent of faculty with PhD's, the instructional expenditure per student and graduation rate has non-linear relationship with out-of-state tuition.
 

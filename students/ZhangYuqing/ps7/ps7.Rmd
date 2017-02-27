@@ -3,7 +3,8 @@ title: "PS7"
 author: "Yuqing Zhang"
 date: "2/26/2017"
 output:
-  html_document: default
+  github_document:
+    toc: true
   
   
 ---
@@ -54,7 +55,7 @@ biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
 train_biden <- glm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
 test_biden <- glm(biden ~age + female + educ + dem + rep,data = biden_split$test)
 mse.test <- mse(train_biden,biden_split$test)
-mse.test
+
 ```
 Compare to the training MSE from step 1, the MSE using only the test set observations is `r mse.test` and it's larger. 
 
@@ -152,7 +153,6 @@ biden_boot %>%
   summarize(est.boot = mean(estimate),
             se.boot = sd(estimate, na.rm = TRUE))
 
-summary(biden_boot)
 ```
 The estimate from the bootstrap is very similar with the estimate from the original OLS model. The standard error differs among variables, some are larger, some are smaller.
 ##Part 2: College (bivariate) 
@@ -325,8 +325,6 @@ The 6 predictors and intercept are all significant. Being a private university w
 
 ###Problem 3 Estimate a GAM on the training data
 ```{r gam}
-library(gam)
-
 # estimate model for splines on age and education plus dichotomous female
 college_gam <- gam(Outstate ~ lo(PhD)+perc.alumni +Room.Board + lo(Expend)+bs(Grad.Rate, degree=3,df = 4) + Private , data = college)
 summary(college_gam)
@@ -447,7 +445,7 @@ data_frame(x = college_gam_terms$Private$x,
 
 For whether the school is a private or public school, the tuition difference is significant and substantial.From the graph we can tell that clearly private school requires more out of state tuition than public school. 
 
-##Problem 4 Use the test set to evaluate the model fit of the estimated OLS and GAM models
+###Problem 4 Use the test set to evaluate the model fit of the estimated OLS and GAM models
 
 ```{r test model fit}
 mse_ols <- mse(outstate_ols, college_split$test)
@@ -457,7 +455,7 @@ mse_gam
 ```
 GAM's MSE,`r mse_gam` is smaller than ols's mse, `r mse_ols`, meaning that GAM fits the data better. This is because instead of using linearality for all predictors, we included various non-linear relationship in the model, which is closer to reality. This makes GAM's prediction more accurate.
 
-##Problem 5 Non-linear?
+###Problem 5 Non-linear?
 From the discussion above we may say that percent of faculty with PhD's, the instructional expenditure per student and graduation rate has non-linear relationship with out-of-state tuition. 
 
 Looking at the ANOVA test though, only lo(Expend) has a statistically significant result from the Nonparametric Effect. This might mean that the relationship between it and outstate is nonlinear. Thus, we performed an ANOVA test between the original model and a GAM with linear Expend. In the test, the original model is more significant.This shows that Expend is indeed nonlinear.
