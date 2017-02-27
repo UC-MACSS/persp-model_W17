@@ -50,6 +50,10 @@ summary(part3.model2)
 
 For my gam model, I use linear regression on private and 4 degree polynomial on Grad.Rate, 3 degree polynomial on Expend. For other variables, I use local regression. From the summary table, we could see that the almost all variables are statistically significant.
 
+###I don't know why I can't run the preplot. I just follow the instruction to write this part. I try lots of time. Also I update Rstudio. However, it continuously report error message. 
+Error in preplot.gam(c_gam, se = TRUE, rug = FALSE) : 
+  need to have names for fitted.values when call has a subset or na.action argument
+  
 ```{r  , include=TRUE}
 
 clg_gam_terms <- preplot(part3.model2, se = TRUE, rug = FALSE)
@@ -62,10 +66,11 @@ data_frame(x = clg_gam_terms$Private$x,
   mutate(y_low = y - 1.96 * se.fit,
          y_high = y + 1.96 * se.fit) %>%
   ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
-  geom_errorbar() +
-  geom_point() +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
   labs(title = "GAM of Out-of-state Tuition",
-       x = "Is Private School or Not",
+       x = "Private",
        y = expression(f[5](private)))
 ```
 
@@ -82,7 +87,6 @@ data_frame(x = part3.model2.terms$`lo(Room.Board)`$x,
   geom_line(aes(y = y_low), linetype = 2) +
   geom_line(aes(y = y_high), linetype = 2) +
   labs(title = "GAM of Out-of-state Tuition",
-       subtitle = "Linear Regression",
        x = "Room.Board",
        y = expression(f[6](Room.Board)))   
 ```
@@ -140,7 +144,6 @@ data_frame(x = clg_gam_terms$`bs(Expend, degree = 4)`$x,
   geom_line(aes(y = y_low), linetype = 2) +
   geom_line(aes(y = y_high), linetype = 2) +
   labs(title = "GAM of Out-of-state Tuition",
-       subtitle = "Log Transformation",
        x = "Expend",
        y = expression(f[3](expend)))
 ```
@@ -158,7 +161,6 @@ data_frame(x = clg_gam_terms$`bs(Grad.Rate, degree = 3)`$x,
   geom_line(aes(y = y_low), linetype = 2) +
   geom_line(aes(y = y_high), linetype = 2) +
   labs(title = "GAM of Out-of-state Tuition",
-       subtitle = "Splines",
        x = "Grad.Rate",
        y = expression(f[4](Grad.Rate)))
 ```
@@ -179,6 +181,8 @@ mse_model2
 The mse from OLS is 3787199, and the mse from gam is 3750909. So the mse from gam is smaller, we could know that the gam modal fit the data better. However, the difference is not very big, so perhaps the model has overfitting problem.
 
 ## 5. Non-linear Relationship with the response
+
+
 ```{r  , include=TRUE}
 
 # Room.Board
