@@ -632,7 +632,7 @@ ggplot(data=DATA_2, mapping=aes(y=Outstate, x=Room.Board)) +
     ## `geom_smooth()` using method = 'loess'
     ## `geom_smooth()` using method = 'loess'
 
-![](PS7_HJ_files/figure-markdown_github/II.1.-1.png)
+![](II.1.-1.png)
 
 ``` r
 # <Graph: Predicted Value and Residuals>
@@ -643,7 +643,7 @@ ggplot(data=GRID_2A, mapping=aes(y=resid, x=pred)) +
        y="Residuals", x="Predicted Out-of-state Tuition")
 ```
 
-![](PS7_HJ_files/figure-markdown_github/II.1.-2.png)
+![](II.1.-2.png)
 
 ``` r
 # <Comment>
@@ -671,7 +671,7 @@ data_frame(terms=TERM, MSE=FOLD_VECTOR) %>%
        y="Mean Squared Error", x="Degree of Polynomial")
 ```
 
-![](PS7_HJ_files/figure-markdown_github/II.1.-3.png)
+![](II.1.-3.png)
 
 ``` r
 # <Comment>
@@ -845,7 +845,7 @@ ggplot(data=DATA_2, mapping=aes(y=Outstate, x=Top10perc)) +
     ## `geom_smooth()` using method = 'loess'
     ## `geom_smooth()` using method = 'loess'
 
-![](PS7_HJ_files/figure-markdown_github/II.2.-1.png)
+![](II.2.-1.png)
 
 ``` r
 # <Graph: Predicted Value and Residuals>
@@ -857,7 +857,7 @@ ggplot(mapping=aes(y=resid, x=pred)) +
        y="Residuals", x="Predicted Out-of-state Tuition")
 ```
 
-![](PS7_HJ_files/figure-markdown_github/II.2.-2.png)
+![](II.2.-2.png)
 
 ``` r
 # <Comment>
@@ -886,7 +886,7 @@ data_frame(terms=TERM, MSE=FOLD_VECTOR) %>%
        y="Mean Squared Error", x="Degree of Polynomial")
 ```
 
-![](PS7_HJ_files/figure-markdown_github/II.2.-3.png)
+![](II.2.-3.png)
 
 ``` r
 # <Comment>
@@ -1060,7 +1060,7 @@ ggplot(data=DATA_2, mapping=aes(y=Outstate, x=Expend)) +
     ## `geom_smooth()` using method = 'loess'
     ## `geom_smooth()` using method = 'loess'
 
-![](PS7_HJ_files/figure-markdown_github/II.3.-1.png)
+![](II.3.-1.png)
 
 ``` r
 # <Graph: Predicted Value and Residuals>
@@ -1072,7 +1072,7 @@ ggplot(mapping=aes(y=resid, x=pred)) +
        y="Residuals", x="Predicted Out-of-state Tuition")
 ```
 
-![](PS7_HJ_files/figure-markdown_github/II.3.-2.png)
+![](II.3.-2.png)
 
 ``` r
 # <Comment>
@@ -1109,7 +1109,7 @@ data_frame(terms=TERM, MSE=FOLD_VECTOR) %>%
   scale_colour_manual("", values=c("MSE for Log Transformation"="orange"))
 ```
 
-![](PS7_HJ_files/figure-markdown_github/II.3.-3.png)
+![](II.3.-3.png)
 
 ``` r
   labs(title="MSE Estimates", subtitle="Out-of-state Tuition ~ Instructional Expenditure per Student",
@@ -1329,7 +1329,7 @@ data_frame(x = GAM_TERM$Private$x,
        y = expression(f[1](private)))
 ```
 
-![](PS7_HJ_files/figure-markdown_github/III.3.-1.png)
+![](III.3.-1.png)
 
 ``` r
 # <Graph: Room.Board>
@@ -1348,7 +1348,7 @@ data_frame(x = GAM_TERM$Room.Board$x,
        y = expression(f[2](Room.Board)))   
 ```
 
-![](PS7_HJ_files/figure-markdown_github/III.3.-2.png)
+![](III.3.-2.png)
 
 ``` r
 # <Graph: PhD>
@@ -1367,7 +1367,7 @@ data_frame(x = GAM_TERM$`poly(PhD, 3)`$x,
        y = expression(f[3](PhD)))
 ```
 
-![](PS7_HJ_files/figure-markdown_github/III.3.-3.png)
+![](III.3.-3.png)
 
 ``` r
 # <Graph: Expend>
@@ -1386,7 +1386,7 @@ data_frame(x = GAM_TERM$`log(Expend)`$x,
        y = expression(f[4](expend)))
 ```
 
-![](PS7_HJ_files/figure-markdown_github/III.3.-4.png)
+![](III.3.-4.png)
 
 ``` r
 # <Graph: perc.alumni>
@@ -1405,7 +1405,7 @@ data_frame(x = GAM_TERM$`lo(perc.alumni)`$x,
        y = expression(f[5](perc.alumni)))
 ```
 
-![](PS7_HJ_files/figure-markdown_github/III.3.-5.png)
+![](III.3.-5.png)
 
 ``` r
 # <Graph: Grad.Rate>
