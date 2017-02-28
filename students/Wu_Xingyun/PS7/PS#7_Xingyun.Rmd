@@ -564,3 +564,4 @@ gam_mse
 5. According to the plots in part(3), `Expend` and `Grad.Rate` seem to have long-linear relationship with the response.
   For `Expend`, approximately below 30,000, the relationship between `Expend` and `Outstate` is positive. But approximately above 30,000, the relationship between `Expend` and `Outstate` is getting negative. This would not be a linear relationship.
   For `Grad.Rate`, it is similar. Approximately below 80, the relationship between `Grad.Rate` and `Outstate` is positive, but approximately above 80, the relationship between `Grad.Rate` and `Outstate` is negative. This would not be a linear relationship.
+ 
