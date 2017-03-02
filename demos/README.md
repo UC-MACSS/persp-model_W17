@@ -32,3 +32,8 @@ Demonstration scripts for MACS 30100
 
 * [Statistical learning: tree-based methods](http://cfss.uchicago.edu/persp008_tree_methods.html)
 * [Slides for tree-based methods](http://cfss.uchicago.edu/extras/persp_tree_methods_slides.html)
+
+# Support vector machines
+
+* [Statistical learning: support vector machines](http://cfss.uchicago.edu/persp009_svm.html)
+* [Slides for tree-based methods](http://cfss.uchicago.edu/extras/persp_svm_slides.html)
