@@ -1,0 +1,127 @@
+---
+title: "Problem Set 8 | MACS 301"
+author: "Julian McClellan"
+date: "Due 3/6/17"
+output:
+  html_document: default
+  pdf_document: 
+    latex_engine: lualatex
+---
+```{r setup, echo = FALSE, include = FALSE}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(titanic)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(devtools)
+library(rcfss)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE)
+df.biden <- read_csv('data/biden.csv')
+options(digits = 3)
+theme_set(theme_minimal())
+```
+
+# Part 1: Sexy Joe Biden
+
+#### 1. Split the data into a training set (70%) and a validation set (30%). *Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.*
+
+We utilize 70% of the data as training data, and the remaining 30% as testing data.
+
+```{r split_biden, echo = TRUE}
+set.seed(1234) # For reproducibility
+biden.split <- resample_partition(df.biden, c(test = .3, train = .7))
+```
+
+***
+
+#### 2. Fit a decision tree to the training data, with biden as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?
+
+```{r biden_tree0}
+# Make tree model
+tree.biden <- tree(biden ~ ., data = biden.split$train)
+
+# plot tree
+tree_data <- dendro_data(tree.biden)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Decision Tree for Biden Score', 
+       subtitle = 'Default controls, all predictors')
+
+# Based off of resampling class notes
+calc_mse <- function(model, data){
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+leaf_vals <- leaf_label(tree_data)$yval
+test_mse <- calc_mse(tree.biden, biden.split$test)
+```
+
+Using the default tree controls to make the tree, interpretation is relatively easy. Indeed, the tree was built using only `dem` and `rep` as predictors, so let's interpret. Starting at the top If `dem > 0.5`, more plainly, if someone is a democrat (`dem = 1`), then the tree predicts a `biden` score of `r leaf_vals[3]`. Otherwise, if `dem < 0.5`, if someone is not a democrat, then we take the left branch of the tree to the next decision point. If, at this decision point, `rep < .05`, i.e. someone is not republican (an independent since they are neither `rep` or `dem` is `1`), then the tree predicts a `biden` score of `leaf_vals[2]`. Otherwise, if `rep > 0.5`, i.e. they are a republican, the tree predicts a `biden` score of `leaf_vals[3]`.  
+
+Additionally, the test MSE appears to be `r test_mse`.
+
+***
+
+#### 3. Now fit another tree to the training data with some customized control options. Use cross-validation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?
+
+```{r biden_prune_tree}
+tree.base <- tree(biden ~ . , data = biden.split$train, 
+                     control = tree.control(nobs = nrow(biden.split$train),
+                              mindev = 0))
+base_test_mse <- calc_mse(tree.base, biden.split$test)
+
+num_nodes <- 2:25
+pruned_trees <- map(num_nodes, prune.tree, tree = tree.base, k = NULL)
+test_mses <- map_dbl(pruned_trees, calc_mse, data = biden.split$test)
+
+tree.opt <- pruned_trees[[which.min(test_mses)]]
+opt_test_mse <- calc_mse(tree.opt, biden.split$test)
+
+tibble(num_nodes = num_nodes, test_mse = test_mses) %>%
+  ggplot(aes(x = num_nodes, y = test_mse)) +
+  geom_line() + 
+  labs(title = 'Test MSE for Different Numbers of Terminal Nodes',
+       subtitle = '(Test MSE calculated on Test data defined in Step 1)',
+       x = 'Terminal Nodes in Tree',
+       y = 'Test MSE')
+```
+
+According to the graph, the minimum test MSE occurs at `r summary(tree.opt)$size` terminal nodes in the tree. Clearly, pruning the tree helps reduce the test MSE. Indeed, the original tree had `r summary(tree.base)$size` terminal nodes and a test MSE of `r base_test_mse`, and yet the optimal tree has only `r summary(tree.opt)$size` terminal nodes and a test MSE of `r opt_test_mse`.
+
+Now let's plot the optimal tree.
+
+```{r biden_prune_121}
+# plot tree
+tree_data <- dendro_data(pruned_trees[[which.min(test_mses)]], type = 'uniform') 
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data),
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data),
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Optimal Decision Tree for Biden Score', 
+       subtitle = sprintf('All Predictors | %d Terminal Nodes', summary(tree.opt)$size))
+```
+
+While I won't interpret all 11 paths
