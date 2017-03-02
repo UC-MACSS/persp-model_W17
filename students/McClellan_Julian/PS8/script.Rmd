@@ -122,6 +122,130 @@ ggplot(segment(tree_data)) +
   theme_dendro() +
   labs(title = 'Optimal Decision Tree for Biden Score', 
        subtitle = sprintf('All Predictors | %d Terminal Nodes', summary(tree.opt)$size))
+
+leaf_vals <- leaf_label(tree_data)$yval
 ```
 
-While I won't interpret all 11 paths
+While I won't interpret all 11 possible paths, I will, interpret one path. At the top, at the first decision node, if `dem < 0.5`, i.e. `dem` is 0, we go left to another decision node. If `rep < 0.5`, i.e. `rep` is 0, we go left again to another decision node. If `female < 0.5`, i.e. `female` is 0 (male), we go left again and arrive at a terminal node, where the tree predicts a `biden` score of `r leaf_vals[1]`.
+
+***
+
+#### 4. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+
+```{r biden_bagging}
+set.seed(1234) # Need reproducible bootstrap
+(biden_bag <- randomForest(biden ~ female + age + educ + dem + rep, data = biden.split$train,
+                           mtry = length(df.biden) - 1, importance = TRUE,
+                           ntree = 500))
+
+# Calculate bagged MSE
+mse_bag <- calc_mse(biden_bag, biden_split$test)
+
+# Get variable importance
+var_import <- importance(biden_bag, type = 1)
+
+# Variable importance measures
+data_frame(var = rownames(importance(biden_bag)),
+           MeanDecreaseGini = var_import[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Predicting Biden Warmth Score",
+       subtitle = "Bagging: 500 Trees",
+       x = NULL,
+       y = "% Average Decrease in Out of Bag MSE")
+```
+
+The test MSE for the bagging approach is `r mse_bag`. 
+
+Looking at the variable importance graph above, our x-axis is the median % decrease in OOB MSE. Clearly, splitting on `dem` reduces the OOB MSE by the greatest margin, at an `r var_import[4]`% median decrease. Splitting on `rep` also provides a decent median reduction, with  a `r var_import[5]`%. Splitting on the other variables, however, do not help reduce OOB MSE by much. Indeed, splitting on `female` and `educ` actually *increases* the OOB MSE by median values of `r -1 * var_import[1]` and `r -1 * var_import[3]` respectively, while splitting on `age` only provides a median decrease of the OOB MSE by `r var_import[2]`%.
+
+*** 
+
+#### 5. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of m, the number of variables considered at each split, on the error rate obtained.
+
+```{r biden_rforest}
+set.seed(1234) # Need reproducible bootstrap
+(biden_rforest <- randomForest(biden ~ female + age + educ + dem + rep, 
+                               data = biden.split$train,
+                              importance = TRUE,
+                              ntree = 500))
+
+# Calculate rforest MSE
+mse_rforest <- calc_mse(biden_rforest, biden_split$test)
+
+# Get variable importance
+var_import <- importance(biden_rforest, type = 1)
+
+# Variable importance measures
+data_frame(var = rownames(importance(biden_rforest)),
+           MeanDecreaseGini = var_import[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Predicting Biden Warmth Score",
+       subtitle = sprintf("Random Forest: 500 trees: %d randomly chosen predictors at each split", 
+                          floor(sqrt(length(df.biden) - 1))),
+       x = NULL,
+       y = "% Median Decrease in Out of Bag MSE")
+```
+
+```{r rforest_bag_compare}
+data_frame(var = rownames(importance(biden_rforest)),
+           `Random forest` = importance(biden_rforest, type = 1)[,1]) %>%
+  left_join(data_frame(var = rownames(importance(biden_bag)),
+           Bagging = importance(biden_bag, type = 1)[,1])) %>%
+  mutate(var = fct_reorder(var, `Random forest`, fun = median)) %>%
+  {.} -> wut
+
+wut %>%
+  gather(model, gini, -var) %>%
+  {.} -> wut
+
+wut %>%
+  ggplot(aes(var, gini)) +
+  geom_col(aes(fill = model), position = 'dodge') +
+    coord_flip() +
+    labs(title = "Predicting Biden Warmth Score",
+         subtitle = "Random Forest vs. Bagging",
+         x = NULL,
+         y = "Average % decrease in the OOB MSE",
+         fill = "Method")
+```
+The random forest obtains a test MSE of `r mse_rforest`.
+
+As we can see, utilizing a random forest changes our variable importance measures somewhat. Previously, `dem` had a large median decrease at `~80%`. now it only has a `r var_import[4]`% median decrease for OOB MSE. The other variables all have had their median decrease in OOB MSE increase to varying levels. Indeed, `female` now provides a higher median decrease in OOB MSE than `age` and `educ`. Also noteworthy is the fact that `female` and `educ` actually have median *decreases* in OOB MSE rather than increases as there was previously.  
+
+Now let's take a look at the effect of `m`, the number of randomly chosen predictors chosen as split criteria as each decision node, on the test MSE for a random forest.  
+
+```{r biden_rforest_m}
+set.seed(1234) # Need reproducible bootstrap
+forests <- data_frame(num_predictors = 1:5,
+                        models = map(num_predictors, 
+                                     ~ randomForest(biden ~ ., 
+                                                    data = biden.split$train, 
+                                                    ntree = 500, importance = TRUE, 
+                                                    mtry = .)),
+                        test_mse = map_dbl(models, calc_mse, data = biden.split$test))
+
+forests %>%
+  ggplot(aes(num_predictors, test_mse)) +
+  geom_line() +
+  labs(title = "Random Forest Test MSE",
+       subtitle = "Random Forest: 500 trees",
+       x = "Number of Predictors Randomly Chosen as Split Criteria at each Decision Node",
+       y = "Test MSE")
+```
+
+Clearly, looking at the above graph, the number of predictors (`m`) we randomly select to serve as possible split criteria at each decision node has an effect on the test MSE. Indeed, in this case, we see a general trend that the lower `m` is, the lower our test MSE. However, we don't want to go too low and set `m = 1`, as the ideal value for `m` according to this graph is `2`.
+
+***
+
+#### 6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter λ influence the test MSE?
+
+
+```{r biden_boost}
+
+```
