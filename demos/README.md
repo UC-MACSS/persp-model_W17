@@ -17,3 +17,23 @@ Demonstration scripts for MACS 30100
 # Generalized linear models
 
 * [Statistical learning: generalized linear models](http://cfss.uchicago.edu/persp005_glm.html)
+
+# Resampling methods
+
+* [Statistical learning: resampling methods](http://cfss.uchicago.edu/persp006_resampling.html)
+* [Slides for resampling methods](http://cfss.uchicago.edu/extras/persp_resampling_slides.html)
+
+# Non-linearity in linear models
+
+* [Statistical learning: moving beyond linearity](http://cfss.uchicago.edu/persp007_nonlinear.html)
+* [Slides for non-linearity](http://cfss.uchicago.edu/extras/persp_nonlinear_slides.html)
+
+# Tree-based methods
+
+* [Statistical learning: tree-based methods](http://cfss.uchicago.edu/persp008_tree_methods.html)
+* [Slides for tree-based methods](http://cfss.uchicago.edu/extras/persp_tree_methods_slides.html)
+
+# Support vector machines
+
+* [Statistical learning: support vector machines](http://cfss.uchicago.edu/persp009_svm.html)
+* [Slides for tree-based methods](http://cfss.uchicago.edu/extras/persp_svm_slides.html)

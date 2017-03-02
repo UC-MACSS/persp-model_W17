@@ -1,0 +1,369 @@
+---
+title: "PS6_JTung"
+author: "Tung, Joanna"
+date: "February 17, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+IMPORT PACKAGES!
+```{r}
+library (dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+library(tidyr)
+library(caret)
+library(pROC)
+```
+READ IN THE DATA:
+```{r}
+dat <- read_csv("data/mental_health.csv")
+```
+Problem 1: Describe the data
+
+Questions:
+
+1) The histogram of voter turnout is provided below. The dataset was first filtered to remove all "NA" responses, assuming that the overall affect of NA responses is negligible. The remaining 2,613 responses were used to generate a histogram illustrating the probability density observed in the datset for voters and non-voters.
+```{r}
+# Create subset of the data that omits "NA" responses
+vote_to <- subset(dat, vote96 != "NA")
+
+# Plot the histogram
+hist1 <- ggplot(vote_to, mapping = aes(x = vote96), axes = FALSE) +
+  geom_histogram(binwidth = 1, col = I("black"), aes(y = ..density..)) +
+ scale_x_discrete(name = "Voted: 1 = Yes, 0 = No", limits = c(0,1)) + labs(title = "Voter Turnout in 1996 Election",
+      y = "Percent of Total Response")
+
+hist1
+```
+
+We can use the ggplot_build function to determine the exact height of the "voted" column. This tells us that the unconditional probability of a given individual turning out to vote, given the dataset provided, is approximately 68%.
+```{r}
+ggplot_build(hist1)$data
+```
+
+2) The scatterplot illustrating the relationship between mental health and observed voter turnout has been provided below. The first thing we notice is that the estimated linear regression line visually has a very poor fit to the data: voter turnout only takes discrete values of 0 and 1, while the linear regression model returns predicted values between 0 and 1. This suggests that the linear regression model returns a line that does not adequately capture the relationship between predictor and response we are looking for. Consider, the linear regression approach permits predictions that exceed the 0 and 1 bounds, which are nonsensical for our purposes. This colors any assumptions we want to make from the linear model: we know that the linear regression model is not a good model fit for the data so cannot confidently infer anything about the relationship between mental health and voter turnout from the estimated linear regression model. Another way of expressing this in practical terms is as follows: we cannot confidently infer probabilities from the linear regression model because it assumes probable responses outside of the sensical range [0,1].  *Note, the problem set indicates that the mental health scores range from 0-9; however, the data itself reports mental health scores ranging from 0-16. I assumed that health scores do range from 0-16, with 16 indiating the most severely depressed conditions.
+```{r}
+# Plot Mental Health Scores versus Voter Turnout
+scatter1 <- ggplot(vote_to, aes(mhealth_sum, vote96)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Mental Health and Voter Turnout",
+       x = "Mental Health Score",
+       y = "Voter Turnout")
+
+scatter1
+```
+
+Problem 2: Basic model (logistic)
+
+Below is the code for estimating a logistic regression model between mental health and voter turnout. The generalized linear model function in R was used. The summary of estimation is also provided below. 
+```{r}
+# Estimate parameters for a logistic regression model
+vote_to_mh <- glm(vote96 ~ mhealth_sum, data = vote_to, family = binomial)
+summary(vote_to_mh)
+```
+
+Questions:
+
+1) Yes, the relationship between mental health and voter turnout is statistically significant. This is illustrated by the small P-value claculated for the coefficient for mental health scores (mhealth_sum): the reported p-value 3.13e-13 << 0.05 (or 0.01, according to "An Introduction to Statistical Learning", p68). This tells us that the it is highly improbable that the null hypothesis (that $\beta_{mhealth}$ = 0) is true.
+
+2) The generalized linear model function returns predicted values in log-odd form. We can interpret the coefficient for mental health scores as follows: for an one-unit increase in mental health score, we expect the predicted log-odd voter turnout to decline by -0.14348. Another way to interpret this constant value is that it means we will have a straight-line linear relationship between the log-odd predictions and the predictor, as is confirmed in the graph below. A graph of the log-odd predicted values (blue line) is provided below.
+```{r}
+vote_to_pred <- vote_to %>%
+  add_predictions(vote_to_mh)
+
+ggplot(vote_to_pred, aes(mhealth_sum)) + 
+  geom_line(aes(y = pred), color = "blue", size = 1) + 
+  labs(title = "Mental Health Score vs. Predicted Log-Odds Voter Turnout",
+       x = "Mental Health Score",
+       y = "Predicted Log-Odds for Voter Turnout")
+```
+
+3) Since predicted values are reported in log-odds, we need to convert our predicted values into odds. This is accomplished by exponentiating our predicted results (function pred2odds, below). We can interpret the coefficient for the mental health score in odds as follows: for an one-unit increase in the mental health score, we expect the odds for voter turnout to decrease by a multiplicative factor of exp(-0.14348). Since odds are decreasing by a multiplicative factor instead of a constant value for the one-unit increase in the predictor, this also tells us that the relationship between mental health score and predicted odds will not be a straight-line, but rather curvilinear, as is confirmed by the graph below. A graph of mental health scores and predicted odds is provided below.
+
+```{r}
+# Function to convert log-odd predictions to odds predictions
+pred2odds <- function(x){exp(x)}
+
+# Add the odds predictions to the data table
+vote_to_pred <- vote_to_pred %>%
+  mutate(odds = pred2odds(pred))
+
+# Plot the predicted odds vs. mental health
+ggplot(vote_to_pred, aes(mhealth_sum, odds)) + 
+  geom_line(color = "blue", size = 1) + 
+  labs(title = "Mental Health Scores vs. Predicted Voter Turnout Odds",
+       x = "Mental Health Score",
+       y = "Predicted Voter Turnout Odds")
+
+```
+
+4) Since predicted values are reported in log-odds, we need to convert our predicted values into probabilities. This is performed by the logit2prob function below. We can interpret the coefficient for the mental health score in probabilities as follows: Since the probability is a function of the exponentiated prediction, the difference in probabilities for voters to turnout for a given one-unit increase in mental health score will vary depending on the size of the mental health scores being evaluated -- the change in the probability is not constant for a one-unit increase in the predictor. A graph of mental health scores vs. probability of voter turnout is provided below.
+
+The effect of the severity of mental health scores on the probability of voter turnout is well illustrated by comparing the first difference for an increase in mental health index from 1 to 2 to the first difference for an increase in mental health index from 5 to 6:
+
+First difference (mhealth_sum 1 to 2): -0.02917824
+
+First difference (mhealth_sum 5 to 6): -0.03477821
+
+As is clear, the difference in probability of voter turnout between moving from mental health scores 1 to 2 and 5 to 6 is different. This is explains why the probability curve is non-linear for changes in our predictor (mental health score index).
+
+```{r}
+# Function to convert log-odd predictions into probabilities
+pred2prob <- function(x){exp(x)/(1 + exp(x))}
+
+# Add the probability predictions to the data table
+vote_to_pred <- vote_to_pred %>%
+  mutate(prob = pred2prob(pred))
+
+# Calculate predicted voter turnout probabilities for mhealth_sum 1, 2, 5 and 6
+newdata = data.frame(mhealth_sum = c(1,2,5,6))
+prob_diff <- predict(vote_to_mh, newdata, type = "response")
+
+# Calculate first difference between moving from 1 to 2 and 5 to 6 on the mental health score index
+Pdiff_12 <- prob_diff[2] - prob_diff[1]
+Pdiff_56 <- prob_diff[4] - prob_diff[3]
+
+# Print results
+Pdiff_12
+Pdiff_56
+```
+```{r}
+# Plot the predicted probabilities vs. mental health scores
+ggplot(vote_to_pred, aes(mhealth_sum, prob)) + 
+  geom_line(color = "blue", size = 1) + 
+  labs(title = "Mental Health Scores vs. Predicted Probability of Voter Turnout",
+       x = "Mental Health Score",
+       y = "Predicted Probability of Voter Turnout")
+```
+
+5) The accuracy rate, PRE and AUC for this model have been calculated using the code below. 
+
+Accuracy Rate: 
+The model has an accuracy rate of ~67.8%. If we compare this accuracy to the accuracy rate of a "useless classifier" that estimates that voters were always turn out to vote (this is the modal category, calculated below), we see that our accuracy rate of 67.8% is WORSE than the ~ 68.2% accuracy rate of our "useless classifier."
+
+Proportional Reduction in Error (PRE):
+The PRE gives us an indication of how well our model improves on the error of the null model. The PRE calculated for this logistic regression model tells us that we only improved the error by ~1.61%. 
+
+Area under the Curve (AUC):
+The Area Under the Curve gives us an indication of how well the model predicts responses for any given threshold value. An AUC of 0.5 represents the null model (ie. prediction is based a coin flip). The AUC for this logistic regression model is 0.5401, thus showing insignificant improvement over the null model.
+
+In summary, the accuracy rate, PRE and AUC calculations show that this single-predictor logistic regression model is not a very good model at all. The improvement it offers over the null model is minimal (as evidenced by the PRE and AUC) and indeed fails to outperform the "useless classfier's" accuracy rate.
+```{r}
+
+# Calculate Accuracy of the model, based on threshold of 0.5
+mhealth_accuracy <- vote_to %>%
+  add_predictions(vote_to_mh) %>%
+  mutate(prob = pred2prob(pred), 
+         prob = as.numeric(prob> .5))
+
+Prob1_accuracy <- mean(mhealth_accuracy$vote96 == mhealth_accuracy$prob, na.rm = TRUE)
+
+# Function to get the mode of the voter turnout responses in the data
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+Prob1_mode <- getmode(mhealth_accuracy$vote96)
+
+# Get the mean of the voter turnout responses in the data
+Prob1_datamean <- mean(mhealth_accuracy$vote96)
+
+Prob1_accuracy
+Prob1_mode
+Prob1_datamean
+```
+```{r}
+# function to calculate PRE for a logistic regression model
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+  
+  # get the predicted values for y from the model
+  y.hat <- round(model$fitted.values)
+  
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+# Get the PRE for our logistic regression model vote_to_mh
+Prob1_PRE <- PRE(vote_to_mh)
+Prob1_PRE
+```
+```{r}
+# Calculate the area under the curve
+auc_x <- auc(mhealth_accuracy$vote96, mhealth_accuracy$pred)
+auc_x
+```
+
+Problem 3: Multiple variable model (logistic)
+
+Questions:
+
+1) Components of the GLM:
+Probability distribution used: Bernoulli distribution
+$$\Pr(Y_i = y_i | \pi) = \pi_i^{y_i} (1 - \pi_i)^{(1 - y_i)}$$
+Linear predictor: 
+The linear predictor $\eta_i$ describes a linear relationship between terms for mental health score, age, income, and race (black=1, white=0). There are no interactive terms.
+$$\eta_i = \beta_0 + \beta_{1}Mentalhealth_i + \beta_{2}Age_i + \beta_{3}Income_i + \beta_{4}Race_4i$$
+Link function:
+The link function is the logit function.
+$$\pi_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$$
+
+2) The logistic regression model for the GLM above has been estimated below.
+```{r}
+vote_to_mult <- glm(vote96 ~ mhealth_sum + age + inc10 + black, data = vote_to, family = binomial)
+summary(vote_to_mult)
+```
+
+3) Interpreting the model:
+
+GLM returned significant p-values for the following predictors: Mental Health Score, Age and Income. All three of these predictors exhibited p-values well below the 0.01 limit. The predictor for race (black or otherwise) was not significant, with a p-value of 0.528 >> 0.01. This is a valuable insight, even if it proves insignificant for predictive purposes: it suggests that race is not an important factor in voter turnout, within the sample. Increased depression, as indicated by a higher mental health score, is predicted to decrease likelihood of voter turnout, all other predictors held constant (estimated coefficient is negative). In contrast, age and income are positively associated with voter turnout, producing higher predicted rates of voter turnout, all other predictors held constant (estimated coefficient is positive). Because of the many predictors used in this model, this model is perhaps best interpreted by evaluating the first difference for these three significant predictors, instead of through graphical methods. Because this is a logistic regression, as expected, we observe that the first difference is not constant when moving between different ranges of a given predictor and find that increased depression (illustrated by the mental health score) produces a decline in predicted probability of voter turnout (negative sign of the difference between probability of moving between age 30 to 40 and 70 to 80), while predicted probabilities for age and income increase with increasing age or income, all other variables held constant. 
+
+Finally, we can evaluate how well this multiple-predictor model works in comparison to the single predictor model used in Problems 1 and 2. The accuracy of this model is ~70.4%, compared to the accuracy of the "useless classifier" (~68.2%) which estimates that all will vote. This is a marked improvement over the previous model, which could not outperform the baseline case; however, the improvement of this multiple-predictor model over the baseline remains limited (<2%). As this indicates, the presence of statistically significant predictors does not necessarily result in a powerful prediction model. We see a similarly limited (7-point) improvement in the proportional reduction in error (from 1.6% to 8.7%) between the single and multiple-predictor models, and a decent increase in the area under the curve, now just over 70% of the ideal case (AUC = 0.7162). Overall, this model is more predictively powerful than our previous single-predictor model, but in practice, offers only a slight improvement over the baseline.
+
+All of the calculations that produced the interpretations above are provided below.
+
+```{r}
+vote_mult <- vote_to %>%
+  data_grid(mhealth_sum, age, inc10, black) %>%
+  add_predictions(vote_to_mult) %>%
+  mutate(prob = pred2prob(pred))
+
+# Calculate predicted voter turnout probabilities for mental health, holding other variables constant
+newdata = data.frame(age = c(30,30,30,30), mhealth_sum = c(5,6,9,10), inc10 = c(5,5,5,5), black = c(0,0,0,0))
+prob_mh <- predict(vote_to_mult, newdata, type = "response")
+
+
+# Calculate first difference between moving from 1 to 2 and 9 to 10 in age
+Pdiff_mh1 <- prob_mh[2] - prob_mh[1]
+Pdiff_mh2 <- prob_mh[4] - prob_mh[3]
+
+# Print results
+prob_mh
+Pdiff_mh1
+Pdiff_mh2
+
+# Calculate predicted voter turnout probabilities for age, holding other variables constant
+newdata = data.frame(age = c(30,40,70,80), mhealth_sum = c(5,5,5,5), inc10 = c(5,5,5,5), black = c(0,0,0,0))
+prob_age <- predict(vote_to_mult, newdata, type = "response")
+
+
+# Calculate first difference between moving from 30 to 40 and 70 to 80 in age
+Pdiff_age1 <- prob_age[2] - prob_age[1]
+Pdiff_age2 <- prob_age[4] - prob_age[3]
+
+# Print results
+prob_age
+Pdiff_age1
+Pdiff_age2
+
+# Calculate predicted voter turnout probabilities for income, holding other variables constant
+newdata = data.frame(age = c(30,30,30,30), mhealth_sum = c(5,5,5,5), inc10 = c(1,2,9,10), black = c(0,0,0,0))
+prob_inc <- predict(vote_to_mult, newdata, type = "response")
+
+
+# Calculate first difference between moving from 10000 to 20000 to 90000 to 10000 in age
+Pdiff_inc1 <- prob_inc[2] - prob_inc[1]
+Pdiff_inc2 <- prob_inc[4] - prob_inc[3]
+
+# Print results
+prob_inc
+Pdiff_inc1
+Pdiff_inc2
+
+```
+```{r}
+# Calculate Accuracy of the model, based on threshold of 0.5
+vote_mult_accuracy <- vote_to %>%
+  add_predictions(vote_to_mult) %>%
+  mutate(prob = pred2prob(pred), 
+         prob = as.numeric(prob> .5))
+
+Prob1mult_accuracy <- mean(vote_mult_accuracy$vote96 == vote_mult_accuracy$prob, na.rm = TRUE)
+
+# Function to get the mode of the voter turnout responses in the data
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+Prob1mult_mode <- getmode(vote_mult_accuracy$vote96)
+
+# Get the mean of the voter turnout responses in the data
+Prob1mult_datamean <- mean(vote_mult_accuracy$vote96)
+
+Prob1mult_accuracy
+Prob1mult_mode
+Prob1mult_datamean
+
+# Get the PRE for our logistic regression model vote_to_mh
+Prob1mult_PRE <- PRE(vote_to_mult)
+Prob1mult_PRE
+
+# Calculate the area under the curve
+auc_xmult <- auc(vote_mult_accuracy$vote96, vote_mult_accuracy$pred)
+auc_xmult
+
+```
+
+
+Problem 4: Modeling TV Consumption (Poisson)
+
+```{r}
+# Import new data
+dat2 <- read_csv("data/gss2006.csv")
+```
+
+1) Components of the GLM
+Probability distribution used: Poisson distribution
+$$P(Y_i = y_i | \mu) = \frac{\mu^{y_i} e^{-\mu}}{y_i!}$$
+Linear Predictor
+The linear predictor $\eta_i$ describes a linear relationship between terms for education level and hours of relaxation. There are no interactive terms.
+$$\eta_i = \beta_0 + \beta_{1}Education_i + \beta_{2}RelaxationHours_i$$
+Link Function:
+The link function is the log function.
+
+2) The logistic regression model for the GLM using the Poisson distribution above has been estimated below.
+```{r}
+TV_hrs <- glm(tvhours ~ educ + hrsrelax, family = "poisson", data = dat2)
+summary(TV_hrs)
+```
+
+3) Interpreting the model:
+
+GLM with the Poisson distribution found that both Educational Level (educ) and Hours of Free Time (hrsrelax) were statistically significant in predicting the number of hours of TV watched per day: both coefficients for Educational Level and Free Time were found to have p-values << 0.01, with p-values of 2.78 e-11 and 1.70e-11, respectively. The sign of the coefficient for education (-) tells us that, available free time held constant, an increase in educational levels will result in lower numbers of hours of TV watched per day. The converse is true for the hours of free time available. This is perhaps best described using a line graph, in which the predicted number of hours of TV watched per day is plotted as a function of education level, separated by available hours of free time. The predicted number of hours of TV watched per day was simply calculated by taking the exponent of the predicted values from the glm (recall, the log function is the link function for the Poisson distribution: to convert between the GLM predictions and probability, we simply need to exponentiate the predictions). As the plot illustrates, as expected, predicted hours of TV watching declines curvilinearly with increasing educational level, but increases as the hours of free time available increase. We also see that the number of hours of free time does not increase hours of TV watched as largely for those with higher educational levels as compared to those with lower educational levels.
+
+One issue with using the Poisson distribution is that it assumes that the mean and variance are identical. If the variance in our data is too small or too large in comparison with the mean, it could result in under- or overdispersion. This would signal to us that the Poisson is likely not the most appropriate distribution for modeling the random components of our data. We tested for under- and overdispersion using the "quasipoisson" method and observed a dispersion parameter of ~1.28. This value exceeds the desired value of 1 (where mean and variance are identical) and indicates that our conditional variance in the data sample exceeds the assumed variance for the Poisson distribution model. While the parameters are indeed calculated with statistical significance, this observation of overdispersion undermines the appropriateness of this approach. We should consider alternate distribution models that do not rely on an assumption that mean = variance, or consider revising our model to include more predictors to adjust the overdispersion observed.
+```{r}
+dat2 %>%
+  data_grid(educ, hrsrelax = seq(0,24, 4)) %>%
+  add_predictions(TV_hrs) %>%
+  mutate(pred = exp(pred),
+         hrsrelax = factor(hrsrelax)) %>%
+  ggplot(aes(educ, pred, color = hrsrelax)) +
+  geom_line() +
+  labs(title = "Effect of free time and education on Hours of Tv watched",
+       x = "Education",
+       y = "Predicted hours of TV watched per day")
+```
+
+
+```{r}
+TV_quasimod <- glm(tvhours ~ educ + hrsrelax, family = "quasipoisson", data = dat2)
+summary(TV_quasimod)
+```
+
