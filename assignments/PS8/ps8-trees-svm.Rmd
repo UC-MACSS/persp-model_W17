@@ -111,6 +111,6 @@ Submit your assignment as a single [R Markdown document](http://rmarkdown.rstudi
 
 Either:
 
-1. Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a $\LaTeX$ generated PDF document with your results and substantive analysis.
+1. Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a \LaTeX generated PDF document with your results and substantive analysis.
 1. Submit your assignment as a single Jupyter Notebook with your code, output, and written analysis compiled there.
 
