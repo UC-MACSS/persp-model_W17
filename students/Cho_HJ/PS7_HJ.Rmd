@@ -1,0 +1,525 @@
+---
+title: "Perspectives on Computational Modeling PS7"
+author: "HyungJin Cho"
+date: "February 27, 2017"
+output: github_document
+---
+
+```{r Setup, include=FALSE}
+# < Chunk Options >
+knitr::opts_chunk$set(echo = TRUE)
+
+# < Import Pacakges >
+library(tidyverse)
+library(modelr)
+library(knitr)
+library(broom)
+library(pander)
+library(feather)
+library(gam)
+library(splines)
+
+# < Import Data >
+DATA_1 = read_csv("data/biden.csv")     # DATA_1: biden.csv
+DATA_2 = read_csv("data/College.csv")     # DATA_2: College.csv = College.feather
+DATA_2 = read_feather("data/College.feather")
+
+set.seed(1234)
+
+```
+
+# Part 1: Sexy Joe Biden
+
+#### 1.Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.
+```{r I.1., echo=TRUE, warning=FALSE}
+# <Model>
+FIT_1A = lm(biden ~ ., data=DATA_1)
+
+# <MSE Function> 
+FUNC_MSE = function(model, data){
+  x = modelr:::residuals(model, data)
+  mean(x^2, na.rm=TRUE)
+}
+
+# <Model Estimation Summary> 
+pander(summary(FIT_1A))
+
+# <MSE Calculation>
+MSE_1 = FUNC_MSE(model=FIT_1A, data=DATA_1)
+MSE_1
+
+```
+
+The Mean Squared Error is `r MSE_1`.  
+
+#### 2.Estimate the test MSE of the model using the validation set approach. Split the sample set into a training set (70%) and a validation set (30%). Be sure to set your seed prior to this part of your code to guarantee reproducibility of results. Fit the linear regression model using only the training observations. Calculate the MSE using only the test set observations. How does this value compare to the training MSE from step 1?
+
+```{r, I.2., echo=TRUE, warning=FALSE}
+# <Function Definition>
+FUNC_VALIDATION_1 = function(DATA){
+  # <Validation Set Classification>
+  set.seed(1234)
+  DATA_SPLIT = resample_partition(DATA, c(train=0.7, test=0.3))
+  DATA_TRAIN = DATA_SPLIT$train %>%
+    tbl_df()
+  DATA_TEST = DATA_SPLIT$test %>%
+    tbl_df()
+  # <Model>
+  FIT = lm(biden ~ ., data=DATA_TRAIN)
+  # <MSE Calculation>
+  MSE = FUNC_MSE(model=FIT, data=DATA_TEST)
+
+  # <Model Estimation Summary>
+  return(pander(summary(FIT)))
+}
+
+# <Function Definition>
+FUNC_VALIDATION_2 = function(DATA){
+  # <Validation Set Classification>
+  set.seed(1234)
+  DATA_SPLIT = resample_partition(DATA, c(train=0.7, test=0.3))
+  DATA_TRAIN = DATA_SPLIT$train %>%
+    tbl_df()
+  DATA_TEST = DATA_SPLIT$test %>%
+    tbl_df()
+  # <Model>
+  FIT = lm(biden ~ ., data=DATA_TRAIN)
+  # <MSE Calculation>
+  MSE = FUNC_MSE(model=FIT, data=DATA_TEST)
+
+  # <MSE Calculation>
+  return(MSE_2 = MSE)
+}
+
+# <MSE Calculation>
+FUNC_VALIDATION_1(DATA_1)
+MSE_2 = FUNC_VALIDATION_2(DATA_1)
+
+```
+
+The testing Mean Squared Error is `r MSE_2`. The test MSE of the model using the validation set approach has higher value compared to the training MSE of the model using the traditional approach (Difference between Step2 and Step1 = `r MSE_2 - MSE_1`).
+
+#### 3.Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+
+```{r, I.3., echo=TRUE, warning=FALSE}
+# <Function Definition>
+FUNC_VALIDATION_3 = function(DATA){
+  # <Validation Set Classification>
+  DATA_SPLIT = resample_partition(DATA, c(train=0.7, test=0.3))
+  DATA_TRAIN = DATA_SPLIT$train %>%
+    tbl_df()
+  DATA_TEST = DATA_SPLIT$test %>%
+    tbl_df()
+  # <Model>
+  FIT = lm(biden ~ ., data=DATA_TRAIN)
+  # <MSE Calculation>
+  MSE = FUNC_MSE(model=FIT, data=DATA_TEST)
+
+  # <Mean Squared Error>
+  return(data_frame(MSE))
+}
+
+# <MSE Calculation>
+set.seed(1234)
+MSE_3A = rerun(100, FUNC_VALIDATION_3(DATA_1)) %>%
+  bind_rows()
+MSE_3 = mean(MSE_3A$MSE)
+MSE_3
+
+```
+
+The average Mean Squared Error is `r MSE_3`. The average MSE of the model using the validation set approach with 100 different splits of the observations has higher value compared to the training MSE of the model using the traditional approach, but has lower value compared to the test MSE of the model using the validation set approach (Difference between Step3 and Step1 = `r MSE_3 - MSE_1`, Difference between Step3 and Step2 = `r MSE_3 - MSE_2`).
+
+
+### 4.Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+
+```{r, I.4., echo=TRUE, warning=FALSE}
+# <Function Definition: Leave-one-out cross-validation>
+FUNC_LOOCV_1 = function(data, nrow){
+  LOOCV_DATA = crossv_kfold(data, nrow)
+  LOOCV_MODEL = map(LOOCV_DATA$train, ~ lm(biden ~ ., data=.))
+  LOOCV_MSE = map2_dbl(LOOCV_MODEL, LOOCV_DATA$test, FUNC_MSE)
+  
+  print(mean(LOOCV_MSE, na.rm=TRUE))
+}
+
+# <MSE Calculation>
+MSE_4 = FUNC_LOOCV_1(DATA_1, nrow(DATA_1))
+
+```
+
+The test Mean Squared Error is `r MSE_4`. The test MSE of the model using the leave-one-out cross-validation (LOOCV) approach has lower value compared to the test MSE of the model using the validation set approach, but has higher value compare to the training MSE of the model using the traditional approach (Difference between Step4 and Step3 = `r MSE_4 - MSE_3`, Difference between Step4 and Step2 = `r MSE_4 - MSE_2`, Difference between Step4 and Step1 = `r MSE_4 - MSE_1`).
+
+### 5.Estimate the test MSE of the model using the 10-fold cross-validation approach. Comment on the results obtained.
+```{r, I.5., echo=TRUE, warning=FALSE}
+# <MSE Calculation>
+MSE_5 = FUNC_LOOCV_1(DATA_1, 10)
+
+```
+
+The test Mean Squared Error is `r MSE_5`. The test MSE of the model using the 10-fold cross-validation approach has lower value compared to the test MSE of the model using the validation set approach or the model using the leave-one-out cross-validation (LOOCV) approach, but has higher value compare to the training MSE of the model using the traditional approach (Difference between Step5 and Step4 = `r MSE_5 - MSE_4`, Step5 and Step3 = `r MSE_5 - MSE_3`, Difference between Step5 and Step2 = `r MSE_5 - MSE_2`, Difference between Step4 and Step1 = `r MSE_5 - MSE_1`).
+
+### 6.Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds. Comment on the results obtained.
+```{r, I.6., echo=TRUE, warning=FALSE}
+# <Function Definition>
+FUNC_FOLD_2 = function(data, nrow){
+  FOLD_DATA = crossv_kfold(data, nrow)
+  FOLD_MODEL = map(FOLD_DATA$train, ~ lm(biden ~ ., data=.))
+  FOLD_MSE = map2_dbl(FOLD_MODEL, FOLD_DATA$test, FUNC_MSE)
+
+  return(data_frame(FOLD_MSE))
+}
+
+# <MSE Calculation>
+set.seed(1234)
+MSE_6A = rerun(100, FUNC_FOLD_2(DATA_1, 10)) %>%
+  bind_rows()
+MSE_6 = mean(MSE_6A$FOLD_MSE)
+MSE_6
+
+```
+
+The average Mean Squared Error is `r MSE_6`. The average MSE of the model using the 10-fold cross-validation approach with 100 different splits of the observations has higher value compared to the previous MSE (Difference between Step6 and Step5 = `r MSE_6 - MSE_5`).
+
+
+### 7.Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap (n=1000).
+```{r, I.7., echo=TRUE, warning=FALSE}
+# <Model Estimation Summary> 
+pander(summary(FIT_1A))
+
+# <Bootstrap>
+set.seed(1234)
+BOOT_1 = DATA_1 %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model=map(strap, ~ lm(biden ~ ., data=.)),
+         coef=map(model, tidy)) %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot=mean(estimate),
+            se.boot=sd(estimate, na.rm=TRUE)) %>%
+  pander()
+
+```
+
+In general, parameters and standard errors are simillar. For the estimates, the values using the bootstrap are slightly higher for intercept and lower for the other variables. For the standard errors, the values using the bootstrap are slightly higher for `age`, `dem`, `female`, `rep` and lower for the other variables.
+
+# Part 2: College
+
+#### `Room.Board` Room and board costs.
+
+```{r, II.1., echo=TRUE, warning=FALSE}
+# <Model>
+FIT_2A = lm(Outstate ~ Room.Board, data=DATA_2)
+FIT_2AA = lm(Outstate ~ poly(Room.Board, 2), data=DATA_2)
+DATA_2 %>%
+  add_predictions(FIT_2A) %>%
+  add_residuals(FIT_2A) %>%
+  {.} -> GRID_2A
+DATA_2 %>%
+  add_predictions(FIT_2AA) %>%
+  add_residuals(FIT_2AA) %>%
+  {.} -> GRID_2AA
+# <Model Estimation Summary> 
+pander(summary(FIT_2A))
+pander(summary(FIT_2AA))
+# <Comment>
+print("The linear regression model appears 'Outstate = -17.45 + 2.4*Room.Board' with statistical significance. The model's fitness represented by R square is 0.4281")
+
+# <Graph: Regression Model>
+ggplot(data=DATA_2, mapping=aes(y=Outstate, x=Room.Board)) +
+  geom_point() +
+  geom_smooth(data=GRID_2A, mapping=aes(y=pred), color='blue', size=2) +
+  geom_smooth(data=GRID_2AA, mapping=aes(y=pred), color='orange', size=2) +
+  labs(title="Regression Model", subtitle="Out-of-state Tuition ~ Room and Board Costs",
+       y="Out-of-state Tuition", x="Room and Board costs")
+# <Graph: Predicted Value and Residuals>
+ggplot(data=GRID_2A, mapping=aes(y=resid, x=pred)) +
+  geom_point(data=GRID_2A, color='blue', alpha=0.5) +
+  geom_hline(yintercept=0, linetype='dashed', color='blue', size=2) +
+  labs(title="Predicted Value and Residuals", subtitle="Out-of-state Tuition ~ Room and Board Costs",
+       y="Residuals", x="Predicted Out-of-state Tuition")
+# <Comment>
+print("The graph of regression model and the graph of predicted value and residuals show that there is a positive linear relationship between Outstate and Room.Board and the residuals are randomly located around 0.")
+
+# <10-fold cross-validation>
+set.seed(1234)
+FOLD_VECTOR = vector("numeric", 5)
+TERM = 1:5
+for(i in TERM){
+  FOLD_DATA = crossv_kfold(DATA_2, k=10)
+  FOLD_MODEL = map(FOLD_DATA$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  FOLD_MSE = map2_dbl(FOLD_MODEL, FOLD_DATA$test, FUNC_MSE)
+  FOLD_VECTOR[[i]] = mean(FOLD_MSE, na.rm=TRUE)
+}
+# <Graph: MSE Estimates>
+data_frame(terms=TERM, MSE=FOLD_VECTOR) %>%
+  ggplot(mapping=aes(y=MSE, x=terms)) +
+  geom_line() +
+  labs(title="MSE Estimates", subtitle="Out-of-state Tuition ~ Room and Board Costs",
+       y="Mean Squared Error", x="Degree of Polynomial")
+# <Comment>
+DIFF_2A = round(((FOLD_VECTOR[2] - FOLD_VECTOR[1])/FOLD_VECTOR[1] * 100), 2)
+sprintf("The graph of MSE estimates shows that MSE is lowest at degree 2. However, the MSE only decreases %s percent. Therefore, 1-degree line is selected. In conclusion, there is a positive relationship between Outstate and Room.Board with a coefficient of 2.4.", DIFF_2A)
+
+```
+#### `Top10perc` Percent of new students from top 10% of H.S. class.
+
+```{r, II.2., echo=TRUE, warning=FALSE}
+# <Model>
+FIT_2B = lm(Outstate ~ Top10perc, data=DATA_2)
+FIT_2BB = lm(Outstate ~ sqrt(Top10perc), data=DATA_2)
+DATA_2 %>%
+  add_predictions(FIT_2B) %>%
+  add_residuals(FIT_2B) %>%
+  {.} -> GRID_2B
+DATA_2 %>%
+  add_predictions(FIT_2BB) %>%
+  add_residuals(FIT_2BB) %>%
+  {.} -> GRID_2BB
+# <Model Estimation Summary> 
+pander(summary(FIT_2B))
+pander(summary(FIT_2BB))
+# <Comment>
+print("The linear regression model appears 'Outstate = 6906 + 128.2*Top10perc' with statistical significance. The model's fitness represented by R square is 0.3162")
+
+# <Graph: Regression Model>
+ggplot(data=DATA_2, mapping=aes(y=Outstate, x=Top10perc)) +
+  geom_point() +
+  geom_smooth(data=GRID_2B, mapping=aes(y=pred), color='blue', size=2) +
+  geom_smooth(data=GRID_2BB, mapping=aes(y=pred), color='orange', size=2) +
+  labs(title="Regression Model", subtitle="Out-of-state Tuition ~ Percent of New Students from Top 10% of H.S. Class",
+       y="Out-of-state Tuition", x="Out-of-state Tuition ~ Percent of New Students from Top 10% of H.S. Class")
+# <Graph: Predicted Value and Residuals>
+ggplot(mapping=aes(y=resid, x=pred)) +
+  geom_point(data=GRID_2B, color='blue', alpha=0.5) +
+  geom_point(data=GRID_2BB, color='orange', alpha=0.5) +
+  geom_hline(yintercept=0, linetype='dashed', color='blue', size=2) +
+  labs(title="Predicted Value and Residuals", subtitle="Out-of-state Tuition ~ Out-of-state Tuition ~ Percent of New Students from Top 10% of H.S. Class",
+       y="Residuals", x="Predicted Out-of-state Tuition")
+# <Comment>
+print("The graph of regression model and the graph of predicted value and residuals show that there is a positive linear relationship between Outstate and Top10perc and the residuals are randomly located around 0. Thus, the square root-transformation is not applied.")
+
+# <10-fold cross-validation>
+set.seed(1234)
+FOLD_VECTOR = vector("numeric", 5)
+TERM = 1:5
+for(i in TERM){
+  FOLD_DATA = crossv_kfold(DATA_2, k=10)
+  FOLD_MODEL = map(FOLD_DATA$train, ~ lm(Outstate ~ poly(Top10perc, i), data = .))
+  FOLD_MSE = map2_dbl(FOLD_MODEL, FOLD_DATA$test, FUNC_MSE)
+  FOLD_VECTOR[[i]] = mean(FOLD_MSE, na.rm=TRUE)
+}
+
+# <Graph: MSE Estimates>
+data_frame(terms=TERM, MSE=FOLD_VECTOR) %>%
+  ggplot(mapping=aes(y=MSE, x=terms)) +
+  geom_line() +
+  labs(title="MSE Estimates", subtitle="Out-of-state Tuition ~ Percent of New Students from Top 10% of H.S. Class",
+       y="Mean Squared Error", x="Degree of Polynomial")
+# <Comment>
+DIFF_2B = round(((FOLD_VECTOR[2] - FOLD_VECTOR[1])/FOLD_VECTOR[1] * 100), 2)
+sprintf("The graph of MSE estimates shows that MSE is lowest at degree 2. However, the MSE only decreases %s percent. Therefore, 1-degree line is selected. In conclusion, there is a positive relationship between Outstate and Top10perc with a coefficient of 128.2.", DIFF_2B)
+
+```
+
+#### `Expend` Instructional expenditure per student.
+
+```{r, II.3., echo=TRUE, warning=FALSE}
+# <Model>
+FIT_2C = lm(Outstate ~ Expend, data=DATA_2)
+FIT_2CC = lm(Outstate ~ log(Expend), data=DATA_2)
+DATA_2 %>%
+  add_predictions(FIT_2C) %>%
+  add_residuals(FIT_2C) %>%
+  {.} -> GRID_2C
+DATA_2 %>%
+  add_predictions(FIT_2CC) %>%
+  add_residuals(FIT_2CC) %>%
+  {.} -> GRID_2CC
+# <Model Estimation Summary> 
+pander(summary(FIT_2C))
+pander(summary(FIT_2CC))
+# <Comment>
+print("The linear regression model appears 'Outstate = 5434 + 0.5183*Expend' with statistical significance. The model's fitness represented by R square is 0.4526")
+
+# <Graph: Regression Model>
+ggplot(data=DATA_2, mapping=aes(y=Outstate, x=Expend)) +
+  geom_point() +
+  geom_smooth(data=GRID_2C, mapping=aes(y=pred), color='blue', size=2) +
+  geom_smooth(data=GRID_2CC, mapping=aes(y=pred), color='orange', size=2) +
+  labs(title="Regression Model", subtitle="Out-of-state Tuition ~ Instructional Expenditure per Student",
+       y="Out-of-state Tuition", x="Instructional Expenditure per Student")
+# <Graph: Predicted Value and Residuals>
+ggplot(mapping=aes(y=resid, x=pred)) +
+  geom_point(data=GRID_2C, color='blue', alpha=0.5) +
+  geom_point(data=GRID_2CC, color='orange', alpha=0.5) +
+  geom_hline(yintercept=0, linetype='dashed', color='blue', size=2) +
+  labs(title="Predicted Value and Residuals", subtitle="Out-of-state Tuition ~ Instructional Expenditure per Student",
+       y="Residuals", x="Predicted Out-of-state Tuition")
+# <Comment>
+print("The graph of regression model and the graph of predicted value and residuals show that the model doen't suit for the linear relationship between Outstate and Expend. Thus, the log-transformation is applied.")
+
+# <10-fold cross-validation>
+set.seed(1234)
+FOLD_VECTOR = vector("numeric", 5)
+TERM = 1:5
+for(i in TERM){
+  FOLD_DATA = crossv_kfold(DATA_2, k=10)
+  FOLD_MODEL = map(FOLD_DATA$train, ~ lm(Outstate ~ poly(Expend, i), data = .))
+  FOLD_MSE = map2_dbl(FOLD_MODEL, FOLD_DATA$test, FUNC_MSE)
+  FOLD_VECTOR[[i]] = mean(FOLD_MSE, na.rm=TRUE)
+}
+FUNC_LOG = function(data, nrow){
+  FOLD_DATA = crossv_kfold(data, nrow)
+  FOLD_MODEL = map(FOLD_DATA$train, ~ lm(Outstate ~ log(Expend), data = .))
+  FOLD_MSE = map2_dbl(FOLD_MODEL, FOLD_DATA$test, FUNC_MSE)
+  return(mean(FOLD_MSE, na.rm=TRUE))
+}
+FOLD_LOG = FUNC_LOG(DATA_2, 10)
+
+# <Graph: MSE Estimates>
+data_frame(terms=TERM, MSE=FOLD_VECTOR) %>%
+  ggplot(mapping=aes(y=MSE, x=terms)) +
+  geom_line() +
+  geom_hline(mapping=aes(yintercept=FOLD_LOG, color='MSE for Log Transformation'),
+             linetype='dashed') + 
+  scale_colour_manual("", values=c("MSE for Log Transformation"="orange"))
+  labs(title="MSE Estimates", subtitle="Out-of-state Tuition ~ Instructional Expenditure per Student",
+       y="Mean Squared Error", x="Degree of Polynomial")
+# <Comment>
+DIFF_2C = round(((FOLD_VECTOR[3] - FOLD_LOG)/FOLD_LOG * 100), 2)
+sprintf("The graph of MSE estimates shows that MSE is lowest at degree 3. However, the MSE only decreases %s percent. Therefore, log-transformation is selected. In conclusion, there is a positive relationship between Outstate and log(Expend) with a coefficient of 7482.", DIFF_2C)
+
+```
+
+# Part 3: College
+
+#### 1.Split the data into a training set and a test set.
+
+```{r, III.1., echo=TRUE, warning=FALSE}
+# <Validation Set Classification>
+set.seed(1234)
+DATA_2_SPLIT = resample_partition(DATA_2, c(train=0.7, test=0.3))
+  
+```
+
+#### 2.Estimate an OLS model on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+```{r, III.2., echo=TRUE, warning=FALSE}
+# <OLS model>
+FIT_3A = lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + log(Expend) + Grad.Rate, data=DATA_2_SPLIT$train)
+pander(summary(FIT_3A))
+
+```
+
+The table shows that the predictors and intercept of the OLS model are statistically significant. The R Square is 0.7592 which indicates the OLS model can explain 75.92% of the variance in the training dataset. There is a positive relationship between each predictor and the `Outstate`. The estimate for the predictor of `Private` is 2365. Holding other variables constant, private schools are related with an increase in the out-of-state tuition of 2365 dollars. The estimate for the predictor of `Room.Board` is 0.8441. Holding other variables constant, an additional dollar of the room and board costs is related with an increase in the out-of-state tuition of 0.8441 dollars. The estimate for the predictor of `PhD` is 25.22. Holding other variables constant, an additional percent of the faculty holding PhD degree is related with an increase in the out-of-state tuition of 25.22 dollars. The estimate for the predictor of `perc.alumni` is 35.75. Holding other variables constant, an additional percent of the alumni donates is related with an increase in the out-of-state tuition of 35.75 dollars. The estimate for the predictor of `log(Expend)` is 3750. Holding other variables constant, an additional percent of the instructional expenditure is related with an increase in the out-of-state tuition of 3750 dollars. The estimate for the predictor of `Grad.Rate` is 29.32. Holding other variables constant, an additional percent of the instructional expenditure is related with an increase in the out-of-state tuition of 29.32 dollars.
+
+#### 3.Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors. You can select any non-linear method (or linear) presented in the readings or in-class to fit each variable. Plot the results, and explain your findings. Interpret the results and explain your findings, using appropriate techniques (tables, graphs, statistical tests, etc.).
+```{r, III.3., echo=TRUE, warning=FALSE, error=TRUE}
+# <GAM>
+GAM_1 = gam(Outstate ~ Private + Room.Board + poly(PhD,3) + lo(perc.alumni) + log(Expend) + bs(Grad.Rate, df=2+1, degree=2), data=DATA_2_SPLIT$train, na.action=na.fail)
+summary(GAM_1)
+
+# <Graph>
+GAM_TERM = preplot(GAM_1, se=TRUE, rug=FALSE)
+# <Graph: Private>
+data_frame(x = GAM_TERM$Private$x,
+           y = GAM_TERM$Private$y,
+           se.fit = GAM_TERM$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Linear Regression",
+       x = "Private",
+       y = expression(f[1](private)))
+# <Graph: Room.Board>
+data_frame(x = GAM_TERM$Room.Board$x,
+           y = GAM_TERM$Room.Board$y,
+           se.fit = GAM_TERM$Room.Board$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Linear Regression",
+       x = "Room.Board",
+       y = expression(f[2](Room.Board)))   
+# <Graph: PhD>
+data_frame(x = GAM_TERM$`poly(PhD, 3)`$x,
+           y = GAM_TERM$`poly(PhD, 3)`$y,
+           se.fit = GAM_TERM$`poly(PhD, 3)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Cubic Model",
+       x = "PhD",
+       y = expression(f[3](PhD)))
+# <Graph: Expend>
+data_frame(x = GAM_TERM$`log(Expend)`$x,
+           y = GAM_TERM$`log(Expend)`$y,
+           se.fit = GAM_TERM$`log(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Log Transformation",
+       x = "Expend",
+       y = expression(f[4](expend)))
+# <Graph: perc.alumni>
+data_frame(x = GAM_TERM$`lo(perc.alumni)`$x,
+           y = GAM_TERM$`lo(perc.alumni)`$y,
+           se.fit = GAM_TERM$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "perc.alumni",
+       y = expression(f[5](perc.alumni)))
+# <Graph: Grad.Rate>
+data_frame(x = GAM_TERM$`bs(Grad.Rate, degree = 2, df = 3)`$x,
+           y = GAM_TERM$`bs(Grad.Rate, degree = 2, df = 3)`$y,
+           se.fit = GAM_TERM$`bs(Grad.Rate, degree = 2, df = 3)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Splines",
+       x = "Grad.Rate",
+       y = expression(f[6](Grad.Rate)))
+
+```
+
+Simple linear regression for `Private`, linear regression for `Room.Board`, cubic model for `PhD`, log transformation for `Expend`, local regression for `perc.alumni`, and spline with 3 degrees of freedom and 2 degrees polynomial for Grad.Rate are used. The table shows that all the variables are statistically significant. The graphs show that the variables have substantial and significant relationships with out-of-state tuition. 
+
+#### 4.Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+```{r, III.4., echo=TRUE, warning=FALSE}
+OLS = FUNC_MSE(model=FIT_3A, data=DATA_2_SPLIT$test)
+OLS
+GAM = FUNC_MSE(model=GAM_1, data=DATA_2_SPLIT$test)
+GAM
+```
+The MSE from OLS is `r OLS` and the MSE from GAM is `r GAM`.
+Smaller MSE indicates the model fits the data better. Therefore, predictions from OLS are more accurate.
+
+#### 5.For which variables, if any, is there evidence of a non-linear relationship with the response?
+As log transformation for `Expend` is used, instructional expenditure per student has a non-linear relationship with the out-of-state tuition.
+
