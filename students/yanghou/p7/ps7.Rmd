@@ -1,0 +1,271 @@
+---
+title: "ps7"
+author: "YangHou"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE,message=FALSE)
+options(digit=3)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(splines)
+library(lattice)
+library(gam)
+set.seed(1234)
+```
+
+##problem 1
+1.
+```{r}
+bdata=read_csv("biden.csv")
+model1=lm(biden ~.,data=bdata)
+mse_cal=function(model,data){
+  x=modelr:::residuals(model,data)
+  mean(x^2,na.rm=TRUE)
+}
+mse_result=mse_cal(model1,bdata)
+mse_result
+```
+
+The mean squared error is 395.27.
+
+2.
+```{r}
+bdata_split=resample_partition(bdata,c(test=0.3,train=0.7))
+model_train=lm(biden~.,data=bdata_split$train)
+mse_result2=mse_cal(model_train,bdata_split$test)
+mse_result2
+```
+The new MSE is 411.54, which is larger than the previous MSE. This is reasonable since now the training set is only a small portion of the data, it will not suit the other part as good as the presvious approach.
+
+3.
+```{r}
+mse_list=numeric(100)
+for (i in 1:100){
+  bsplit=resample_partition(bdata,c(test=0.3,train=0.7))
+  model_train=lm(biden~.,data=bsplit$train)
+  mse_list[i]=mse_cal(model_train,bsplit$test)
+}
+mse_result3=mean(mse_list)
+mse_result3
+
+```
+```{r}
+hist(mse_list,main='MSE Distribution',xlab='MSE')
+```
+
+The new MSE we get is 401.51, which is better than the previous approach. The histogram above shows the distribution of the MSE from 100 trails. 
+
+4.
+```{r}
+bloocv=crossv_kfold(bdata,k=nrow(bdata))
+loocv_model=map(bloocv$train,~lm(biden~.,data=.))
+loocv_mse=map2_dbl(loocv_model,bloocv$test,mse_cal)
+mean(loocv_mse)
+```
+
+The MSE is 397.96, which is lower than using previous approach.
+
+5.
+```{r}
+f10_d=crossv_kfold(bdata,k=10)
+f10_m=map(f10_d$train,~lm(biden~.,data=.))
+f10_mse=map2_dbl(f10_m,f10_d$test,mse_cal)
+mean(f10_mse)
+```
+
+The MSE value is 397.69, which is slightly lower than the previous one. However, it only computes 10 times, which is much more effienct than the previous approach.
+
+6.
+```{r}
+mse_list=numeric(100)
+for (i in 1:100){
+  f10_d=crossv_kfold(bdata,k=10)
+  f10_m=map(f10_d$train,~lm(biden~.,data=.))
+  f10_mse=map2_dbl(f10_m,f10_d$test,mse_cal)
+  mse_list[i]=mean(f10_mse)
+}
+mean(mse_list)
+```
+
+```{r}
+hist(mse_list,main='10 fold 100 times',xlab='10 fold mse')
+```
+
+The MSE value is 398.01, which is still very close to the previous approach. However, this time the ditribution has less deviation, which means this approach is more stable.
+
+7.
+```{r}
+bboot=bdata%>%modelr::bootstrap(1000)%>%mutate(model=map(strap,~lm(biden~.,data=.)),coef=map(model,tidy))
+bboot%>%unnest(coef)%>%group_by(term)%>%summarize(est.boot=mean(estimate),se.boot=sd(estimate,na.rm=TRUE))
+summary(model1)
+```
+
+The estimates we get from bootstrap are close to estimates we get in step 1. For the standard deviations, some are slightly higher and some are slightly lower, but all in acceptable level. This is due to the fact that bootstrap treats the sample as the population, so there is no pre-assumption for the distribution in the population.
+
+##problem 2
+```{r}
+cdata=read_csv("college.csv")
+```
+First, we explore relation between outstate and expend.
+
+```{r}
+ggplot(cdata,aes(x=Expend,y=Outstate))+geom_point()+labs(title='Expand vs Outstate',y='Outstate',x='Expand')
+
+```
+
+It seems we should use log exand to estimate the outstate.
+```{r}
+ggplot(cdata,aes(x=Expend,y=Outstate))+geom_point()+geom_smooth(method='lm',formula=y~log(x))+labs(title="Outstate on Expend")
+```
+
+```{r}
+model_expand=lm(Outstate~log(Expend),data=cdata)
+e_data=cdata%>%add_predictions(model_expand)%>%add_residuals(model_expand)
+ggplot(e_data,aes(x=pred))+geom_point(aes(y=resid))
+```
+
+The residuals distributes around 0 evenly. So let's compare MSE value for lienar and log model to see if truely log is better.
+```{r}
+f10_d=crossv_kfold(cdata,k=10)
+f10_m=map(f10_d$train,~lm(Outstate~log(Expend),data=.))
+f10_mse=map2_dbl(f10_m,f10_d$test,mse_cal)
+mean(f10_mse,na.rm=TRUE)
+```
+compare with linear model.
+```{r}
+lmodel=glm(Outstate~Expend,data=cdata)
+mse_cal(lmodel,data=cdata)
+```
+
+As we can see, the MSE value for log model is lower than linear model, which proves our pick of log model is better.
+
+Second, let's exam Outstate on Room.Board.
+```{r}
+ggplot(cdata,aes(x=Room.Board,y=Outstate))+geom_point()+labs(title='Room.Board vs Outstate')
+```
+
+It seems like linear. Let's check the residuals.
+```{r}
+model_Room=lm(Outstate~Room.Board,data=cdata)
+r_data=cdata%>%add_predictions(model_Room)%>%add_residuals(model_Room)
+ggplot(r_data,aes(x=pred))+geom_point(aes(y=resid))
+```
+The residuals distributes around 0 evenly. Then we use 10-fold to better investigate the model.
+```{r}
+f10_d=crossv_kfold(cdata,k=10)
+terms=1:5
+result=vector("numeric",5)
+for (i in terms){
+  f10_m=map(f10_d$train,~lm(Outstate~poly(Room.Board,i),data=.))
+  f10_mse=map2_dbl(f10_m,f10_d$test,mse_cal)
+  result[i]=mean(f10_mse)
+}
+data_frame(terms=terms,fold10=result)%>%ggplot(aes(x=terms,y=fold10))+geom_line()+labs(title="MSE estimates")
+```
+
+The result shows that 1,2,3 order have relatively same result and are all better than 4,5 order. So I will stick with linear relationship.
+
+Last, since Americans are rich and generous, let's exam the donation.
+```{r}
+ggplot(cdata,aes(x=perc.alumni,y=Outstate))+geom_point()+labs(title='perc.alumni vs Outstate')
+```
+
+The relationship appears to be linear, let's check the residuals.
+```{r}
+model_donation=lm(Outstate~perc.alumni,data=cdata)
+d_data=cdata%>%add_predictions(model_donation)%>%add_residuals(model_donation)
+ggplot(r_data,aes(x=pred))+geom_point(aes(y=resid))
+```
+
+The residuals distributes around 0 evenly. Then we use 10-fold to better investigate the model.
+```{r}
+f10_d=crossv_kfold(cdata,k=10)
+terms=1:5
+result=vector("numeric",5)
+for (i in terms){
+  f10_m=map(f10_d$train,~lm(Outstate~poly(perc.alumni,i),data=.))
+  f10_mse=map2_dbl(f10_m,f10_d$test,mse_cal)
+  result[i]=mean(f10_mse)
+}
+data_frame(terms=terms,fold10=result)%>%ggplot(aes(x=terms,y=fold10))+geom_line()+labs(title="MSE estimates")
+```
+
+As we can see, linear relation is no doubt the best choice we have.
+
+##problem 3
+1.
+```{r}
+split_d=resample_partition(cdata,c(test=0.3,train=0.7))
+```
+
+2.
+```{r}
+ols_m=lm(Outstate~Private+Room.Board+PhD+perc.alumni+Expend+Grad.Rate,data=split_d$train)
+summary(ols_m)
+```
+
+As we can see, the R-square is 0.7626, which means the model could explain 76.26% of the change in the tranning set. It is accecptable. All six variables have significant influence for the response variable. In details, a private university will raise the tuition 2662 dollars. 1 unit of increase in room and board costs, percent of faculty with PhD's, percent of alumni who donate, instrucational expenditure per student and graduation rate will result \$1.06,\$33.66,\$48.87,\$0.1931,\$29.51 in the tuition accodingly.
+
+3.
+```{r}
+model_g=gam(Outstate~Private+Room.Board+lo(PhD)+perc.alumni+log(Expend)+Grad.Rate,data=split_d$train)
+summary(model_g)
+```
+
+As we can see, all parameters tend to have significant statistical relationship. 
+```{r}
+gam_terms=preplot(model_g,se=TRUE,rug=FALSE)
+data_frame(x=gam_terms$Private$x,y=gam_terms$Private$y,se.fit=gam_terms$Private$se.y)%>%unique%>%mutate(y_low=y-1.96*se.fit,y_high=y+1.96*se.fit)%>%ggplot(aes(x,y,ymin=y_low,ymax=y_high))+geom_errorbar()+geom_point()+labs(title="GAM",x="Private or not",y=expression(f[1](private)))
+```
+
+As we can see, being public has a signifcant negetive influence on the tuition, and being private has less but postive influence on tuition.
+
+```{r}
+gam_terms=preplot(model_g,se=TRUE,rug=FALSE)
+data_frame(x=gam_terms$Room.Board$x,y=gam_terms$Room.Board$y,se.fit=gam_terms$Room.Board$se.y)%>%mutate(y_low=y-1.96*se.fit,y_high=y+1.96*se.fit)%>%ggplot(aes(x,y))+geom_line()+geom_line(aes(y=y_low),linetype=2)+geom_line(aes(y=y_high),linetype=2)+labs(title="GAM",x="Room.Board",y=expression(f[2](Room.Board)))
+```
+
+As we can see, when room expenditure increases, the tuition tends to increase.However, the confidence interval tends to expand at the head and tail. 
+
+```{r}
+gam_terms=preplot(model_g,se=TRUE,rug=FALSE)
+data_frame(x=gam_terms$`lo(PhD)`$x,y=gam_terms$`lo(PhD)`$y,se.fit=gam_terms$`lo(PhD)`$se.y)%>%mutate(y_low=y-1.96*se.fit,y_high=y+1.96*se.fit)%>%ggplot(aes(x,y))+geom_line()+geom_line(aes(y=y_low),linetype=2)+geom_line(aes(y=y_high),linetype=2)+labs(title="GAM",x="PhD",y=expression(f[3](PhD)))
+```
+
+As we can see, the tuition tends to increase when PhD percentage increases. However, the confidence intercal becomes really wide when PhD percentage is lower than 25%.
+
+```{r}
+gam_terms=preplot(model_g,se=TRUE,rug=FALSE)
+data_frame(x=gam_terms$perc.alumni$x,y=gam_terms$perc.alumni$y,se.fit=gam_terms$perc.alumni$se.y)%>%mutate(y_low=y-1.96*se.fit,y_high=y+1.96*se.fit)%>%ggplot(aes(x,y))+geom_line()+geom_line(aes(y=y_low),linetype=2)+geom_line(aes(y=y_high),linetype=2)+labs(title="GAM",x="perc.alumni",y=expression(f[4](perc.alumni)))
+```
+
+As we can see, the tuition tends to increase when percentage of alumni donation increases. However, the confidence interval tends to be wide when the percentage is larger than 50%.
+
+```{r}
+gam_terms=preplot(model_g,se=TRUE,rug=FALSE)
+data_frame(x=gam_terms$`log(Expend)`$x,y=gam_terms$`log(Expend)`$y,se.fit=gam_terms$`log(Expend)`$se.y)%>%mutate(y_low=y-1.96*se.fit,y_high=y+1.96*se.fit)%>%ggplot(aes(x,y))+geom_line()+geom_line(aes(y=y_low),linetype=2)+geom_line(aes(y=y_high),linetype=2)+labs(title="GAM",x="expend",y=expression(f[5](expend)))
+```
+
+As we can the tuition tends to increase when expend increase. And the confidence interval expands a little with the increase of expend.
+
+```{r}
+gam_terms=preplot(model_g,se=TRUE,rug=FALSE)
+data_frame(x=gam_terms$Grad.Rate$x,y=gam_terms$Grad.Rate$y,se.fit=gam_terms$Grad.Rate$se.y)%>%mutate(y_low=y-1.96*se.fit,y_high=y+1.96*se.fit)%>%ggplot(aes(x,y))+geom_line()+geom_line(aes(y=y_low),linetype=2)+geom_line(aes(y=y_high),linetype=2)+labs(title="GAM",x="Grad.Rate",y=expression(f[6](Grad.Rate)))
+```
+
+As we can see, the tuition tends to increase when graduation rate increases. The confidence interval tends to expand at the head and the tail.
+
+3.
+```{r}
+ols_mse=mse_cal(ols_m,split_d$test)
+gam_mse=mse_cal(model_g,split_d$test)
+ols_mse
+gam_mse
+```
+
+The MSE value for ols is 5068316, the MSE value for gam is 4516359. Since the MSE value of gam is much smaller than ols, we could say gam estimates the model better.
+
+5.From the analysis above, we could conclude that the expend has a nonlinear relationship with tuition.
