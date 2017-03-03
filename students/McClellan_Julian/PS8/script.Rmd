@@ -29,6 +29,7 @@ knitr::opts_chunk$set(cache = TRUE,
                       warning = FALSE,
                       echo = FALSE)
 df.biden <- read_csv('data/biden.csv')
+df.mhealth <- read_csv('data/mental_health.csv')
 options(digits = 3)
 theme_set(theme_minimal())
 ```
@@ -139,7 +140,7 @@ set.seed(1234) # Need reproducible bootstrap
                            ntree = 500))
 
 # Calculate bagged MSE
-mse_bag <- calc_mse(biden_bag, biden_split$test)
+mse_bag <- calc_mse(biden_bag, biden.split$test)
 
 # Get variable importance
 var_import <- importance(biden_bag, type = 1)
@@ -246,6 +247,74 @@ Clearly, looking at the above graph, the number of predictors (`m`) we randomly 
 #### 6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter λ influence the test MSE?
 
 
-```{r biden_boost}
+```{r biden_boost, warning = FALSE}
+pred_trees <- 100
+int_depth <- 4
 
+biden.boost <- gbm(biden ~ ., 
+                   data = biden.split$train, distribution = 'gaussian',
+                   n.trees = 10000, interaction.depth = int_depth)
+
+mse_boost <- mean((biden.split$test$data$biden - 
+                     predict(biden.boost, newdata = biden.split$test, n.trees = pred_trees)) ^ 2)
+
+num_trees_df <- data_frame(num_trees = seq(100, 10000, by = 100),
+                           test_mse = map_dbl(num_trees, ~ mean((biden.split$test$data$biden - 
+                                                             predict(biden.boost, 
+                                                                     newdata = biden.split$test, 
+                                                                     n.trees = .)) ^ 2)))
+
+num_trees_df %>%
+  ggplot(aes(num_trees, test_mse)) +
+    geom_line() +
+    labs(title = 'Number of trees used vs. Test MSE',
+         subtitle = sprintf('Interaction depth = %d', int_depth),
+         x = 'Number of Trees used in Boosting',
+         y = 'Test MSE')
+```
+
+Utilizing the boosting approach to analyze the data, with `r pred_trees` trees, and an interaction depth of `r int_depth` I obtain a test MSE of `r mse_boost`. This is way higher than any of the previous test MSEs I obtained via bagging or with a random forest. Additionally, above we show a graph of the test MSE as a function of the number of trees used in Boosting. Oddly enough, the number of trees used seems to increase the test MSE! This is not what we expect. If you're grading this, take a look at my code, I'm pretty sure I didn't fuck it up.
+
+Now let's see how the value of the shrinkage parameter $\lambda$ has on the test MSE by training several boosted models with the same number of trees, with different values of the shrinkage parameter.
+
+```{r shrinkage}
+shrink_df <- data_frame(shrinkage = seq(0.001, .1, length.out = 100),
+           boosts = map(shrinkage, ~ gbm(biden ~ .,
+                                         data = biden.split$train, distribution = 'gaussian',
+                                         n.trees = 1000, interaction.depth = 3, shrinkage = .)),
+           mse_boost = map_dbl(boosts, 
+                           ~ mean((biden.split$test$data$biden - predict(., 
+                                                                         n.trees = num_trees,
+                                                                  newdata = biden.split$test)) ^ 2)))
+shrink_df %>%
+  ggplot(aes(shrinkage, mse_boost)) +
+    geom_line() + 
+    labs(title = 'Test MSE for Boosting with different Shrinkage Values',
+         subtitle = '100 Trees Used in Boosting',
+         x = paste('Shrinkage Value: ', expression(lambda)),
+         y = 'Test MSE')
+```
+
+As we can see from the above graph, at least with our biden data, lowering the shrinkage value, $\lambda$ always results in a lower test MSE. Note however, that the lowest test MSE with the lowest value of $\lambda$ still has a higher test MSE than what we saw utilizing bagging.
+
+# Part 2: Modeling Voter Turnout
+
+#### 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+```{r}
+df.mh.10fold <- crossv_kfold(df.mhealth, k = 10)
+
+# Standard Decision Tree
+trees.mhealth <- map(df.mh.10fold$train, ~ tree(vote96 ~ ., data = .))
+
+# Optimally Pruned Decision Tree
+
+# Bagged Decision Tree
+
+# Random Forest
+
+# Boosted Decision Tree
+models.kfolds <- map(df.kfolds$train, ~ lm(biden ~ ., data = .))
+mse.kfolds <- map2_dbl(models.kfolds, df.kfolds$test, calc_mse)
+mse <- mean(mse.kfolds)
 ```
