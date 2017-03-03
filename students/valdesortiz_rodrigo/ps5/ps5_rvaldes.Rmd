@@ -48,7 +48,6 @@ grid <- df %>%
 
 grid <- grid %>% 
   add_predictions(biden1) 
-
 ```
 
 ## 1. 
