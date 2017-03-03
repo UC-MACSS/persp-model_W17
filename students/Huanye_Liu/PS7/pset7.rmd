@@ -1,0 +1,243 @@
+---
+title: "Resampling and Nonlinearity"
+author: "Huanye Liu"
+output: md_document
+---
+```{r load library, echo TRUE}
+library(boot)
+# if ISLR not installed uncomment the following line
+#install.packages("ISLR")
+library(ISLR)
+library(splines)
+# if gam not installed uncomment the following line
+#install.packages("gam")
+library(gam)
+```
+
+```{r read, echo=TRUE}
+bd = read.csv("biden.csv",header=T)
+```
+
+# Sexy Joe Biden
+1. Using the whole dataset as the training set, the mean squared error for the training set is 395.2702, as shown below.
+```{r MSElm, echo=TRUE}
+mul = lm(biden~.,data=bd)
+MSE_mul = mean((bd$biden-predict(mul,newdata=bd))^2)
+MSE_mul
+```
+
+2. Using randomly chosen 70% of the dataset as training set and the rest as the test set, the mean square error for the test set is 466.6841 as shown below, which is bigger than the previous MSE for the training data because the previous linear model use the same dataset as both the training data and test data. 
+```{r MSEvalidation_set, echo=TRUE}
+set.seed(1)
+# n is the number of observation
+n = dim(bd)[1]
+train_index = sample(n,n*0.7)
+mul1 = lm(biden~.,data=bd,subset=train_index)
+#[-train_index] is to select out errors in test set
+MSE_mul1 = mean((bd$biden-predict(mul1,newdata=bd))[-train_index]^2)
+MSE_mul1
+```
+   
+3. After repeating the validation set approach 100 times, we can see from the histogram below that most of those calculated MSEs are around 380~420, but still some MSEs can be as large as above 460 and some as small as below 340 for some specific training/test splits, so using the validation set approach, the MSE can vary a lot depending on different training and test sets. 
+```{r MSEvalidation_set1, echo=TRUE}
+set.seed(1)
+# n is the number of observation
+n  = dim(bd)[1]
+# vector is to store the 100 MSEs
+vector = numeric(length=100)
+for (i in c(1:100)){
+  train_index = sample(n,n*0.7)
+  mul = lm(biden~.,data=bd,subset=train_index)
+  #[-train_index] is to select out errors in test set
+  MSE_mul = mean((bd$biden-predict(mul,newdata=bd))[-train_index]^2)
+  vector[i] = MSE_mul
+}
+
+hist(vector)
+
+```
+    
+4. The MSE using the leave one out cross validation is 397.9555, which is less than the MSE using the validation set approach. The reason is now the bias decreases due to using larger training set of n-1 observations compared with the validation set approach only using 70% observations as the training set. Another difference is the MSE using LOOCV is fixed given the dataset while MSEs using validation set approach vary depending on different training/test splits.   
+```{r MSEloocv, echo=TRUE}
+
+glm.fit = glm(biden~.,data=bd)
+cv.err=cv.glm(bd,glm.fit)
+loocvMSE = cv.err$delta[1]
+loocvMSE
+```
+    
+5.Running the code below, the MSE using the 10 fold cross validation is 397.971, which is slightly larger than the MSE using LOOCV due to using a smaller training set. 
+
+
+```{r MSE10fold, echo=TRUE}
+set.seed(1)
+glm.fit = glm(biden~.,data=bd)
+cv.err=cv.glm(bd,glm.fit,K=10)
+tenFoldMSE = cv.err$delta[1]
+tenFoldMSE
+```
+    
+6. After repeating the 10-fold cross validation 100 times, we can see from the histogram below that all of those calculated MSEs are in the range 397~400.5 for all specific training/test splits, therefore compared with the validation set approach, the variablility is much lower due to the larger training set used in this approach.
+
+```{r MSEvalidation_set2, echo=TRUE}
+set.seed(1)
+# vector is to store the 100 MSEs
+vector = numeric(length=100)
+for (i in c(1:100)){
+  glm.fit = glm(biden~.,data=bd)
+  cv.err=cv.glm(bd,glm.fit,K=10)
+  tenFoldMSE = cv.err$delta[1]
+  vector[i] = tenFoldMSE
+}
+hist(vector)
+
+```
+    
+7.  Using bootstrap with 1000 resamplings, we can see from the results as shown below that compared with the estimated paramters and standard errors from the original model in step1, the boostrap approach gives the same estimated coefficients as from the original model, but the standard errors of these coefficients is larger. The reason is that the bootstap approach dosen't rely on some assumptions that the original model assumes. For example some subsets of the data doesn't follow the linear relationship as assumed or sprecified by the original model, therefore when fitting these subsets of data into a linear model using the bootstrap, the resulting estimated coefficients may vary more than the homogeneous error term variance the original model assumes.   
+```{r bootstrap,echo=TRUE}
+# first create a function return the estimated coefficient for later call from boot()
+boot.fn = function(data,index)
+  return(coef(lm(biden~.,data=data,subset=index)))
+set.seed(1)
+boot(bd,boot.fn,1000)
+
+# the result of the original model in step 1
+summary(lm(biden~.,data=bd))$coef
+```
+
+# College(bivariate)
+We first consider the bivrariate relationship between variable Outstate and variable Top10perc. The code below runs polynomial regression from order 1(linear) to order 5, and calculate the MSEs using 10-fold cross-validation. We can see that the the optimal order is 2, and the quadratic fitting is show below as the graph shown below. By running anova, we can see compared with the linear model, the quadratic model fits the data better. 
+```{r part2_1,echo=TRUE}
+set.seed(1)
+cv.error=rep(0,5)
+for(i in 1:5){
+  glm.fit=glm(Outstate~poly(Top10perc,i),data=College)
+  cv.error[i] = cv.glm(College,glm.fit,K=10)$delta[1]
+}
+plot(cv.error[1:5],type='l',col='red',xlab='order',ylab='CV errors',main='Optimal number of degrees for polynomial regression')
+
+Top10perc.lims = range(College$Top10perc)
+Top10perc.grid = seq(from = Top10perc.lims[1],to=Top10perc.lims[2])
+
+plot(College$Top10perc,College$Outstate,xlab = 'Top10perc',ylab = 'Outstate Tuition',main="Outstate Tuition v.s. Top10perc")
+linear = glm(Outstate~poly(Top10perc,1),data=College)
+fit = lm(Outstate~poly(Top10perc,2),data=College)
+pred = predict(fit,newdata = list(Top10perc=Top10perc.grid),se=T)
+pred.linear = predict(linear,newdata = list(Top10perc=Top10perc.grid),se=T)
+lines(Top10perc.grid,pred.linear$fit,col='blue',lwd=2)
+lines(Top10perc.grid,pred$fit,col='red',lwd=2)
+legend(70,10000,legend = c("linear fitting","quadratic fitting"),col=c('blue','red'),lty=1,cex = 0.6,text.font=2)
+anova(linear,fit,test='F')
+```
+   
+Next, we consider the bivrariate relationship between variable Outstate and variable Top25perc. The code below runs polynomial regression from order 1(linear) to order 5, and calculate the MSEs using 10-fold cross-validation. We can see that the optimal order is still 2, and the quadratic fitting is show below as the graph shown below. By running anova, we can see compared with the linear model, the quadratic model fits the data better.
+
+```{r part2_2,echo=TRUE}
+set.seed(1)
+cv.error=rep(0,5)
+for(i in 1:5){
+  glm.fit=glm(Outstate~poly(Top25perc,i),data=College)
+  cv.error[i] = cv.glm(College,glm.fit,K=10)$delta[1]
+}
+plot(cv.error[1:5],type='l',col='red',xlab='order',ylab='CV errors',main='Optimal number of degrees for polynomial regression')
+
+Top25perc.lims = range(College$Top25perc)
+Top25perc.grid = seq(from = Top25perc.lims[1],to=Top25perc.lims[2])
+
+plot(College$Top25perc,College$Outstate,xlab = 'Top25perc',ylab = 'Outstate Tuition',main="Outstate Tuition v.s. Top25perc")
+linear = glm(Outstate~poly(Top25perc,1),data=College)
+fit = lm(Outstate~poly(Top25perc,2),data=College)
+pred = predict(fit,newdata = list(Top25perc=Top25perc.grid),se=T)
+pred.linear = predict(linear,newdata = list(Top25perc=Top25perc.grid),se=T)
+lines(Top25perc.grid,pred.linear$fit,col='blue',lwd=2)
+lines(Top25perc.grid,pred$fit,col='red',lwd=2)
+legend(20,20000,legend = c("linear fitting","quadratic fitting"),col=c('blue','red'),lty=1,cex = 0.6,text.font=2)
+anova(linear,fit,test='F')
+```
+    
+Then we consider the bivrariate relationship between variable Outstate and variable Phd. First by using the linear regression, the CV error is 13836361, and then using the quadratic fittin, the cv error decreases to 12681603, and Finally using piecewise degree 2 polynomial with one knot spline to fit the data, the cv error further decreases to 12490555. By running anova, we can see compared with the linear and quadratic model, the spline model fits the data better, and the spline model shows that when the percent of faculty with PhD is below 60%, tuition doesn't change a lot, but in universities where the Phd holding faculty is above 60%, the tuition increases as the Phd holding rate grows.  
+```{r part2_3,echo=TRUE}
+set.seed(1)
+
+ linear = glm(Outstate~poly(PhD,1),data=College)
+ cv.error.linear=cv.glm(College,linear,K=10)$delta[1]
+ #cv.error.linear
+ quad = glm(Outstate~poly(PhD,2),data=College)
+ cv.error.quad=cv.glm(College,quad,K=10)$delta[1]
+ #cv.error.quad
+ PhD.lims = range(College$PhD)
+ PhD.grid = seq(from = PhD.lims[1],to=PhD.lims[2])
+plot(College$PhD,College$Outstate,xlab='PhD rate',ylab='Outstate Tuition',main="Outstate Tuition v.s. PhD rate")
+fit = glm(Outstate~bs(PhD,knots = c(60),degree=2),data=College)
+pred.spline = predict(fit,newdata = list(PhD=PhD.grid),se=T)
+pred.linear = predict(linear,newdata = list(PhD=PhD.grid),se=T)
+pred.quad = predict(quad,newdata = list(PhD=PhD.grid),se=T)
+lines(PhD.grid,pred.linear$fit,col='blue',lwd=2)
+lines(PhD.grid,pred.quad$fit,col='green',lwd=2)
+lines(PhD.grid,pred.spline$fit,col='red',lwd=2)
+legend(20,20000,legend = c("linear fitting","quadratic fitting",'splines with one knot at 60'),col=c('blue','green','red'),lty=1,cex = 0.6,text.font=2)
+anova(linear,quad,test='F')
+anova(quad,fit,test='F')
+```
+# College(GAM)
+1. I choose 70% observations as the training set and the rest 30% observations as the test set.
+```{r part3_1, echo=TRUE}
+set.seed(1)
+n = dim(College)[1]
+train_index = sample(n,n*0.7)
+```
+  
+2. Running the multivariable linear regression, we can see all six predictors are statistically significant and the adjusted R square is 0.7332.
+```{r part3_2, echo=TRUE}
+ols=lm(Outstate~Private+Room.Board+PhD+perc.alumni+Expend+Grad.Rate,data=College,subset=train_index)
+summary(ols)
+
+```
+   
+3. After some observations from the scatter plots between variable Outstate and each predictor, the generalized additive model is specified as: 
+* a linear relationship between Outstate and Private
+* a linear relationship between Outstate and Room.Board
+* a linear relationship between Outstate and PhD
+* a linear relationship between Outstate and perc.alumni
+* a natural spline with one knot at Expend = 18000 between Outstate and Expend
+* a third order polynomial between Outstate and Grad.Rate.
+    
+The adjusted R squared of generalized additive model is 0.7781, higher than 0.7332 using the OLS.  After plotting the graph of relationship between the repsonse variable Outstate and each predictor, we can see that keeping other predictor fixed 1) Private universities charge higher out of state tuition fees than public universities do. 2) Variable Room.Board, perc.alumni and PhD rate are postively related to out of state tuition within the whole range of the predictors.  3). Instructional expenditure per student is positively related to the tuition when the expenditure is below 18000 but the relationship turns to negatively related when Expend > 18000. 4) In the intermediate range of graduation rate, out of state tuition is positively related to the graduation rate, but the relationship is opposite in the lower and higher range of graduation rate. 
+
+```{r part3_3, echo=TRUE}
+
+
+gam1 = lm(Outstate~Private+poly(Room.Board,1)+poly(PhD,1)+poly(perc.alumni,1)+ns(Expend,knots=c(18000))+poly(Grad.Rate,3),data = College)
+par(mfrow=c(2,3))
+plot.gam(gam1,se=TRUE,col='red')
+summary(gam1)
+```
+   
+4. After running the following code, we can see the test set MSE drops from 3892989 to 3334775 because by applying non-linear functions to some predictors, the generalized add model may be more close to the true relationship between the reponse variable Outstate and these predictors than the OLS model, and therefore the test set error using GAM is smaller than the error using OLS.
+
+```{r part3_4, echo=TRUE}
+
+pred_OLS = predict(ols,newdata=College[-train_index,])
+MSE_OLS = mean((College$Outstate[-train_index]-pred_OLS)^2)
+MSE_OLS
+pred_GAM = predict(gam1,newdata=College[-train_index,])
+MSE_GAM = mean((College$Outstate[-train_index]-pred_GAM)^2)
+MSE_GAM
+```
+   
+5. To find out which predictors are significantly non-linearly related to the response variable, we compare models with predictors before and after non-linear transformation using ANOVA F test as blow, and we can see predictor Expend and predictor Grad.Rate have a non-linear relationship with the reponse variable.
+```{r part3_5,echo=TRUE}
+gam1 = lm(Outstate~Private+poly(Room.Board,1)+poly(PhD,1)+poly(perc.alumni,1)+ns(Expend,knots=c(18000))+poly(Grad.Rate,3),data = College)
+
+
+
+
+gam_expend = lm(Outstate~Private+poly(Room.Board,1)+poly(PhD,1)+poly(perc.alumni,1)+poly(Expend,1)+poly(Grad.Rate,3),data = College)
+gam_Grad = lm(Outstate~Private+poly(Room.Board,1)+poly(PhD,1)+poly(perc.alumni,1)+ns(Expend,knots=c(18000))+poly(Grad.Rate,1),data = College)
+
+
+
+#  the following two comparisons are significant
+anova(gam_expend,gam1,test='F')
+anova(gam_Grad,gam1,test='F')
+```
