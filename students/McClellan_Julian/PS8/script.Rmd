@@ -302,7 +302,7 @@ As we can see from the above graph, at least with our biden data, lowering the s
 #### 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 
 ```{r}
-df.mh.10fold <- crossv_kfold(na.omit(df.mhealth), k = 10))
+df.mh.10fold <- crossv_kfold(na.omit(df.mhealth), k = 10)
 
 # Standard Decision Tree
 trees.mhealth <- map(df.mh.10fold$train, ~ tree(vote96 ~ ., data = .))
