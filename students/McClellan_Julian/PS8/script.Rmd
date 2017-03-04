@@ -314,7 +314,7 @@ err.rate.tree <- function(model, data) {
 }
 
 
-err_rate_comp = data_frame(tree_types = c('Standard Tree', 'Optimally Pruned', 'Bagged', 'Random Forest', 'Boosted'))
+err_rate_comp = data_frame(tree_types = c('Standard Tree', 'Optimally Pruned', 'Bagged', 'Random Forest (500)', 'Random Forest (2500)'))
 
 df.mhealth <- df.mhealth %>%
   mutate(vote96 = factor(vote96),
@@ -336,7 +336,7 @@ ftree.mhealth <- tree(vote96 ~ ., data = mhealth.split$train, control =
 data_frame(nodes = 2:107,
            err_rates = map_dbl(nodes, ~ 
                                err.rate.tree(prune.tree(ftree.mhealth, best = .), mhealth.split$test))) %>%
-  {which.min(.$err_rates)} %>%
+  {.$nodes[which.min(.$err_rates)]} %>%
   prune.tree(ftree.mhealth, best = .) %>%
   {.} -> ptree.mhealth
 
@@ -349,16 +349,51 @@ mhealth_bag <- randomForest(vote96 ~ ., data = mhealth.split$train,
                            ntree = 500)
 test_error <- append(test_error, err.rate.tree(mhealth_bag, mhealth.split$test))
 
-# Random Forest
+# Random Forest 500 Trees
 mhealth_rforest <- randomForest(vote96 ~ ., 
                                data = mhealth.split$train,
                               importance = TRUE,
                               ntree = 500)
 test_error <- append(test_error, err.rate.tree(mhealth_rforest, mhealth.split$test))
 
-# Boosted Decision Tree
-mhealth_boost <- gbm(vote96 ~ ., 
-                   data = mhealth.split$train, distribution = 'huberized',
-                   n.trees = 5000, interaction.depth = int_depth)
-predict(mhealth_boost, mhealth.split$test$data, n.trees = 100, class = 'response')
+# Random Forest 2500 Trees
+mhealth_rforest2 <- randomForest(vote96 ~ ., 
+                               data = mhealth.split$train,
+                              importance = TRUE,
+                              ntree = 2500)
+
+test_error <- append(test_error, err.rate.tree(mhealth_rforest2, mhealth.split$test))
+
+err_rate_comp %>%
+  mutate(test_error = test_error) %>%
+  ggplot(aes(tree_types, test_error)) +
+    geom_col() + 
+    theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
+    labs(title = 'Test Set Error Rate for different Decision Tree Types', 
+         x = 'Decision Tree Types',
+         y = 'Test Error Rate')
+```
+
+Looking at the graph then, the Optimally Pruned Tree appears to have the lowest test MSE, so we will use that. Additionally, it is relatively straightforward to interpret a single pruned decision tree. Let's go ahead and plot it and see what we think.
+
+```{r tree_interpret}
+tree_data <- dendro_data(ptree.mhealth, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Pruned Decision Tree', 
+       subtitle = 'Predicting 1996 Voting (1 = Vote, 0 = Not Vote)')
+```
+
+I hope I don't have to explain how to interpret a decision tree again, so here you go. 
+
+#### 2. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+```{r svm_5}
+
 ```
