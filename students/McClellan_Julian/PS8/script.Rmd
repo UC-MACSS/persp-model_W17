@@ -365,7 +365,7 @@ mhealth_rforest2 <- randomForest(vote96 ~ .,
 test_error <- append(test_error, err.rate.tree(mhealth_rforest2, mhealth.split$test))
 
 err_rate_comp %>%
-  mutate(test_error = test_error) %>%
+ mutate(test_error = test_error) %>%
   ggplot(aes(tree_types, test_error)) +
     geom_col() + 
     theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
