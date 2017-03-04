@@ -1,0 +1,206 @@
+---
+title: "Problem Set 7"
+author: "Reid McIlroy-Young"
+date: "February 27, 2017"
+output: 
+  html_document:
+    toc: true
+---
+
+``` {r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, warning = FALSE, error = FALSE)
+set.seed(1234)
+options(digits = 3)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(gam)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(pROC)
+library(gbm)
+library(rcfss)
+library(ggdendro)
+library(forcats)
+```
+
+# Part 1
+
+``` {r, Q 1.1}
+data <- read.csv('data/biden.csv')
+
+data_split <- resample_partition(data, c(test = 0.3, train = 0.7))
+```
+
+``` {r, Q 1.2}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+bTree <- tree(biden ~ dem + rep + educ + age + female, data = data_split$train)
+mse(bTree, data_split$test)
+```
+
+``` {r, Q 1.2 plot}
+tree_data <- dendro_data(bTree)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+```
+
+``` {r, Q 1.3}
+bcTree <- tree(biden ~ dem + rep + educ + age + female, data = data_split$train,
+               control = tree.control(nobs = nrow(data_split$train), mindev = 0))
+mse(bcTree, data_split$test)
+```
+
+``` {r, Q 1.3 plot}
+tree_data <- dendro_data(bcTree)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+```
+
+``` {r, Q 1.3 CV}
+set.seed(1234)
+
+auto_cv <- crossv_kfold(data, k = 10)
+auto_cv <- mutate(auto_cv, tree = map(train, ~ tree(biden ~ ., data = ., control = tree.control(nobs = nrow(.),  mindev = 0))))
+
+# calculate each possible prune result for each fold
+auto_t <- expand.grid(auto_cv$.id, 2:10)
+
+auto_t <- as_tibble(auto_t)
+auto_t <- mutate(auto_t, Var2 = as.numeric(Var2))
+auto_t <- rename(auto_t, .id = Var1, k = Var2)
+
+auto_t <- left_join(auto_cv, auto_t)
+auto_t <- mutate(auto_t, prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+auto_t %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
+``` {r, Q 1.4}
+(titanic_bag <- randomForest(biden ~ ., data = data,
+                             ntree = 500, mtry = 5))
+```
+
+``` {r}
+data_frame(var = rownames(importance(titanic_bag)),
+           MeanDecreaseGini = importance(titanic_bag)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting survival on the Titanic",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```
+
+``` {r, Q 1.5}
+(titanic_rf <- randomForest(biden ~ ., data = data,
+                             ntree = 500))
+
+data_frame(var = rownames(importance(titanic_rf)),
+           MeanDecreaseGini = importance(titanic_rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting survival on the Titanic",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```
+
+``` {r, Q 1.6}
+titanic_split <- resample_partition(data, p = c("test" = .3,  "train" = .7))
+boost1 <- gbm(biden ~ ., data = titanic_split$train, n.trees = 10000, interaction.depth = 1)
+
+titanic_models <- list("bagging" = randomForest(biden ~ ., data = titanic_split$train,
+                                                mtry = 7, ntree = 10000),
+                       "rf_mtry2" = randomForest(biden ~ ., data = titanic_split$train,
+                                                 mtry = 2, ntree = 10000),
+                       "rf_mtry4" = randomForest(biden ~ ., data = titanic_split$train,
+                                                 mtry = 4, ntree = 10000),
+                       "boosting_depth1" = gbm(biden ~ .,
+                                               data = titanic_split$train,
+                                               n.trees = 10000, interaction.depth = 1),
+                       "boosting_depth2" = gbm(biden ~ .,
+                                               data = titanic_split$train,
+                                               n.trees = 10000, interaction.depth = 2),
+                       "boosting_depth4" = gbm(biden ~ .,
+                                               data = titanic_split$train,
+                                               n.trees = 10000, interaction.depth = 4))
+
+
+boost_test_err <- data_frame(bagging = predict(titanic_models$bagging,
+                                               newdata = as_tibble(titanic_split$test),
+                                               predict.all = TRUE)[[2]] %>%
+                               apply(2, function(x) x != as_tibble(titanic_split$test)$biden) %>%
+                               apply(2, mean),
+                             rf_mtry2 = predict(titanic_models$rf_mtry2,
+                                                newdata = as_tibble(titanic_split$test),
+                                                predict.all = TRUE)[[2]] %>%
+                               apply(2, function(x) x != as_tibble(titanic_split$test)$biden) %>%
+                               apply(2, mean),
+                             rf_mtry4 = predict(titanic_models$rf_mtry4,
+                                                newdata = as_tibble(titanic_split$test),
+                                                predict.all = TRUE)[[2]] %>%
+                               apply(2, function(x) x != as_tibble(titanic_split$test)$biden) %>%
+                               apply(2, mean),
+                             boosting_depth1 = predict(titanic_models$boosting_depth1,
+                                                       newdata = as_tibble(titanic_split$test),
+                                                       n.trees = 1:10000) %>%
+                               apply(2, function(x) round(x) == as.numeric(as_tibble(titanic_split$test)$biden) - 1) %>%
+                               apply(2, mean),
+                             boosting_depth2 = predict(titanic_models$boosting_depth2,
+                                                       newdata = as_tibble(titanic_split$test),
+                                                       n.trees = 1:10000) %>%
+                               apply(2, function(x) round(x) == as.numeric(as_tibble(titanic_split$test)$biden) - 1) %>%
+                               apply(2, mean),
+                             boosting_depth4 = predict(titanic_models$boosting_depth4,
+                                                       newdata = as_tibble(titanic_split$test),
+                                                       n.trees = 1:10000) %>%
+                               apply(2, function(x) round(x) == as.numeric(as_tibble(titanic_split$test)$biden) - 1) %>%
+                               apply(2, mean))
+                            
+
+boost_test_err %>%
+  mutate(id = row_number()) %>%
+  mutate_each(funs(cummean(.)), bagging:rf_mtry4) %>%
+  gather(model, err, -id) %>%
+  mutate(model = factor(model, levels = names(titanic_models))) %>%
+  ggplot(aes(id, err, color = model)) +
+  geom_line() +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  labs(x = "Number of trees",
+       y = "Test classification error",
+       color = "Model")
+```
