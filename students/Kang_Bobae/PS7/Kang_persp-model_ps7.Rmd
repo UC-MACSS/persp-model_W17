@@ -1,0 +1,535 @@
+---
+title: "Problem set #7: resampling and nonlinearity"
+author: "Bobae Kang"
+date: "February 27, 2017"
+output:
+  github_document:
+    toc: true
+---
+```{r include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, cache=TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r setup}
+# import packages
+library(knitr)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(data.table)
+library(splines)
+library(gam)
+
+# set seed for reproducibility
+set.seed(0)
+
+# import data
+biden <- fread('data/biden.csv')
+college <- fread('data/College.csv')
+
+# define a function to get mse
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+# Part 1: Sexy Joe Biden (redux) [4 points]
+## The traditional approach
+Here I use all observations in the `biden` dataset to fit the linear regression model wherein the dependent variable is `biden` and independent variables are `age`, `female`, `educ`, `dem`, and `rep`. The coefficients for three independent variables (namely, `female`, `dem`, and `rep`) appear statistically significant with extremely small p-values. The mean squared error (MSE) of this model is 395.2702.
+  
+```{r Part 1 simple regression}
+# fit linear regression
+biden_model <- lm(biden ~ age + female + educ + dem + rep, data = biden)
+# examine model
+summary(biden_model)
+
+# report mse
+print('The MSE value:')
+mse(biden_model, biden)
+```
+
+## The validation set approach
+Here I split the dataset into the training set (70% of all observations) and the validation set (30% of all observations). Only the training set is used to fit the model. Then, I use the validation set to calcaulted the MSE of the trained model, which equals 389.8694. This is smaller than the previous MSE score!
+
+```{r, Part 1 test-train split}
+# split data
+biden_split <- modelr::resample_partition(biden, c(test = 0.3, train = 0.7))
+# fit linear regression
+biden_model1 <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+# examine model
+summary(biden_model1)
+
+# report mse
+print('The MSE value:')
+mse(biden_model1, biden_split$test)
+```
+
+## The validation set approach, 100 times
+Now, I repeat the cross validation for the linear model 100 times, using 100 different splits of training and validation sets. Then I calculate MSE each time. The plot shows the MSE scores of 100 trials of cross validation. The red horizontal line marks the mean of all 100 MSEs, which equals 401.0916. This suggests that I may have been lucky on my first cv attempt.
+
+```{r Part 1 repeat cv 100 times}
+cv_mse_biden <- function(biden, p_train){
+  biden_split <- resample_partition(biden, c(test = 1-p_train, train = p_train))
+  biden_train <- biden_split$train %>%
+    tbl_df()
+  biden_test <- biden_split$test %>%
+    tbl_df()
+  
+  model <- lm(biden ~ age + female + educ + dem + rep, data = biden_train)
+  result <- mse(model, biden_test) %>%
+    tbl_df()
+  
+  return(result)
+}
+mse_biden_100 <- rerun(100, cv_mse_biden(biden, 0.7)) %>%
+  bind_rows(.id = "id") 
+
+# plot
+mse_biden_100 %>%
+  ggplot(aes(as.integer(id))) +
+  geom_point(aes(y=value)) +
+  geom_line(aes(y=mean(value)), color='red') +
+  labs(title = 'MSE estimates of 100 cross validations',
+       subtitle = 'Spliting the data into a training set (70%) and a validation set (30%)',
+       x = 'Cross Validation Trial',
+       y = 'Mean Sqaured Error')
+
+# report MSE
+print('The mean of 100 CV MSE values:')
+mean(mse_biden_100$value)
+```
+
+## The leave-one-out cross-validation (LOOCV) approach
+Now, I employ the LOOCV appraoch to the model and calcualte the mean MSE, which is 397.9555. This seemes to be an improvement from repeating the simple 70-30 cross validations.
+  
+```{r Part 1 loocv}
+loocv_data <- crossv_kfold(biden, k = nrow(biden))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+
+# report MSE
+print('The LOOCV MSE value:')
+mean(loocv_mse)
+```
+
+## The 10-fold cross-validation approach
+The 10-fold cross-validation MSE score for the current model is 399.0661. Although this is larger than the LOOCV MSE score, it is still an improvement from repeating simple 70-30 cross validations. Since 10-fold cross-validation is computationally much cheaper than the LOOCV, especially when the model is complex and data is large (i.e. has many, many observations), this seems to be an effective approach.
+  
+```{r Part 1 10-fold cv}
+cv10_data <- crossv_kfold(biden, k = 10)
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+
+# report MSE
+print('The 10-fold CV MSE value:')
+mean(cv10_mse)
+```
+
+## The 10-fold cross-validation approach, 100 times
+Now, the repeated 10-fold cross-validation produces an even smaller MSE value: 398.1019. Although this is still larger than LOOCV MSE score in this case, the 100 repeated 10-fold approach is still computationally cheaper and the difference in MSE is very small.
+  
+```{r Part 1 repeat 10-fold cv 100 times}
+cv10_mse_biden <- function(biden){
+  cv10_data <- crossv_kfold(biden, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  result <- mean(cv10_mse) %>%
+    tbl_df()
+  
+  return(result)
+}
+cv10_mse_100 <- rerun(100, cv10_mse_biden(biden)) %>%
+  bind_rows(.id = "id")
+
+# plot
+cv10_mse_100 %>%
+  ggplot(aes(as.integer(id))) +
+  geom_point(aes(y=value)) +
+  geom_line(aes(y=mean(value)), color='red') +
+  labs(title = 'MSE estimates of 100 cross validations',
+       subtitle = '10-fold cross validations',
+       x = 'Cross Validation Trial',
+       y = 'Mean Sqaured Error')
+
+# report MSE
+print('The meanf of 100 10-fold CV MSE values:')
+print(mean(cv10_mse_100$value))
+```
+
+## The bootstrap approach
+Finally, I compare the linear regression estimates for coefficients and standard errors beween the original model and the bootstrap model (N=1000), which are included in the following data frame. The result shows that the original and bootstrapped estimates for coefficients and standard errors are very close to each other. 
+```{r Part 1 bootstrap}
+# bootstrap N = 1000
+biden_boot <- biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~lm(biden ~ age + female + educ + dem + rep, data =.)),
+  coef = map(model, tidy))
+
+# get original estiamte and se
+term <- c('(Intercept)', 'age', 'female', 'educ', 'dem', 'rep')
+Estimate.original <- summary(biden_model)$coefficients %>% tbl_df() %>% select(Estimate) %>% cbind(term) %>% arrange(term)
+Std.Error.original <- summary(biden_model)$coefficients %>% tbl_df() %>% select(`Std. Error`) %>% cbind(term) %>% arrange(term)
+
+# combine as a single table  
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(Estimate.boot = mean(estimate),
+            Std.Error.boot = sd(estimate, na.rm = TRUE)) %>%
+  cbind(Estimate.original[1]) %>%
+  cbind(Std.Error.original[1])
+
+```
+
+
+# Part 2: College (bivariate) [3 points]
+## Simple linear models
+In this part of the assignment, I use the `College` dataset and fit three simple linear models with the same response variable (i.e. `Outstate`) but three different explanatory variables (respectively, `Top10perc`, `PhD`, and `S.F.Ratio`).  
+In the first model, the coefficient for `Top10perc` is statistically significant with an extremely small p-value. The coefficient suggests that a unit increase in the percent of new students from top 10% of H.S. class, on average, leads to an increase in out-of-state tuition by $128.244. 
+In the second model, the coefficient for `PhD` is statistically significant with an extremely small p-value. The coefficient suggests that a unit increase in the percent of faculty with Ph.D.'s, on average, leads to an increase in out-of-state tuition by $94.361.   
+In the third model, the coefficient for `S.F.Ratio` is statistically significant with an extremely small p-value. The coefficient suggests that a unit increase in the  student/faculty ratio, on average, leads to a decrease in out-of-state tuition by $563.89.
+  
+```{r Part 2 fit OLS models}
+# fit basic linear models
+college_Top10perc <- lm(Outstate ~ Top10perc, data=college)
+college_PhD <- lm(Outstate ~ PhD, data=college)
+college_S.F.Ratio <- lm(Outstate ~ S.F.Ratio, data=college)
+
+# examine models
+summary(college_Top10perc)
+summary(college_PhD)
+summary(college_S.F.Ratio)
+```
+
+The following three plots illustrate the distribution of `Outstate` variable against different explanatory variables as well as the linear regression lines. The plots suggest that the simple linear fit may not sufficiently explain the variation of the `Outstate` variable. 
+  
+```{r Part 2 exploratory plotting}
+# Top10perc
+college %>%
+  mutate(pred = predict(college_Top10perc, college)) %>%
+  ggplot(aes(x=Top10perc)) +
+  geom_point(aes(y=Outstate), color='maroon', alpha=.3) +
+  geom_line(aes(y=pred), color='red', size=1) +
+#  geom_smooth()+
+  labs(title='Plot of Out-of-State Tuition for Colleges',
+       subtitle='by percentage of new students from top 10% of H.S. class',
+       x='Top 10 percent students in %',
+       y='Out-of-state tuition')
+
+# PhD
+college %>%
+  mutate(pred = predict(college_PhD, college)) %>%
+  ggplot(aes(x=PhD)) +
+  geom_point(aes(y=Outstate), color='orange', alpha=.3) +
+  geom_line(aes(y=pred), color='red', size=1) +
+  #  geom_smooth()+
+  labs(title='Plot of Out-of-State Tuition for Colleges',
+       subtitle='by percentage of faculty with Ph.D.s',
+       x='Faculty with Ph.D.s in %',
+       y='Out-of-state tuition')
+
+# S.F.Ratio
+college %>%
+  mutate(pred = predict(college_S.F.Ratio, college)) %>%
+  ggplot(aes(x=S.F.Ratio)) +
+  geom_point(aes(y=Outstate), color='dark green', alpha=.3) +
+  geom_line(aes(y=pred), color='red', size=1) +
+#  geom_smooth()+
+  labs(title='Plot of Out-of-State Tuition for Colleges',
+       subtitle='by student-faculty ratio',
+       x='Student-faculty ratio',
+       y='Out-of-state tuition')
+```
+
+To further examine the fit of linear models, let's check how the residuals are distributed. The below is the combined plot of residuals. For all three models, the distribution of residuals suggest the existence of some systemic variation of `Outstate` that the linear models are failing to explain.
+
+```{r Part 2 residual plotting}
+college %>%
+  mutate(resid1 = residuals(college_Top10perc)) %>%
+  mutate(resid2 = residuals(college_PhD)) %>%
+  mutate(resid3 = residuals(college_S.F.Ratio)) %>%
+  ggplot(aes(x=Outstate)) +
+  geom_point(aes(y=resid1, color='Top10perc'), alpha=.2) +
+  geom_point(aes(y=resid2, color='PhD'), alpha=.2) +
+  geom_point(aes(y=resid3, color='S.F.Ratio'), alpha=.2) +
+  geom_hline(yintercept=0, linetype='dashed') +
+  labs(title='Plot of Residuals',
+     subtitle='for all three simple linear regression models',
+     x='Out-of-state-tuition',
+     y='Residual') +
+  scale_color_manual('',
+                     breaks=c("Top10perc", "PhD", "S.F.Ratio"),
+                     values=c("maroon", "orange", "dark green")) +
+  theme(legend.text.align = 0)
+
+```
+
+## Non-linear models
+Here, I fit three non-linear models. For the first model with `Top10perc` as the explanatory variable, the new model uses the cubic spline technique. For the second model with `PhD` as the explanatory variable, the new model uses the thrid-order polynomial regression technique. For the third model with `S.F.Ratio` as the explanatory variable, the new model uses the monotonic transformation of the `S.F.Ratio` by taking its square root. In the first model, the coefficient 
+  
+```{r Part 2 fit non-linear models}
+# fit non-linear models
+college_Top10perc_sp <- glm(Outstate ~ bs(Top10perc, degree=3), data=college)
+college_PhD_3 <- glm(Outstate ~ poly(PhD, 3), data=college)
+college_S.F.Ratio_sqrt <- glm(Outstate ~ sqrt(S.F.Ratio), data=college)
+
+# examine models
+summary(college_Top10perc_sp)
+summary(college_PhD_3)
+summary(college_S.F.Ratio_sqrt)
+```
+
+## Comparison
+Now, I compare linear and non-linear models. First, I compare models where `Top10perc` is the explanatory variable. The plot shows that the cubic spline model does not differ much from the linear model for the most part. Indeed, the calculated MSEs suggest that the non-linear model performs better but not to a great extent: (11052575-10996127)/11052575 = 0.005107226, or about 0.5 percent.  
+
+```{r Part 2 compare Top10perc}
+# Top10perc, by plotting
+college %>%
+  gather_predictions(college_Top10perc, college_Top10perc_sp) %>%
+  mutate(model = factor(model,
+                        levels = c("college_Top10perc", "college_Top10perc_sp"),
+                        labels = c("college_Top10perc", "college_Top10perc_sp"))) %>%
+  ggplot(aes(x=Top10perc)) +
+  geom_point(aes(y = Outstate), color='maroon', alpha=0.3) +
+  geom_line(aes(y = pred, color = model), size=1) +
+  scale_color_discrete(labels = c('Linear', 'Cubic spline')) +
+  labs(title='Plot of Out-of-State Tuition for Colleges',
+       subtitle='by percentage of faculty with Ph.D.s',
+       color = "Model") +
+  theme(legend.text.align = 0)
+
+# Top10perc, by MSE
+data_frame(terms = c('Linear', 'Cubic spline'),
+           predictor = c('Top10perc', 'Top10perc'),
+           model = list(college_Top10perc, college_Top10perc_sp)) %>%
+  mutate(mse = map_dbl(model, mse, data = college)) %>%
+  select(-model)
+
+```
+
+Second, I compare models where `PhD` is the explanatory variable. The plot shows that the third-order polynomial model differs much from the original linear model. There is, of course, a risk of overfitting. However, comparing these two in MSE suggests the non-linear model is indeed a better model with much improved performance: (13792993-12380110)/13792993 = 0.1024348 or approximately 10.2%.
+
+```{r Part 2 compare PhD}
+# PhD, by plotting
+college %>%
+  gather_predictions(college_PhD, college_PhD_3) %>%
+  mutate(model = factor(model,
+                        levels = c("college_PhD", "college_PhD_3"),
+                        labels = c("college_PhD", "college_PhD_3"))) %>%
+  ggplot(aes(x=PhD)) +
+  geom_point(aes(y = Outstate), color='orange', alpha=0.3) +
+  geom_line(aes(y = pred, color = model), size=1) +
+  scale_color_discrete(labels = c('Linear', 'poly(X, 3)')) +
+  labs(title='Plot of Out-of-State Tuition for Colleges',
+       subtitle='by percentage of faculty with Ph.D.s',
+       color = "Model") +
+  theme(legend.text.align = 0)
+
+# PhD, by MSE
+print(data_frame(Model = c('Linear', 'ploy(X, 3)'),
+           Predictor = c('PhD', 'PhD'),
+           model = list(college_PhD, college_PhD_3)) %>%
+  mutate(mse = map_dbl(model, mse, data = college)) %>%
+  select(-model))
+```
+
+Finally, I compare models where `S.F.Ratio` is the explanatory variable. On the plot, the difference between linear and non-linear models seem rather insignificant. The comparison between the two in MSE suggest that the non-linear model shows slightly improved performance on the test set: (11188174-11020458)/11188174 or approximately 1.5%
+  
+```{r Part 2 compare S.F.Ratio}
+# S.F.Ratio, by plotting
+college %>%
+  gather_predictions(college_S.F.Ratio, college_S.F.Ratio_sqrt) %>%
+  mutate(model = factor(model,
+                        levels = c("college_S.F.Ratio", "college_S.F.Ratio_sqrt"),
+                        labels = c("college_S.F.Ratio", "college_S.F.Ratio_sqrt"))) %>%
+  ggplot(aes(x=S.F.Ratio)) +
+  geom_point(aes(y = Outstate), color='dark green', alpha=0.3) +
+  geom_line(aes(y = pred, color = model), size=1) +
+  scale_color_discrete(labels = c('Linear', 'sqrt(X)')) +
+  labs(title='Plot of Out-of-State Tuition for Colleges',
+       subtitle='by student-faculty ratio',
+       color = "Model") +
+  theme(legend.text.align = 0)
+
+# S.F.Ratio, by MSE
+print(data_frame(Model = c('Linear', 'sqrt(X)'),
+           Predictor = c('S.F.Ratio', 'S.F.Ratio'),
+           model = list(college_S.F.Ratio, college_S.F.Ratio_sqrt)) %>%
+  mutate(MSE = map_dbl(model, mse, data = college)) %>%
+  select(-model))
+```
+
+# Part 3: College (GAM) [3 points]
+## OLS
+First, I fit the OLS model to the training data, which consists of 80% of all observations. Its response variable is, again, `Outstate` and the explanatory variables include `Private`, `Room.Board`, `PhD`, `perc.alumni`, `Expend`, and `Grad.Rate`. The summary of the model indicates that the R-squared value suggests that model as a whole explains about 75% of the variation in `Outstate`, and the coefficients for all six predictors are statistically significant with very small p-vales. These coefficients suggest the following:
+
+* being a private institution, on average, leads to an increase in out-of-state tutition by $2,780, holding other variables constant;
+* a unit increase in room and board costs, on average, leads to an increase in out-of-state tuition by $0.9694, holding other variables constant ;
+* a unit increase in the percent of faculty with Ph.D.'s, on average, leads to an increase in out-of-state tuition by $3.905, holding other variables constant;
+* a unit increase in the percent of alumni who donate, on average, leads to an increase in out-of-state tuition by $4.193, holding other variables constant;
+* a unit increase in the instructional expenditure per student, on average, leads to an increase in out-of-state tuition by $0.2127, holding other variables constant; and
+* a unit increase in the graduation rate, on average, leads to an increase in out-of-state tuition by #3.358, holding other variables constant.
+
+
+```{r Part 3 fit OLS model}
+# split the data
+college_split <- resample_partition(data=college, c(train=0.8, test=0.2))
+
+# fit OLS
+college_mul_ols <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data=college_split$train) 
+# examine
+summary(college_mul_ols)
+```
+
+
+## GAM
+The general additive model I used to explain 'Outstate' consists of the following: a linear regression model for `Private`, cubic spline model for `perc.alumni`, and four local regression linear regression models for `Room.Board`, `PhD`, `Expend`, and `Grad.Rate`. In choosing these models, I used the Akaike Information Criterion (AIC) score for selecting the final model. That is, the final model is the one with the lowest AIC value among all the variations I have tried. The p-value for each model suggest that each of these models makes a statistically significant difference to the model as a whole. 
+
+```{r Part 3 fit GAM model}
+# fit GAM
+college_mul_gam <- gam(Outstate ~
+                         Private +
+                         lo(Room.Board) +
+                         lo(PhD) +
+                         bs(perc.alumni, degree=3) +
+                         lo(Expend) +
+                         lo(Grad.Rate),
+                       data=college_split$train) 
+#examine
+summary(college_mul_gam)
+```
+
+The following plots show the relationship between the response variable and each of six explanatory variables, holding others constant. The interpretation of these plots are as follows:
+
+* Being private schools leads to the higher out-of-state tuition, holding other variables constant;
+* The higher room and board costs generally lead to the higher out-of-state tuition, holding other variables constant;  
+* Overall, the percentage of faculty with Ph.D.'s is positively correlated with out-of-state tuition, holding other variables constant.However, there is negative correlation between them around 30 < `PhD` < 50;  
+* The higher percentage of alumni who donate generally lead to higher out-of-state tuition, holding other variables constant;  
+* Holding other variables constant, instructional expenditure per student is positively correlated with out-of-state tuition while `Expend` is lower than about 30000. When `Expend` value is higher, it is negatively correlated with the response variable; and  
+* Holding other variables constant, the graduate rate is positively correlated with out-of-state tuition while `Grad.Rate` is lower than about 80. When `Grad.Rate` value is higher, it is negatively correlated with the response variable.  
+
+```{r Part 3 GAM graph}
+college_gam_terms <- preplot(college_mul_gam, se=TRUE, rug=FALSE)
+
+# private
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x, levels = c("Yes", "No"), labels = c("Private", "Public"))) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = 'GAM of out-of-state tuition',
+       x = 'Private school or not',
+       y = expression(f[1](Private)))
+
+# Room.Board
+data_frame(x = college_gam_terms$`lo(Room.Board)`$x,
+           y = college_gam_terms$`lo(Room.Board)`$y,
+           se.fit = college_gam_terms$`lo(Room.Board)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "Room and board costs",
+       y = expression(f[2](Room.Board)))
+
+# PhD
+data_frame(x = college_gam_terms$`lo(PhD)`$x,
+           y = college_gam_terms$`lo(PhD)`$y,
+           se.fit = college_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "Percent of faculty with Ph.D.'s",
+       y = expression(f[3](PhD)))
+
+# perc.alumni
+data_frame(x = college_gam_terms$`bs(perc.alumni, degree = 3)`$x,
+           y = college_gam_terms$`bs(perc.alumni, degree = 3)`$y,
+           se.fit = college_gam_terms$`bs(perc.alumni, degree = 3)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Cubic spline",
+       x = "Percent of alumni who donate",
+       y = expression(f[4](perc.alumni)))
+
+# Expend
+data_frame(x = college_gam_terms$`lo(Expend)`$x,
+           y = college_gam_terms$`lo(Expend)`$y,
+           se.fit = college_gam_terms$`lo(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "Instructional expenditure per student",
+       y = expression(f[5](Expend)))
+
+# Grad.Rate
+data_frame(x = college_gam_terms$`lo(Grad.Rate)`$x,
+           y = college_gam_terms$`lo(Grad.Rate)`$y,
+           se.fit = college_gam_terms$`lo(Grad.Rate)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle='Local regression',
+       x = "Graduation rate",
+       y = expression(f[6](Grad.Rate)))
+```
+
+## Comparison
+To compare the OLS model and GAM model, I have first looked at the residual plots. In both cases, the residuals are distributed in a roughly randomly fashion althoguh there may be the linear pattern for residuals. It is difficult to determine which model is with less errors simply using the plot. When their MSE values are compared, however, GAM appears as the better model with approximately 18.6%$ less MSE.     
+```{r Part 3 compare OLS and GAM}
+# residual plot
+college[college_split$train$idx] %>%
+  mutate(resid1 = residuals(college_mul_ols)) %>%
+  mutate(resid2 = residuals(college_mul_gam)) %>%
+  ggplot(aes(x=Outstate)) +
+  geom_point(aes(y=resid1, color='OLS'), alpha=.3) +
+  geom_point(aes(y=resid2, color='GAM'), alpha=.3) +
+  geom_hline(yintercept=0, linetype='dashed') +
+  labs(title='Plot of Residuals',
+     subtitle='for both OLS and GAM models',
+     x='Out-of-state-tuition',
+     y='Residual') +
+  scale_color_manual('',
+                     breaks=c("OLS", "GAM"),
+                     values=c("red", "blue")) +
+  theme(legend.text.align = 0)
+
+  
+# by MSE
+data_frame(Model = c('OLS', 'GAM'),
+           model = list(college_mul_ols, college_mul_gam)) %>%
+  mutate(MSE = map_dbl(model, mse, data = college)) %>%
+  select(-model)
+```
+
+## Non-linearity
+In Part 2 of this assignment, I have investigated the relationship between the response variable and theree explanatory variables (`Top10perc`, `PhD`, and `S.F.Ratio`). In all three cases, non-linear models showed some improvement from their linear counterparts. In particular, the 3rd-order polynomial model for `OutState` and `PhD` made a sizable difference in MSE when compared to the simple linear model, which leads to me believe that the true relationship between these two variables is indeed non-linear. In contrast, the difference in MSE between non-linear and linear models wherein `Top10perc` is the explanatory variable seems largely insignificant. This leads me to believe that the true relationship between `Top10perc` and `OutState` may indeed be linear. 

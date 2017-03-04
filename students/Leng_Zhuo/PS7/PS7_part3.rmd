@@ -1,0 +1,232 @@
+---
+title: "Problem set #7: resampling and nonlinearity"
+author: "Zhuo Leng"
+output:
+  github_document:
+    toc: true
+---
+##Part 3: GAM
+```{r setup, include = FALSE}
+library(rmarkdown)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+``` {r, include=FALSE}
+set.seed(1234)
+options(digits = 3)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(gam)
+
+
+GAM_college_data <- read.csv(file = "data/College.csv", header = T)
+```
+
+##Estimate an OLS model 
+```{r gam-ols, include = TRUE}
+attach(GAM_college_data)
+##1.split the data
+
+part3_split <- resample_partition(GAM_college_data, c(test = 0.3, train = 0.7))
+
+part3.model1 <- lm(Outstate ~  Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = part3_split$train)
+summary(part3.model1)
+
+```
+
+
+As the summary table above, we could see that the OLS model coefficients are as above. From their p-value, we could see all the six predictors are statistics significant. The Adjusted R-squared:  0.738, which is close to 1, means the model fit the data well. 
+
+##3.GAM model
+```{r gam-gam, include = TRUE}
+require(mgcv)
+part3.model2 <- gam(Outstate ~  Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + poly(Expend, 4) + poly(Grad.Rate, 3), data = part3_split$train)
+summary(part3.model2)
+
+```
+
+For my gam model, I use linear regression on private and 4 degree polynomial on Grad.Rate, 3 degree polynomial on Expend. For other variables, I use local regression. From the summary table, we could see that the almost all variables are statistically significant.
+
+###I don't know why I can't run the preplot. I just follow the instruction to write this part. I try lots of time. Also I update Rstudio. However, it continuously report error message. 
+Error in preplot.gam(c_gam, se = TRUE, rug = FALSE) : 
+  need to have names for fitted.values when call has a subset or na.action argument
+  
+```{r  , include=TRUE}
+
+clg_gam_terms <- preplot(part3.model2, se = TRUE, rug = FALSE)
+
+# Private
+data_frame(x = clg_gam_terms$Private$x,
+           y = clg_gam_terms$Private$y,
+           se.fit = part3.model2.terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = "Private",
+       y = expression(f[5](private)))
+```
+
+
+```{r  , include=TRUE}
+# Room.Board
+data_frame(x = part3.model2.terms$`lo(Room.Board)`$x,
+           y = part3.model2.terms$`lo(Room.Board)`$y,
+           se.fit = part3.model2.terms$lo(Room.Board)$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = "Room.Board",
+       y = expression(f[6](Room.Board)))   
+```
+
+
+
+```{r  , include=TRUE}
+
+# PhD
+data_frame(x = clg_gam_terms$`lo(PhD)`$x,
+           y = clg_gam_terms$`lo(PhD)`$y,
+           se.fit = clg_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "PHD",
+       y = expression(f[1](PhD)))
+```
+
+
+
+```{r  , include=TRUE}
+# perc.alumni
+data_frame(x = clg_gam_terms$`lo(perc.alumni)`$x,
+           y = clg_gam_terms$`lo(perc.alumni)`$y,
+           se.fit = clg_gam_terms$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "perc.alumni",
+       y = expression(f[2](perc.alumni)))
+```
+
+
+
+```{r  , include=TRUE}
+# Expend
+data_frame(x = clg_gam_terms$`bs(Expend, degree = 4)`$x,
+           y = clg_gam_terms$`bs(Expend, degree = 4)`$y,
+           se.fit = clg_gam_terms$`bs(Expend, degree = 4)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = "Expend",
+       y = expression(f[3](expend)))
+```
+
+
+```{r  , include=TRUE}
+# Grad.Rate
+data_frame(x = clg_gam_terms$`bs(Grad.Rate, degree = 3)`$x,
+           y = clg_gam_terms$`bs(Grad.Rate, degree = 3)`$y,
+           se.fit = clg_gam_terms$`bs(Grad.Rate, degree = 3)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = "Grad.Rate",
+       y = expression(f[4](Grad.Rate)))
+```
+
+
+
+## 4. Testing Model
+```{r gam-test, include=TRUE}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+mse_model1 <- mse(part3.model1, part3_split$test)
+mse_model2 <- mse(part3.model2, part3_split$test)
+mse_model1
+mse_model2
+```
+The mse from OLS is 3787199, and the mse from gam is 3750909. So the mse from gam is smaller, we could know that the gam modal fit the data better. However, the difference is not very big, so perhaps the model has overfitting problem.
+
+## 5. Non-linear Relationship with the response
+
+
+```{r  , include=TRUE}
+
+# Room.Board
+gam_no_rb <- gam(Outstate ~  Private + lo(PhD) + lo(perc.alumni) + poly(Expend, 4) + poly(Grad.Rate, 3), data = part3_split$train)
+
+gam_lin_rb <- gam(Outstate ~ Private + Room.Board + lo(PhD) + lo(perc.alumni) + poly(Expend, 4) + poly(Grad.Rate,3), data = part3_split$train)
+
+# PhD
+gam_no_phd <- gam(Outstate ~ Private + lo(Room.Board) + lo(perc.alumni) + poly(Expend,4) + poly(Grad.Rate, 3), data = part3_split$train)
+
+gam_lin_phd <- gam(Outstate ~ Private + lo(Room.Board) + PhD + lo(perc.alumni) + poly(Expend,4) +  poly(Grad.Rate,3), data = part3_split$train)
+
+## perc.alumni
+gam_no_pa <- gam(Outstate ~ Private + lo(Room.Board) + lo(PhD) + poly(Expend, 4) + poly(Grad.Rate, 3), data = part3_split$train)
+
+gam_lin_pa <- gam(Outstate ~ Private + lo(Room.Board) + lo(PhD) + perc.alumni + poly(Expend, 4) + poly(Grad.Rate, 3), data = part3_split$train)
+
+# Expend
+gam_no_expend<- gam(Outstate ~Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + poly(Grad.Rate, 3), data = part3_split$train)
+
+gam_lin_expend <- gam(Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + Expend + poly(Grad.Rate,3), data = part3_split$train)
+
+
+##Grad.Rate
+gam_no_gr <- gam(Outstate ~ Private + lo(PhD) + lo(Room.Board) + lo(perc.alumni) + poly(Expend, 4) , data = part3_split$train)
+
+gam_lin_gr <- gam(Outstate ~ Private + lo(Room.Board) + PhD + lo(perc.alumni) + poly(Expend, 4) + Grad.Rate, data = part3_split$train)
+
+```
+We need to know the new model that omits predictor and the GAM model that have the linear predictor. We will not include the Private here because it's binary. Then we conduct ANOVA test among the three model: 1.full model 2. linear predictor model 3. omits predictor model
+
+```{r  , include=TRUE}
+anova(gam_no_rb, gam_lin_rb, part3.model2)
+anova(gam_no_phd, gam_lin_phd, part3.model2)
+anova(gam_no_pa, gam_lin_pa, part3.model2)
+anova(gam_no_expend, gam_lin_expend, part3.model2)
+anova(gam_no_gr, gam_lin_gr, part3.model2)
+```
+
+After the anova test, we could conclude that the Phd,and Grad.Rate are statistically significant in 2th model, so they have linear relationship. Phd and perc.alumni and Expend have non-linear relationshionship.
+
+
+
+
+
+
+

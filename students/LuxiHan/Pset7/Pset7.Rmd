@@ -1,0 +1,470 @@
+---
+title: "Problem Set 7"
+author: "MACS 30100 - Perspectives on Computational Modeling<br> Luxi Han 10449918"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+```
+
+```{r library/data}
+library(memisc)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+library(pander)
+library(xtable)
+library(stargazer)
+library(gam)
+library(ISLR)
+library(rcfss)
+```
+
+## Problem 1
+#1. 
+The following is the regression result:
+```{r 1a, results = 'asis'}
+mse <- function(model, data){
+  new_data <- data%>%
+  add_residuals(model)
+  return(mean(new_data$resid ^ 2))
+}
+biden_table = read_csv('data/biden.csv')
+ols_biden <- lm(biden ~ female + age + dem +rep + educ, biden_table)
+ols_mse <- mse(ols_biden, biden_table)
+stargazer(ols_biden, type = 'latex', title = 'Simple Linear Regression of Biden Warmth', header = FALSE, no.space = TRUE)
+print(paste('1 a) The MSE for OLS is: ', toString(ols_mse)))
+```
+
+```{r}
+test = t(data.frame(ols_biden$coef))
+rownames(test) = c()
+test
+summary(ols_biden)$coefficients
+```
+The MSE for the simple linear regression model is 395.27.
+
+#2. 
+```{r 1b, results = 'asis'}
+set.seed(1234)
+biden_split <- resample_partition(biden_table, c(test = 0.3, train = 0.7))
+biden_validation <- lm(biden ~ female + age + dem +rep + educ, biden_split$train)
+cross_mse <- mse(biden_validation, biden_split$train)
+stargazer(ols_biden, type = 'latex', title = 'Simple Linear Regression using Cross Validation of Biden Warmth', header = FALSE, no.space = TRUE)
+print(paste('1 b) The MSE for the cross validation method is: ', toString(cross_mse)))
+```
+
+The MSE for the cross validation method is approximately 393.83.
+The MSE for the cross validation method is slightly lower than the simple linear regression model. But the difference is small, we can't conclude which model is better.
+
+#3
+```{r 1 c , results = 'asis'}
+set.seed(1234)
+cross_val <- function(data){
+        data_split <- resample_partition(data, c(test = 0.3, train = 0.7))
+        ols_data <- lm(biden ~ female + age + dem +rep + educ, data)
+        coef_table = data.frame(t(data.frame(ols_data$coef)))
+        rownames(coef_table) = c()
+        cross_mse <- mse(ols_data, data_split$train)
+        coef_table['mse'] = cross_mse
+        return(coef_table)
+}
+
+coef_table <- rerun(100, cross_val(biden_table))%>%
+  bind_rows()
+xtable(data.frame(colMeans(coef_table)), header = FALSE)
+print(paste('Standard deviation of MSE is: ', sd(coef_table$mse)))
+```
+
+The above is the mean of the 100 validation set estimation results for the coefficients. Additionally, we have the average MSE for the 100 split. The MSE is around 394.05. The estimation is about the same as the regression using the full sample.
+
+We can also plot the histogram of MSE:
+
+```{r}
+ggplot(coef_table, aes(mse))+
+  geom_histogram()+
+  labs(
+    x = 'MSE',
+    y = 'Counts',
+    title = 'Histogram of Sample MSE from Validation Set Method'
+  )
+```
+
+#4.
+```{r 1 d}
+loocv_data <- crossv_kfold(biden_table, nrow(biden_table))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ female + age + dem +rep + educ, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+The leave one out estimation for the MSE is 397.96. This is approximately the same as the full sample approach. This indicates the good fitness of the model.
+
+#5
+```{r 1 e}
+set.seed(1234)
+tenfold_data <- crossv_kfold(biden_table, 10)
+tenfold_models <- map(tenfold_data$train, ~ lm(biden ~ female + age + dem +rep + educ, data = .))
+tenfold_mse <- map2_dbl(tenfold_models, tenfold_data$test, mse)
+mean(tenfold_mse)
+```
+The ten fold estimation for the MSE is 397.88. This is almost the same as LOOCV estimation. This corroborates the fact that the performance of ten fold estimation is almost as good as LOOCV, with the advantage that ten fold estimation requires less computation power.
+
+#6
+```{r 1f}
+set.seed(1234)
+mse_tenfold<-function(data){
+tenfold_data <- crossv_kfold(data, 10)
+tenfold_models <- map(tenfold_data$train, ~ lm(biden ~ female + age + dem +rep + educ, data = .))
+tenfold_mse <- map2_dbl(tenfold_models, tenfold_data$test, mse)
+return(mean(tenfold_mse))
+}
+mse_tenfold <- rerun(100, mse_tenfold(biden_table))%>%
+  unlist()
+mean_mse <- mean(mse_tenfold)
+print(paste('1 f: The mean MSE for 10 fold cross validation approach simulating 100 times is: ', toString(mean_mse)))
+sd(mse_tenfold)
+
+```
+The mean squared error for 10 fold cross validation simulating 100 times is 398.06. 
+Again this result doesn't differ from the full sample method much. And the mean squared error is computed for the test data on the training dataset. Though the MSE performance doesn't improve compared to the validation set method, the standard deviation of the MSE among the 100 ten fold validation sets are better than that of the validation set method. In the validation set method, the standard deviation of the MSE is higher(8.83) compared to the ten fold cross validation method(0.57). This corroborates the idea that ten fold  cross validation and LOOCV method has less fluctuation in MSE compared to the validation set method.
+
+The following is the histogram of the tenfold cross validation approach. As we can see, compared to the validation set approach, the range of the sample MSE is much smaller, ranging from (397, 399). While the sample MSE of validation set approach ranges from (370, 420).
+
+```{r}
+ggplot(data.frame(mse_tenfold), aes(mse_tenfold))+
+  geom_histogram()+
+    labs(
+    x = 'MSE',
+    y = 'Counts',
+    title = 'Histogram of Sample MSE from Tenfold Validation Set Method'
+  )
+```
+
+#7.
+```{r 1g, results = 'asis'}
+options(xtable.comment = FALSE)
+set.seed(1234)
+biden_boot <- biden_table%>%
+  modelr::bootstrap(1000)%>%
+    mutate(model = map(strap, ~ lm( biden ~ female + age + dem +rep + educ, data = .)),
+    coef = map(model, tidy))
+
+boot_biden_coef <- biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+
+print(xtable(boot_biden_coef, type = 'latex', caption = 'Estimated Results for Bootstrap', comments = FALSE),
+      caption.placement = "top")
+```
+
+From the result we can see that the bootstrap result is similar to that of the simple linear regression in a). But we get a larger standard error for each estimator. This comes as a result of that the assumption of OLS is not fully satisfied.
+
+##Problem 2
+We first estimate the relationship between outstate tuition and the school type. 
+For our sample set, we have that the average tuition for public school is 6813.41 dollars. The estimated coefficient is 4988.283 dollars. This means that compared to public university, the tuition for private university is on average 4988.23 dollars higher than private school (5/7 time higher than that of pulic school). This effect is relatively large. 
+```{r 2a, results = 'asis'}
+private_ols <- lm(Outstate ~ Private, College)
+# apps.lo <- gam(Outstate ~ lo(Apps, span = 0.4), family = gaussian,  College)
+# college.app <- College %>%
+#   add_predictions(apps.lo)
+# ggplot(college.app, aes(x = Apps, y = pred))+
+#   geom_line()
+# college_smooth <- glm(Outstate ~ bs(perc.alumni, df = 5), data = College , family = gaussian)
+# college.app <- College %>%
+#   add_predictions(college_smooth)
+# ggplot(college.app, aes(x = perc.alumni, y = pred))+
+#   geom_line()
+stargazer(private_ols, type = 'latex', title = 'Linear Regression Outstate Tuition vs. Private School', header = FALSE, no.space = TRUE)
+```
+
+Now we can look at the relationship between out of state tuition and instructional expenditure per student.  We first plot the scatter plot. This plot is not linear by eyeballing the scatter plot. Thus we can estiamte the tuition elasticity of instructional expenditure (i.e. take log of both response variables and predictors).   
+We summarize both of the models in Table 5.
+For the level model, one dollar increase in instructional expenditure leads to 0.518 dollar increase in out of state tuition. For the log model. We can see that one percent increase in instructional expenditure leads to 0.706 percent increase in out of state tuition. Firstly examining the R square value, we can see that there is a 0.05 increase in R square.  But if we take log on only the instructional expenditure, we can further improve R square value to 0.577. This model indicates that one percent in instructional expenditure leads to 7482.15 dollars increase in out of state tuition.  
+Then we can further compare both models by using validation set  method.  
+The following is the result.  
+
+```{r}
+ggplot(College, aes(x = Expend, y = Outstate))+
+  geom_point()+
+  labs(x = 'Instructional Expenditure per Student',
+       y = 'Out of State Tuition',
+       title = 'Scatter Plot of Out of State Tuition vs. Instructional Expenditure')
+```
+
+
+```{r 2b}
+set.seed(12345)
+cross_val2 <- function(data, flag){
+        data_split <- resample_partition(data, c(test = 0.3, train = 0.7))
+        model <- lm(response ~ predictor, data_split$train)
+        coef_table = data.frame(t(data.frame(model$coef)))
+        rownames(coef_table) = c()
+        if(flag == TRUE){
+        cross_mse <- mse(model, data_split$test)
+        }
+        else{
+          expand_log_mse <- data_split$test %>%
+          data.frame()%>%
+          add_predictions(model)%>%
+          mutate(pred = exp(pred),
+         resid = (Outstate - pred) ^ 2)
+          cross_mse = mean(expand_log_mse$resid)
+        }
+        coef_table['mse'] = cross_mse
+        return(coef_table)
+}
+expend_base <- lm(Outstate ~ Expend, College)
+expend_log <- lm(log(Outstate) ~ log(Expend), College)
+expend_log2 <- lm(Outstate ~ log(Expend), College)
+expend_base_mse <- mse(expend_base, College)
+data <- College%>%
+  mutate(
+    response = Outstate,
+    predictor = Expend
+  )
+expend_base_mse <- cross_val2(data, TRUE)$mse
+print("MSE for the Simple Linear Regression without Log Transformation:")
+print(expend_base_mse)
+
+data <- College%>%
+  mutate(
+    response = log(Outstate),
+    predictor = log(Expend)
+  )
+mean_mse_epand_log <- cross_val2(data, FALSE)$mse
+print("MSE for the Simple Linear Regression WITH Log Transformation on Both Sides:")
+print(mean_mse_epand_log)
+
+data <- College%>%
+  mutate(
+    response = Outstate,
+    predictor = log(Expend)
+  )
+mean_mse_epand_log2 <- cross_val2(data, TRUE)$mse
+print("MSE for the Simple Linear Regression WITH Log Transformation on Predictor:")
+print(mean_mse_epand_log2)
+```
+
+Above is the MSE for the test set for the three model. We can see that the one side log transformation performs the best. Thus judging by the regression result, university in the US calculate their budget for out of state tuition in a way that they project the percent change of instructional expenditure into a level change in out of state tuition. 
+
+```{r, results = 'asis'}
+stargazer(expend_base, expend_log, expend_log2, type = 'latex', title = 'Out of State Tuition vs. Instructional Expenditure (Level vs. Log)', header = FALSE, no.space = TRUE)
+```
+
+From a demand and supply side perspective, does higher demand for the education for one school increases the tuition for one school? Thus we can examine the relatinoship between the out of state tuition and number of application received each year. Firstly we plot the scatter plot:
+
+```{r}
+ggplot(College, aes(x = Apps, y = Outstate))+
+  geom_point()+
+  labs(x = 'Number of Applications Received',
+       y = 'Out of State Tuition',
+       title = 'Scatter Plot Out of State Tuition vs. Number of Applications')
+```
+
+By looking at the scatter plot, we can see that there is different trend for application reveived among different regions. Specifically, when number of applications received below and above 5000 dollars, there are different trends. But since the scatter plot is noisy, we can fit a local regression to test this relationship. 
+
+By using the full sample to test the local regression, we can plot the following prediction plot. ([Note] in this case, we exclude the outlier; we do this by limiting the number of applications below 30000.)
+
+```{r}
+College <- College[College$Apps < 30000, ]
+college_smooth <- gam(Outstate ~ lo(Apps, span = 0.3), data = College , family = gaussian)
+college.app <- College %>%
+  add_predictions(college_smooth)
+ggplot(college.app, aes(x = Apps, y = pred))+
+  geom_line()
+```
+
+By looking at the graph of the local regression, we can see that there is different trend below and above 5000 applications.  
+When nthe number of applications is below 5000, we see a hump shaped curve. This may indicate that there are some colleges that will allow paying to get into college so that they can take advantage of the high tuition to generate profit. These are usually business type colleges. But it's still hard for us to explain the drop in the region between 2500 and 5000. One possible explanation is that we enter a region of academic institutes and there is a break around 2500. After 5000 applications, we can see a normal supply and price curve. Though for academic institute, a demand and supply analysis may oversimply the analysis by excluding externality and government subsidies, by looking at the graph, there is still an element of demand and supply relationship.
+
+```{r}
+set.seed(1234)
+tenfold_data <- crossv_kfold(College, 10)
+tenfold_models_nonlinear <- map(tenfold_data$train, ~ gam(Outstate ~ lo(Apps, span = 0.3), data = College , family = gaussian))
+tenfold_mse_nonlinear <- map2_dbl(tenfold_models_nonlinear, tenfold_data$test, mse)
+print("MSE for Local Regression using tenfold cross validation: ")
+mean(tenfold_mse_nonlinear)
+tenfold_models_linear <- map(tenfold_data$train, ~ lm(Outstate ~ Apps, College))
+tenfold_mse_linear <- map2_dbl(tenfold_models_linear, tenfold_data$test, mse)
+print("MSE for OLS using tenfold cross validation: ")
+mean(data.frame(tenfold_mse_linear)$tenfold_mse_linear)
+```
+
+The above is the MSE for OLS and Local Regression. As we can see local regression does improve the model perfermance and reduce MSE.
+
+In summary, we find that the out of state tuition for private university is almost twice the amount of public school. There is a linear-log relationship between out of state tuition and instructinoal expenditure. This indicates that the university projects the percent change of instructional expenditure into a level change of out of state tuition. And finally, there is a supply side effect on out of state tuition for the schools that have out of state tuition higher than 5000 dollars but the effect is reversed for the schools between 2500 and 5000 dollars. This may indicate discontinuity in the sample.
+
+##3.
+###1.
+```{r 3a}
+college_split <- resample_partition(College, c(test = 0.3, train = 0.7))
+
+```
+
+###2. 
+Below is the regression result:
+```{r 3b, results = 'asis'}
+set.seed(12345)
+college_ols <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, college_split$train)
+stargazer(college_ols, type = 'latex', title = 'Simple Linear Regression of Out of State Tuition', header = FALSE, no.space = TRUE)
+```
+
+The model has an R square of 0.751. This means that approximately 75.1% of the variation in out of state tuition is explained by the response variables chosen. This is considered a good fit. 
+
+Additionally, all of the chosen variables are significant. The regression shows that holding all other constant, on average the out of state tuitoin is 2879.279 dollars higher for private university than for public university. On average, one dollar increase in room and board expenses will indicate 1.042 dollar increase in tuition. Also, one percent increase in the number of faculties who have PhD degree will on average lead to 37.783 dollars increase in out of state tuition. And one percent increase in Alumni donation will also on average increase out of state tuition by 50.772 dollars. 
+
+A somewhat odd result is that one dollar increase in instructional expenditure leads to a 0.209 dollar increase on average in tuition. This is even smaller compared to the effect of room and board cost because normally the tuition doesn't include room and board cost but does include instructional expenditure cost. One plausible explanation is indicated in the above question. The university change the level of tuition in response to the percent change of instructional expenditure. A one percent increase in instructinoal expenditure will increase dollar amount change of tuition. 
+
+Grauduation rate is also significant. One percent increase in graduation rate will lead to 24.117 dollar increase in tuition. This variable can have several possible effects. One effect is through the resources the university spend on student education: for example, more tutors, higher teacher sallary etc. In general, more resources spent on student education, higher the chance for the students to graduate. Thus, this variable can also have another effect through reputation. The higher quality one school give, the higher the reputation they gain. And it's normal for the Ivy league university to have the highest tuition among all of univeristy.
+
+###3.
+```{r 3c}
+set.seed(12345)
+college_gam <- gam(Outstate ~ Private + bs(Room.Board, df = 6) + bs(perc.alumni, df = 6) + bs(PhD, df = 6) + log(Expend) + lo(Grad.Rate), college_split$train, family = gaussian)
+summary(college_gam)
+```
+
+```{r 3c1}
+college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
+
+#Room.Board
+data_frame(x = college_gam_terms$`bs(Room.Board, df = 6)`$x,
+           y = college_gam_terms$`bs(Room.Board, df = 6)`$y,
+           se.fit = college_gam_terms$`bs(Room.Board, df = 6)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Room and board Cost",
+       y = expression(f[1]('Room and board Cost'))
+       )
+
+```
+
+The above graph is the relationship between room and board cost and out of state tuition. I fit a spline regression with 3 knots. In general there is a positive relationship between these two variables. The curvature only occurs at the end of the range. Thus we can't conclude there is much non linear relationship between these two variables. 
+
+```{r 3c2}
+data_frame(x = college_gam_terms$`bs(perc.alumni, df = 6)`$x,
+           y = college_gam_terms$`bs(perc.alumni, df = 6)`$y,
+           se.fit = college_gam_terms$`bs(perc.alumni, df = 6)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Percent of Alumni Donation",
+       y = expression(f[1]('Percent of Alumni Donation'))
+       )
+```
+
+The above graph is the basis function for percent of alumni who donates. I fit a spline regression with 3 knots. The line demonstrates a slowly increasing trend. There is curvature on the end of the range. This is caused by the relatively sparse points at each end of the range. We can't conclude that there is much non linear relationship between out of state tuition and percent of alumni who donates.
+
+```{r 3c3}
+data_frame(x = college_gam_terms$`bs(PhD, df = 6)`$x,
+           y = college_gam_terms$`bs(PhD, df = 6)`$y,
+           se.fit = college_gam_terms$`bs(PhD, df = 6)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Percent of Faculty Having PhD",
+       y = expression(f[1]('Percent of Faculty Having PhD'))
+       )
+```
+
+The above grpah is the relationship between Percent of Faculty having PhD and out of state tuition. I fit a spline regression with 3 knots. We can see that the grpah demonstrates a relatively flat line with curvature only at the end of the graph. This indicates there is relatively weak relationship between these two varialbles.
+
+```{r 3c4}
+data_frame(x = college_gam_terms$`log(Expend)`$x,
+           y = college_gam_terms$`log(Expend)`$y,
+           se.fit = college_gam_terms$`log(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Percent of Instructional Expenditure",
+       y = expression(f[1]('Instructional Expenditure'))
+       )
+```
+
+The above is the relationship between out of state tuition and instructional expenditure. I fit a log transformation of the variable into the model. This decision is made after comparing the performance of a local regression spline regression. Log transformation gives the best fit in the sense that it has narrower confidence interval. This again confirms our conclusion above that the university projects percent change of instructional expenditure to level change in level of out of state tuition.
+
+```{r 3c5}
+data_frame(x = college_gam_terms$`lo(Grad.Rate)`$x,
+           y = college_gam_terms$`lo(Grad.Rate)`$y,
+           se.fit = college_gam_terms$`lo(Grad.Rate)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Graduation Rate",
+       y = expression(f[1]('Graduation Rate'))
+       )
+```
+
+The above is the relationship between out of state tuition and graduation rate. Since by looking at the scatter plot of these two variables, the relationship is unclear, I fit a local regression. The above graph shows a lienar trend. But the relationship is not string since the confidence interval band is really wide. This indicates there is not much relationship between out of state tuition and graduation rate. Hence this also rejects our hypothesis that graduation rate can affect tuition trhough quality of education and reputation.
+
+###4.
+```{r 4a}
+college_gam2 <- lm(Outstate ~ Private + bs(Room.Board, df = 6) + PhD + perc.alumni + Expend + Grad.Rate, college_split$train)
+college_gam3 <- lm(Outstate ~ Private + bs(Room.Board, df = 6) + bs(PhD, df = 6) + perc.alumni + Expend + Grad.Rate, college_split$train)
+college_gam4 <- lm(Outstate ~ Private + bs(Room.Board, df = 6) + bs(PhD, df = 6)+  bs(perc.alumni, df = 6) + Expend + Grad.Rate, college_split$train)
+college_gam5 <- lm(Outstate ~ Private + bs(Room.Board, df = 6) + bs(PhD, df = 6)+  bs(perc.alumni, df = 6) + log(Expend) + Grad.Rate, college_split$train)
+college_gam6<- lm(Outstate ~ Private + bs(Room.Board, df = 6) + bs(PhD, df = 6)+  bs(perc.alumni, df = 6) + log(Expend) + lo(Grad.Rate), college_split$train)
+mse_ols <- mse(college_ols, college_split$test)
+mse_gam <- mse(college_gam, college_split$test)
+print(paste('MSE for OLS model is: ', toString(mse_ols)))
+print(paste('MSE for OLS model is: ', toString(mse_gam)))
+```
+
+As we can see, the MSE for GAM model is better than OLS model. This may indicate the non-linear model is better. But note that this may come as a result of overfitting the model. Apparently, transforming 5 variables into non-linear basis functions decreases MSE by approximately 1/40 is up for debate whether it's good enough. Combine the graph generated above, the non-linear model may acutally overfit the model since most of the variables exhibits linear trend.
+
+###5
+
+```{r 5a}
+anova(college_ols, college_gam2, college_gam3, college_gam4, college_gam5, college_gam6, college_gam)
+```
+
+Above is the anova table for the GAM models and OLS model. We transform the linear predictor into a non-linear basis functions one by one. Then by compare each consecutive model, we can know which variable has non-linear relationship with the out of state tuition.  
+
+I don't think there is a strong evidence that a non-linear specification is necessary judging by the grpah and the anova test.
+
+The result indicates that room and board cost and percent of faculties having PhD degree are the two variables that have non-linear relationship with out of state tuition.  All of the other variables do not exhibit strong non-linear relationship with out of state tuition. 
+
+The result goes against our observation of the relatively flat regression line between percent of faculties having PhD degree and out of state tuition. Faculties having PhD degree exhibits different rate of change in a certain degree: at each end of the range, the rate of out of state tuition increases faster with respect to percent of faculties having PhD degree. The rate of change is smallest in the middle. But again, this may be a result of the broad confidence interval at the end of the range where observation points are sparse.  
+
+But in general, I don't think there is a strong evidence of non-linearity between the response variable and the predictors.

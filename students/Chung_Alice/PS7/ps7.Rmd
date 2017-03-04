@@ -1,0 +1,776 @@
+---
+title: "MACSS 30100 PS#7"
+author: "Alice Mee Seon Chung"
+date: "2/25/2017"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = TRUE)
+
+library(modelr)
+library(broom)
+library(tidyverse)
+library(gam)
+set.seed(1234)
+theme_set(theme_minimal())
+
+df_biden<- read.csv('data/biden.csv')
+df_college <- read.csv('data/College.csv')
+df_wage <- read.csv('data/College.csv')
+```
+
+# Part 1: Sexy Joe Biden
+```{r include= FALSE}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+```{r}
+# linear model
+biden_lm <- lm(biden ~ ., data = df_biden)
+mse_whole <-mse(biden_lm, df_biden)
+summary(biden_lm)
+```
+$\beta_0$ of intercept in the multivariable linear regression is 58.81126 and standard error is 3.12444. $\beta_1$ for female is 4.10323 and standard error is 0.94823. $\beta_2$ for age is 0.04826 and standard error is 0.02825. $\beta_3$ for education is -0.34533 and standard error is 0.19478. $\beta_4$ for Democratic is 15.42426 and standard error is 1.06803. $\beta_5$ for Republican is -15.84951 and standard error is 1.31136.
+
+```{r }
+mse_whole
+```
+1. Using 5- factor linear regression model, the training MSE is 395.2702.
+
+```{r}
+set.seed(1234)
+# split into training and validation set 
+biden_split <- resample_partition(df_biden, c(test = 0.3, train = 0.7))
+#biden_split
+train_model <- glm(biden ~ age+female+educ+dem+rep, data = biden_split$train)
+mse_1 <-mse(train_model, biden_split$test)
+mse_1
+```
+2. The value of MSE using test set observation with all predictors linear regression model is 395.2702. To compare to the training MSE from step 1, which is 399.8303, the value of MSE increases about 4.5601. This is because the model only fits to train data, so when it applies to other data set, the results could become worse. 
+
+```{r}
+set.seed(1234)
+mse_variable <- function(df){
+  df_split <- resample_partition(df, c(test = 0.3, train = 0.7))
+  train_model <- glm(biden ~ age + female + educ + dem + rep, data = df_split$train)
+  mses <-mse(train_model, df_split$test)
+  return(data_frame(mse = mses))
+}
+rerun <-rerun(100, mse_variable(df_biden)) %>%
+  bind_rows(.id = "id")
+
+mse_100 <- mean(rerun$mse)
+mse_100
+
+```
+
+3. The mean MSE of repeating the validaion set approach 100 times, using 100 different splits of the observation into training and validation set is 401.6643. It is 6.3941 higher than the MSE of whole data set and 1.834 higher than the MSE of one time validation set approach with test data set. Repeating 100 times of validation set approach will help to remove over-fitting or under-fitting error. 
+
+```{r}
+set.seed(1234)
+loocv_data <- crossv_kfold(df_biden, k = nrow(df_biden))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ ., data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+
+4. The mean MSE of the model using the leave-one-out cross-validation approach is 397.9555. It is lower than the MSE of repeating the validaion set approach 100 times. The LOOCV model is flexible method but the computation time is long because it is computationally difficult.
+
+```{r}
+set.seed(1234)
+cv10_data <- crossv_kfold(df_biden, k = 10)
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ ., data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+cv_error_fold10 <- mean(cv10_mse)
+cv_error_fold10
+```
+
+5. The mean MSE of the model using the 10-fold cross-validation approach is 397.8837. It is slightly lower than the MSE of the model using LOOCV. Compared with LOOCV model, it is only compute 10 times, so the flexibility decreases. However, the computation time is much shorter than LOOCV, so efficiency increases. 
+
+```{r}
+k_fold <- function(df){
+  cv10_data <- crossv_kfold(df_biden, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ ., data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_error_fold10 <- mean(cv10_mse)
+  return(data_frame(mse = cv_error_fold10))
+}
+rerun_kfold <-rerun(100, k_fold(df_biden)) %>%
+  bind_rows(.id = "id")
+#rerun_kfold
+mean(rerun_kfold$mse, na.rm=TRUE)
+```
+
+6. The mean MSE of repeating 10-fold cross-validation approach 100 times is 398.0712. It is 2.0801 higher than the MSE of whole data set and 0.1875 higher than the MSE of test data set. From this result, 10-fold cross-validation approach has smaller differences when comparing to the validation set approach, that is, 10-fold cross-validation approach is steadier. 
+
+```{r}
+set.seed(1234)
+
+biden_boot <- df_biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ ., data = .)),
+         coef = map(model, tidy))
+
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+
+summary(biden_lm)
+```
+
+7. Compared to the results from original model and bootstrap, the estimated parameters and standard errors are very close. The bootstrap estimated parameters of intercept and dem is larger and estimated parameters of standard error is lower than the original model. Also the bootstrap estimated parameters of female, educ, dem, age, rep is smaller and the estimated parameters of standard error is larger than the original mode. 4 out of 6 variables the bootstrap estimated standard error is larger than original model and this is because bootstrap does not depend on the distributional assumptions. Thus it is extremly flexible and can be applied to any statistical method. 
+
+#2 College(bivariate)
+
+#(1) Simple linear regression (Out of state and Room.Board)
+
+Linear regression models assume the relationship between predictors and the response variable is a straight line. To check if the relationship between the predictor Room.Board and the response Out of state is linear, let's draw the graph of two varaibles and its simple linear regression model.
+```{r}
+lm<- lm(Outstate~ . ,data = df_college)
+summary(lm)
+set.seed(1234)
+simlm1_college = lm(Outstate ~ Room.Board, data = df_college)
+
+ggplot(df_college, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Simple linear model of Out of state and Room.Board ")
+```
+When we focus on the points of variables, we can say that they have positive relationship. However, with simple linear graph, it seems like simplie linear regrssion model does not explain the observations fully. To look more closely, we have to check actual residuals of simple linear regrssion model. If the residuals of the observations is distributed normally with an expected error 0 and not be correlated with the fitted values then we can assume the assumption holds. 
+
+```{r}
+set.seed(1234)
+df_college_pred <- df_college %>%
+  add_predictions(simlm1_college) %>%
+  add_residuals(simlm1_college) 
+
+ggplot(df_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(df_college_pred$resid),
+                            sd = sd(df_college_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+ggplot(df_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Simple linear regression model of Out of state and Room.Board',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+```
+Looking the histogram, the residuals are close to 0 and the shape is bell-shaped but slightly left -skewed. When we see the smoothe fit line, it seems that the residuals are not correlated with fitted values overall. However, with higher predicted values it seems to have negative relationship, but overall it is negligible. The result seems like simple linear model explains the correlationship between the predictor and the response, but the relationship is not perfectly linear so we need to check other non-linear fitting techniques.
+
+# Polynomial regression
+
+I will use LOOCV and k-fold CV methods to figure out what degree of polynomial model produces lowest MSE and determine which model is better model. 
+
+```{r}
+set.seed(1234)
+# LOOCV
+loocv_data <- crossv_kfold(df_college, k = nrow(df_college))
+loocv_models <- map(loocv_data$train, ~ lm(Outstate ~ Room.Board, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+
+#mean(loocv_mse)
+
+cv_error <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  loocv_models <- map(loocv_data$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+  cv_error[[i]] <- mean(loocv_mse)
+}
+
+cv_mse <- data_frame(terms = terms,
+           cv_MSE = cv_error)
+#cv_mse
+
+cv10_data <- crossv_kfold(df_college, k = 10)
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+#cv_error_fold10
+
+data_frame(terms = terms,
+           loocv = cv_error,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, loocv:fold10) %>%
+  ggplot(aes(terms, MSE, color = method)) +
+  geom_line() +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error",
+       color = "CV Method")
+
+#mse(simlm1_college, df_college)
+
+```
+Based on the MSE for the validation tests (k-fold, loocv), a polynomial model with a quadratic term (Room.Board2) produces the lowest average error. 2nd degree and 3rd degree are quite similar but 2nd degree is easier to interprete so we will take 2nd degree.  Adding higher order terms is not necessary. Now draw the graphs of 2nd degree polynomial model and compare with the linear model. 
+
+```{r}
+set.seed(1234)
+polylm_college<- lm(Outstate ~ poly(Room.Board, 2), data = df_college) 
+  
+summary(polylm_college)
+
+
+ggplot(df_college, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2)) + 
+  labs(title = '2nd degree polynomial regression (Outstate and Room.Board)')
+
+poly_df_college_pred <- df_college %>%
+  add_predictions(polylm_college) %>%
+  add_residuals(polylm_college) 
+
+ggplot(poly_df_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(poly_df_college_pred$resid),
+                            sd = sd(poly_df_college_pred$resid))) +
+  labs(title = "2nd degree polynomial regression (Outstate and Room.Board)",
+       x = "Residuals")
+
+ggplot(poly_df_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = '2nd degree polynomial regression (Outstate and Room.Board) ',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+
+sim_mse <-mse(simlm1_college, df_college)
+sim_mse
+poly_mse<- mse(polylm_college, df_college)
+poly_mse
+```
+Looking the histogram, the shape and trend are quite similar to simple linear model. The residuals are close to 0 and the shape is bell-shaped but slightly left -skewed. When we see the smoothe fit line of 2nd degree polynomial regression model, it seems that the residuals are not correlated with fitted values overall. Comparing with simple linear model, this model does not have trend that higher predicted values have negative relationship with residuals. The last graph seems like 2nd degree polynomial model explains the correlationship between the predictor and the response better and fits the data well than simple linear model. MSE of simple linear model is 9244880 and MSE of 2nd degree polynomial model is 9189921. Thus we can say the 2nd degree polynomial model predicts better. 
+
+#(2) Simple linear regression (Out of state and perc.alumni)
+
+Like first simple regression model, to check if the relationship between the predictor Room.Board and the response Out of state is linear, I will draw the graph of two varaibles and its simple linear regression model.
+```{r}
+set.seed(1234)
+#df_college
+simlm2_college = lm(Outstate ~ perc.alumni, data = df_college)
+
+ggplot(df_college, aes(perc.alumni, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Simple linear model of Out of state and perc.alumni ")
+```
+When we focus on the points of variables, we can say that they have positive relationship. However with simple linear graph, it seems like simplie linear regrssion model does not explain the observations perfectly. To look more closely, we have to check actual residuals of simple linear regrssion model. If the residuals of the observations is distributed normally with an expected error 0 and not be correlated with the fitted values then we can assume the assumption holds. 
+
+```{r}
+set.seed(1234)
+df2_college_pred <- df_college %>%
+  add_predictions(simlm2_college) %>%
+  add_residuals(simlm2_college) 
+
+ggplot(df2_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(df2_college_pred$resid),
+                            sd = sd(df2_college_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+ggplot(df2_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Simple linear regression model of Out of state and perc.alumni',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+```
+Looking the histogram, most of the residuals are around 0 and the shape is bell-shaped but slightly left -skewed. When we see the smoothe fit line, the smooth line draws almost horizontal line. We can say that the residuals are not correlated with fitted values overall. The result seems like simple linear model explains the correlationship between the predictor and the response, but the relationship is not perfectly linear so we need to check other non-linear fitting techniques.
+
+# Polynomial regression
+
+I will use LOOCV and k-fold CV methods to figure out what degree of polynomial model produces lowest MSE and determine which model is better model. 
+
+```{r}
+set.seed(1234)
+loocv_data2 <- crossv_kfold(df_college, k = nrow(df_college))
+loocv_models2 <- map(loocv_data2$train, ~ lm(Outstate ~ perc.alumni, data = .))
+loocv_mse2 <- map2_dbl(loocv_models2, loocv_data2$test, mse)
+
+#mean(loocv_mse2)
+
+cv_error2 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  loocv_models2 <- map(loocv_data2$train, ~ lm(Outstate ~ poly(perc.alumni, i), data = .))
+  loocv_mse2 <- map2_dbl(loocv_models2, loocv_data2$test, mse)
+  cv_error2[[i]] <- mean(loocv_mse2)
+}
+
+cv_mse2 <- data_frame(terms = terms,
+           cv_MSE = cv_error2)
+#cv_mse
+
+cv10_data2 <- crossv_kfold(df_college, k = 10)
+
+cv_error_fold102 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models2 <- map(cv10_data2$train, ~ lm(Outstate ~ poly(perc.alumni, i), data = .))
+  cv10_mse2 <- map2_dbl(cv10_models2, cv10_data2$test, mse)
+  cv_error_fold102[[i]] <- mean(cv10_mse2)
+}
+
+#cv_error_fold102
+
+data_frame(terms = terms,
+           loocv2 = cv_error2,
+           fold102 = cv_error_fold102) %>%
+  gather(method, MSE, loocv2:fold102) %>%
+  ggplot(aes(terms, MSE, color = method)) +
+  geom_line() +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error",
+       color = "CV Method")
+
+```
+Based on the MSE for the validation tests (k-fold, loocv), suprisingly the simple degree model produces the lowest average error. Adding higher order terms is not necessary at all. However, to compare the exact value, I will test 2nd degree polynomical model, draw the graphs and compare the result with the simple linear model. 
+
+
+```{r}
+set.seed(1234)
+polylm2_college<- lm(Outstate ~ poly(perc.alumni, 2), data = df_college) 
+  
+summary(polylm2_college)
+
+
+ggplot(df_college, aes(perc.alumni, Outstate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2)) + 
+  labs(title = '2nd degree polynomial regression (Outstate and Room.Board)')
+
+poly2_df_college_pred <- df_college %>%
+  add_predictions(polylm2_college) %>%
+  add_residuals(polylm2_college) 
+
+ggplot(poly2_df_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(poly2_df_college_pred$resid),
+                            sd = sd(poly2_df_college_pred$resid))) +
+  labs(title = "2nd degree polynomial regression (Outstate and Room.Board)",
+       x = "Residuals")
+
+ggplot(poly2_df_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = '2nd degree polynomial regression (Outstate and Room.Board) ',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+
+sim2_mse <-mse(simlm2_college, df_college)
+sim2_mse
+poly2_mse<- mse(polylm2_college, df_college)
+poly2_mse
+
+```
+Looking the histogram, the shape and trend are quite similar to simple linear model. The residuals are close to 0 and the shape is bell-shaped but slightly left -skewed. When we see the smoothe fit line of 2nd degree polynomial regression model, it seems that the residuals are not correlated with fitted values overall. The graph and histograms are very similar with simple linear model so it is hard to tell which model is better model with these graphs. We compare MSE of each model. The MSE of simple linear model is 10980849 and MSE of 2nd degree polynomial model is 10980681. The MSE of 2nd degree polynomial model is about 168 lower. Thus we can say the 2nd degree polynomial model predicts slightly better than simple linear model.  
+
+#(3) Simple linear regression (Out of state and Expend)
+
+Like first and second simple regression model, to check if the relationship between the predictor Room.Board and the response Out of state is linear, I will draw the graph of two varaibles and its simple linear regression model. 
+```{r}
+set.seed(1234)
+#df_college
+simlm3_college = lm(Outstate ~ Expend, data = df_college)
+
+ggplot(df_college, aes(Expend, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Simple linear model of Out of state and Expend ")
+```
+When we focus on the points of variables, we can say that they have positive relationship. However with simple linear graph, it seems like simple linear regrssion model does not explain the observations perfectly. To look more closely, we have to check actual residuals of simple linear regrssion model. If the residuals of the observations is distributed normally with an expected error 0 and not be correlated with the fitted values then we can assume the assumption holds. 
+
+```{r}
+set.seed(1234)
+df3_college_pred <- df_college %>%
+  add_predictions(simlm3_college) %>%
+  add_residuals(simlm3_college) 
+
+ggplot(df3_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(df3_college_pred$resid),
+                            sd = sd(df3_college_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+ggplot(df3_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Simple linear regression model of Out of state and Expend',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+```
+Looking the histogram, most of the residuals are around 0 and the shape is bell-shaped but slightly right -skewed. When we see the smoothe fit line, we can figure out that the linear model does not explain the data well. From the graph, we can infer that it is form of logarithm so we can do log transformation of X. 
+
+```{r}
+set.seed(1234)
+log_college <- lm(Outstate ~ log(Expend), data = df_college)
+
+df4_college_pred <- df_college %>%
+  add_predictions(log_college) %>%
+  add_residuals(log_college) 
+
+ggplot(df4_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(df4_college_pred$resid),
+                            sd = sd(df4_college_pred$resid))) +
+  labs(title = "Linear model for a linear relationship with log transformation ",
+       x = "Residuals")
+
+ggplot(df4_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = 'Simple linear regression model of Out of state and Expend with log transformation',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+```
+Looking the histogram, most of the residuals are around 0 and the shape is bell-shaped. However,
+the smooth line does not draw a line close to 0 overall. We can not say that the residuals are not correlated with fitted values overall. The result seems like simple linear model with log transformation of X explains the correlationship between the predictor and the response better than simple linear model, but we need to check other non-linear fitting techniques.
+
+# Polynomial regression
+
+I will use LOOCV and 10-fold CV methods to figure out what degree of polynomial modelw without log transformation produces lowest MSE and determine which model is better model. 
+
+```{r}
+set.seed(1234)
+loocv_data3 <- crossv_kfold(df_college, k = nrow(df_college))
+loocv_models3 <- map(loocv_data3$train, ~ lm(Outstate ~ Expend, data = .))
+loocv_mse3 <- map2_dbl(loocv_models3, loocv_data3$test, mse)
+
+#mean(loocv_mse3)
+
+cv_error3 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  loocv_models3 <- map(loocv_data3$train, ~ lm(Outstate ~ poly(Expend, i), data = .))
+  loocv_mse3 <- map2_dbl(loocv_models3, loocv_data3$test, mse)
+  cv_error3[[i]] <- mean(loocv_mse3)
+}
+
+cv_mse3 <- data_frame(terms = terms,
+           cv_MSE = cv_error3)
+#cv_mse
+
+cv10_data3 <- crossv_kfold(df_college, k = 10)
+
+cv_error_fold103 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models3 <- map(cv10_data3$train, ~ lm(Outstate ~ poly(Expend, i), data = .))
+  cv10_mse3 <- map2_dbl(cv10_models3, cv10_data3$test, mse)
+  cv_error_fold103[[i]] <- mean(cv10_mse3)
+}
+
+#cv_error_fold103
+
+data_frame(terms = terms,
+           loocv3 = cv_error3,
+           fold103 = cv_error_fold103) %>%
+  gather(method, MSE, loocv3:fold103) %>%
+  ggplot(aes(terms, MSE, color = method)) +
+  geom_line() +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error",
+       color = "CV Method")
+
+```
+Based on the MSE for the validation tests (10-fold, loocv),  a polynomial model with a quadratic term (Expend3) produces the lowest average error. Adding higher order terms is not necessary. Now draw the graphs of 3rd degree polynomial model and compare with the linear model and log transformation model.  
+
+```{r}
+set.seed(1234)
+polylm3_college<- lm(Outstate ~ poly(Expend, 3), data = df_college) 
+  
+summary(polylm3_college)
+
+ggplot(df_college, aes(Expend, Outstate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 3)) + 
+  labs(title = '3rd degree polynomial regression (Outstate and Expend)')
+
+poly3_df_college_pred <- df_college %>%
+  add_predictions(polylm3_college) %>%
+  add_residuals(polylm3_college) 
+
+ggplot(poly3_df_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(poly3_df_college_pred$resid),
+                            sd = sd(poly3_df_college_pred$resid))) +
+  labs(title = "3rd degree polynomial regression (Outstate and Expend)",
+       x = "Residuals")
+
+ggplot(poly3_df_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  labs(title = '3rd degree polynomial regression (Outstate and Expend) ',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+
+log_expend <- map(cv10_data3$train, ~ lm(Outstate ~ log(Expend), 
+                                                             data = .))
+log_mse <- map2_dbl(log_expend, cv10_data3$test, mse)
+mse_log<- mean(log_mse, na.rm = TRUE)
+mse_log
+poly3_mse<- mse(polylm3_college, df_college)
+poly3_mse
+```
+
+```{r}
+summary(polylm3_college)
+summary(log_college)
+```
+The smooth regression seems to explain the data well. Looking the histogram, the shape and trend are similar to simple linear model. The residuals are close to 0 and the shape is bell-shaped but slightly right -skewed. When we see the smoothe fit line of 3rd degree polynomial regression model, it seems that the residuals are not correlated with fitted values overall. However, with lower predicted values it seems to have negative relationship, but overall it is negligible.
+It is hard to tell which model is better model with these graphs. We compare the MSE of each model. The MSE of simple linear model is 8847579, the MSE of log transformation of X is 6862770 and the MSE of 3rd degree polynomial model is 6417330. The MSE of 3rd degree polynomial model is about 445440 lower. The R-sauared score of 3rd degree polynomical model is 0.603 and the R-squared score of log transformation model is 0.5774. Thus we can say the 3rd degree polynomial model predicts slightly better than log-transformation of X model. 
+
+To sum up, the three predictors that use in simple linear regressin models are Room and board cost, percent of alumni who donate and instructional expenditure per student. The p-values of all three variable with all variables linear model are less than 0.05 so they are statistically significant. Thus all three variables have significnat relationship with out of state tuition. However, when we only consider one variable, Room and board cost explains out of state tuition more precisely when it is 2nd degree polynomial model. Instructional expenditure per student explains out of state tuition more precisely when it is 3rd polynomial model. Lastly, percent of alumni perfomes better when it is simple linear model. 
+
+#3 College(GAM)
+
+1.
+```{r}
+set.seed(1234)
+data <- read.csv("data/college.csv")
+gam_split <- resample_partition(data, c(test = 0.5, train = 0.5))
+```
+
+
+```{r}
+ols_gam <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = gam_split$train)
+
+summary(ols_gam)
+
+df6_college_pred <- df_college %>%
+  add_predictions(ols_gam) %>%
+  add_residuals(ols_gam) 
+
+ggplot(df6_college_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(df6_college_pred$resid),
+                            sd = sd(df6_college_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+ggplot(df6_college_pred,aes(pred, resid)) +
+  geom_point() + 
+  geom_smooth() +
+  labs(title = 'Simple linear regression model with 5 varaibles',
+       x = 'Predicted Out of state tuition', 
+       y = 'Residuals')
+```
+
+2. In the summary of OLS model on the training data, the R-squared is 0.7515 and p-value is less than 2.2e-16. We can say that this model explains approximately 75.15% of whole data and the p-value is less thatn significant level 0.05 so it is statistically significant. Also when we look into the p-value of all the variables including intercept, the vlaues are less than 0.05 and all are very close to 0. So we can say that all variables are statistically significant. Looking the histogram, most of the residuals are around 0 and the shape is bell-shaped. The smooth line draw a line close to 0 overall. We can say that the residuals are not correlated with fitted values overall.  However, with higher predicted values it seems to have negative relationship, but the number of predicted out of state tution values are relatively small in the higher part so we can say overall it is negligible. The result seems like OLS model explains the correlationship between the predictor and the response quite well.
+
+
+```{r}
+college_gam <- gam(Outstate ~ Private + bs(Room.Board, degree = 2, df = 3)+ lo(PhD)+ lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate), data = gam_split$train, na.action = na.fail)
+summary(college_gam)
+```
+3. As we conclude in the problem 2, we will use our appropriate flexible model to the data according to the variables. Basically we will use the same result model in the problem 2. We will use linear regression on Private, 3 degrees of freedom and 2 degrees polynomial on Room.Board and 5 degrees of freedom and 3 degrees polynomial on Expend. We also use local regression on other three predictors. From the summary of the model, when we see the p-value, we can say that all 6 variavles are less than 2.2e-16 so it is lower than significant level 0.05. Thus all varibles are statistiaclly significant. For explicit understanding, we will plot all the variables with response. 
+
+
+```{r}
+college_gam_terms <- preplot(college_gam, se = TRUE, rug = FALSE)
+
+## PhD
+data_frame(x = college_gam_terms$`lo(PhD)`$x,
+           y = college_gam_terms$`lo(PhD)`$y,
+           se.fit = college_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of state tuition",
+       subtitle = "Logal regression",
+       x = "PhD",
+       y = expression(f[1](PhD)))
+
+## perc.alumni
+data_frame(x = college_gam_terms$`lo(perc.alumni)`$x,
+           y = college_gam_terms$`lo(perc.alumni)`$y,
+           se.fit = college_gam_terms$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of state tuition",
+       subtitle = "Logal regression",
+       x = "perc.alumni",
+       y = expression(f[2](perc.alumni)))
+
+## Expend
+data_frame(x = college_gam_terms$`bs(Expend, degree = 3, df = 5)`$x,
+           y = college_gam_terms$`bs(Expend, degree = 3, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Expend, degree = 3, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of state tuition",
+       subtitle = "3rd degree polynomial",
+       x = "Expend",
+       y = expression(f[3](expend)))
+
+
+## Grad.Rate
+data_frame(x = college_gam_terms$`lo(Grad.Rate)`$x,
+           y = college_gam_terms$`lo(Grad.Rate)`$y,
+           se.fit = college_gam_terms$`lo(Grad.Rate)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of state tuition",
+       subtitle = "Logal regression",
+       x = "Grad.Rate",
+       y = expression(f[4](Grad.Rate)))
+
+## Private
+data_frame(x = college_gam_terms$Private$x,
+           y = college_gam_terms$Private$y,
+           se.fit = college_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out of sate Tuition",
+       x = "Private or not",
+       y = expression(f[5](private)))
+
+## Room.Board
+data_frame(x = college_gam_terms$`bs(Room.Board, degree = 2, df = 3)`$x,
+           y = college_gam_terms$`bs(Room.Board, degree = 2, df = 3)`$y,
+           se.fit = college_gam_terms$`bs(Room.Board, degree = 2, df = 3)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of state tuition",
+       subtitle = "2nd degree polynomial",
+       x = "Room.Board",
+       y = expression(f[6](Room.Board)))
+```
+
+All these six variables shows that each variables have substantial and significant relationship with out of state tuition. When we see the PhD graph, overall it has positive relationship with the out of state tuition. However, with lower percentage range, the slope is not large and draw almost horizontal line. So we can say that the relationship is weak in the lower percentage range and the 95% confidential interval is bit larger than higher percentage range. The percentage of alumni who donate graph show that thre is a positive relationshop and the line draws steadily uprising so it means the percentage of alumni influences out of state tuition modestly. In Instructional expenditure per student graph, we can say that there is positive relationship. But when the expenditure exceed 30000, the tuition is slightly going down and around 45000, the tuition goes up again. For graduation rate graph, overall there is positive relationship, so with high graduation rate, we can predic the high out of state tuition. But when you see lower 25% part higher 80% part the relationship become weak. When we see the private graph, we can see clear result and substantial positive relationship. The difference between private university and public university is substantially large. For room and board costs graph, we can observe that there is positive relationship. Like percentage of alumni graph, it is steadily uprising so it means that as room and board costs increase, the out of state tuition also increases. 
+
+
+```{r}
+mse_ols <- mse(ols_gam, gam_split$test)
+mse_gam <- mse(college_gam, gam_split$test)
+mse_ols
+mse_gam
+```
+
+4. The MSE of OLS is 4117111 and the MSE of GAM is 3885684. The MSE of GAM is 231427 smaller, so we can say that GAM model fits the data well. Contrast to OLS model, we include non-linear model into GAM model to predict reality more closely. This is why the MSE of GAM is lower than simple OLS model. 
+
+5. 
+```{r}
+gam_college <- gam(Outstate ~ Private + bs(Room.Board, degree = 2, df = 3)+ lo(PhD)+ lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate), data = gam_split$train, na.action = na.fail)
+
+# PhD
+gam_phd <- gam(Outstate ~ PhD + lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+gam_phd_no <- gam(Outstate ~ lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+# perc.alumni
+gam_perc <- gam(Outstate ~ lo(PhD) + perc.alumni + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+gam_perc_no<- gam(Outstate ~ lo(PhD) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+# Expend
+gam_expend <- gam(Outstate ~ lo(PhD) + lo(perc.alumni) + Expend + lo(Grad.Rate) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+gam_expend_no <- gam(Outstate ~ lo(PhD) + lo(perc.alumni) + lo(Grad.Rate) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+# Grad.Rate
+gam_grad <- gam(Outstate ~ lo(PhD) + lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + Grad.Rate + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+gam_grad_no <- gam(Outstate ~ lo(PhD) + lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + Private + bs(Room.Board, degree = 2, df = 3), data = gam_split$train, na.action = na.fail)
+
+# Room.Board
+gam_room <- gam(Outstate ~ lo(PhD) + lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate) + Private + Room.Board, data = gam_split$train, na.action = na.fail)
+
+gam_room_no <- gam(Outstate ~ lo(PhD) + lo(perc.alumni) + bs(Expend, degree = 3, df = 5) + lo(Grad.Rate) + Private, data = gam_split$train, na.action = na.fail)
+```
+
+```{r}
+# test PhD
+anova(gam_phd_no, gam_phd, gam_college,test="F")
+```
+
+None of two models has statistically significant level of p-value. Both are higher than significant level 0.05. Thus we can not say that PhD variables has linear relationship with out of state tuition. 
+
+
+```{r}
+# test perc.alumni
+anova(gam_perc_no ,gam_perc ,gam_college,test="F")
+```
+We can see the 2nd model has the statistically significiant p-value because it is close to 0 and 3rd model is not statistically significant. It means that perc.alumni has linear relationship with the out of state tuition. 
+
+```{r}
+# test Expend
+anova(gam_expend_no ,gam_expend ,gam_college,test="F")
+```
+
+We can see the 2nd and 3rd model has the statistically significiant p-value because both are close to 0. We then consider F-test lowest value and it means that expenditure has non-linear relationship. 
+
+```{r}
+# test Grad Rate
+anova(gam_grad_no ,gam_grad ,gam_college,test="F")
+```
+
+We can see the 2nd model p-value is close to 0, so it has the statistically signiciant p-value. The p-value of 3rd model is not statistically significant because it is greater than 0.05. We can say that graduation rate has linear relationship with the out of state tuition. 
+
+```{r}
+# test Room.Board
+anova(gam_room_no ,gam_room ,gam_college,test="F")
+```
+
+We can see the 2nd model p-value is close to 0, so  it has the statistically signiciant p-value. The p-value of 3rd model is not statistically significant because it is greater than 0.05. We can say that Room.Board has linear relationship with the out of state tuition. 
+
+Thus the predictor PhD and Expend has non-linear relationship with the response. 

@@ -1,0 +1,365 @@
+---
+title: "Problem set 7"
+author: "Jingyuan Zhou"
+date: "2/25/2017"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+sansfont: Garamond
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = TRUE)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(haven)
+library(nnet)
+
+#options(na.action = na.warn)
+set.seed(1234)
+
+theme_set(theme_minimal())
+
+biden_data <- read.csv(file="biden.csv",head=TRUE)
+
+```
+
+# Part 1: Sexy Joe Biden (redux)
+```{R biden 1}
+blm <- lm(biden ~ age + female + educ + dem + rep, data = biden_data)
+tidy(blm)
+
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse(blm, biden_data)
+```
+
+1.After fitting the linear regression model, the mse of the entire data set is 395.2702.
+
+2.After fitting a linear model using only 70% of the data, the mse of the testing dataset is 399.8303, which is a little bit larger than the previous value.
+```{R biden 2}
+biden_split <- resample_partition(biden_data, c(test = 0.3, train = 0.7))
+tlm <-lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+mse(tlm, biden_split$test)
+```
+
+```{R biden 3}
+mse_variable <- function(biden_data){
+  biden_split <- resample_partition(biden_data, c(test = 0.7, train = 0.3))
+  biden_train <- biden_split$train %>%
+    tbl_df()
+  biden_test <- biden_split$test %>%
+    tbl_df()
+
+  result <- mse(tlm <-lm(biden ~ age + female + educ + dem + rep, data = biden_split$train), biden_split$test)
+
+  return(result)
+}
+
+results <- unlist(rerun(100, mse_variable(biden_data)))
+summary(results)
+```
+3. Looking at the distribution of mean squared errors of 100 iterations, the 3rd quantile is 14 higher than the 1st quantile value. This shows that this approach is highly unstable and that validation estimates of the test MSE can be highly depending on the observations sampled into the training and test sets.
+
+```{R biden 4}
+loocv_data <- crossv_kfold(biden_data, k = nrow(biden_data))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+4.Using leave-one-out cross-validation (LOOCV) approach, we get a mean value that's close to 401.7, the average of MSEs of 100 iterations.
+```{R biden 5}
+cv10_data <- crossv_kfold(biden_data, k = 10)
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+mean(cv10_mse)
+```
+5.Using 10-fold cross validation, the mean mse we get is 398.1127, which is extremely close to the value that we get using leave-one-out cross-valiation approach.
+
+```{R biden 6}
+cv_mse <- c()
+for (i in 1:100){
+  cv10_data <- crossv_kfold(biden_data, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_mse[[i]] <- mean(cv10_mse)
+}
+mean(cv_mse)
+```
+6.Repeating the 10-fold cross-validation approach 100 times using 100 different splits of the observations into 10-folds, the mean mse we get is 398.0694, which is extremely similar to our results from 10-fold cross validation. Thus, in practice, we can safely depend on 10-fold cross validation to get the highest efficiency.
+
+```{R biden 7}
+# bootstrapped estimates of the parameter estimates and standard errors
+biden_boot <- biden_data%>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~  lm(biden ~ age + female + educ + dem + rep, data = .)),
+         coef = map(model, tidy))
+
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+tidy(blm)
+````
+Bootstrapped estimate of intercept is 58.69711076 with sd of 3.07088573, 
+original model estimate of intercept is 58.81125899 with sd of 3.1244366.
+
+Bootstrapped estimate of age is 0.04754621 with sd of 0.02929158,
+original model estimate of age is 0.04825892 with sd of 0.0282474.
+
+Bootstrapped estimate of dem is 15.43735011 with sd of 1.08848988,
+original model estimate of dem is 15.42425563 with sd of 1.0680327.
+
+Bootstrapped estimate of educ is -0.33391564 with sd of 0.19947285,
+original model estimate of educ is -0.34533479 with sd of 0.1947796.
+
+Bootstrapped estimate of female is 4.08901065 with sd of 0.94314140,
+original model estimate of female is 4.10323009	 with sd of 0.9482286.
+
+Bootstrapped estimate of rep is -15.85370969 with sd of 1.42368299,
+original model estimate of rep is -15.84950614 with sd of 1.3113624.
+
+By comparing values, we can see that both two approaches get very similar estimates. Original model generally has smaller standard deviations for these estimates than the bootstrapped estimates. The reason might be that the true relationship between biden scores and the parameters is indeed linear, and we do not make any assumptions of the distribution with this bootstrap approach. 
+
+
+# Part 2: College (bivariate)
+```{R College (bivariate)}
+c_data <- read.csv(file="College.csv",head=TRUE)
+glm <-  lm(Outstate~ ., data = c_data)
+tidy(glm)
+
+#the three parameters that I choose are : Apps, Room.Board,Accept
+lm1 <- lm(Outstate~ Room.Board, data = c_data)
+summary(lm1)
+lm2 <- lm(Outstate~ Apps, data = c_data)
+summary(lm2)
+lm3 <- lm(Outstate~ Accept, data = c_data)
+summary(lm3)
+```
+After fitting the three linear models, we get that the model with Room.Board has R^2 as 0.4281; Apps has R^2 as 0.002516; Accept has R^2 as 0.0006633. This shows that Room.Board is most likely to have a linear relationship, so we can start from that.
+
+```{R College RB}
+ggplot(c_data, aes(Room.Board, Outstate)) +
+  geom_point() + 
+  geom_smooth()
+  labs(title = 'Room.Board against Outstate')
+
+set.seed(1234)
+cv10_data <- crossv_kfold(c_data, k = 10)
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+cv_error_fold10
+  
+data_frame(terms = terms,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE, color = method)) +
+  geom_line() +
+  labs(title = "MSE estimates of Room.board",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error",
+       color = "CV Method")
+
+
+```
+Plotting Room.Board shows that there is indeed a linear relationship. We use cross-validation methods to adjustify this finding. From the plot, we see that 2-degree has the lowest mse, so we fit a 2-degree polynomial for this variable.
+
+```{R college RB 2}
+rb_2 <- lm(Outstate~ poly(Room.Board, 2), data = c_data)
+summary(rb_2)
+
+#plot
+ggplot(c_data, aes(x = Room.Board, y = Outstate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2)) +
+  labs(title = 'second order Room.Board against Outstate',x = 'Room.Board',y = 'Outstate') 
+```
+R^2 is 0.4317, which is slightly higher than previous linear model. We obtained a desired bivariate model for Room.Board.
+
+```{R college Apps}
+ggplot(c_data, aes(Apps, Outstate)) +
+  geom_point() + 
+  geom_smooth()+
+  labs(title = 'Apps against Outstate')
+
+set.seed(1234)
+cv10_data <- crossv_kfold(c_data, k = 10)
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ poly(Apps, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+cv_error_fold10
+  
+data_frame(terms = terms,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE, color = method)) +
+  geom_line() +
+  labs(title = "MSE estimates of Apps",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error",
+       color = "CV Method")
+```
+The plot shows that increase degrees of polynomial does not lead to a smaller mse. It seems that even thought the R^2 of the linear model is not very satisfying, it is the best we can do for a bivariate model with variable Apps.
+```{R college Accept}
+ggplot(c_data, aes(Accept, Outstate)) +
+  geom_point() + 
+  geom_smooth()+
+  labs(title = 'Accept against Outstate')
+
+set.seed(1234)
+cv10_data <- crossv_kfold(c_data, k = 10)
+
+cv_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ poly(Accept, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+cv_error_fold10
+  
+data_frame(terms = terms,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE, color = method)) +
+  geom_line() +
+  labs(title = "MSE estimates of Accept",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error",
+       color = "CV Method")
+```
+Similar to the situation of Apps, increasing the degrees of polynomial does not seem to give lower values for mse. Thus, the best bivariate model we can have with Apps is linear even though the R^2 value is very low.
+
+# Part 3: College (GAM)
+```{R College(GAM) 1}
+c_split <- resample_partition(c_data, c(test = 0.7, train = 0.3))
+```
+
+```{R College(GAM) 2}
+ols <- lm(Outstate~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = c_split$train)
+summary(ols)
+
+train <- as.data.frame(c_split$train)
+
+grid <- train %>%
+  add_predictions(ols)%>%
+  add_residuals(ols)
+
+#plot
+ggplot(grid, aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth() +
+  labs(title = 'Predicted value against residual of OLS',x = 'pred',y = 'resid')
+```
+2.The OLS model using the other six variables as predictors has a R^2 value of 0.7665. This shows that it explains 76.7% of the data. Besided, all six variable are statistically significant at 95% confidence interval because their pvalues are all less than 0.025. Visualizing the model fit through the prediction against residual plot, we can see that this model fit is reasonable but not satisfying.
+
+```{R College(GAM) 3}
+library(gam)
+c_gam <- gam(Outstate ~ Private +lo(perc.alumni) + lo(PhD) + lo(Expend) + lo(Grad.Rate) + lo(Room.Board) , data = train)
+tidy(c_gam)
+
+grid_gam <- train %>%
+  add_predictions(c_gam)%>%
+  add_residuals(c_gam)
+
+#plot
+ggplot(grid_gam, aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth()+
+  labs(title = 'Predicted value against residual of GAM',x = 'pred',y = 'resid')
+
+```
+3.With this GAM model, all variables have statistically significant p-values. Again, we visualize the model by plotting the predicted value against residual. We can see that the error is more stable through different predictions, so it's a better model than OLS.
+
+```{R College(GAM) 3 1}
+#top three statistically significant quantitative variables are lo(perc.alumni), lo(Expend), lo(PhD)
+# get graphs of each term
+ c_gam_terms <- preplot(c_gam, se = TRUE, rug = FALSE)
+
+## lo(Apps)
+data_frame(x = c_gam_terms$`lo(perc.alumni)`$x,
+           y = c_gam_terms$`lo(perc.alumni)`$y,
+           se.fit =  c_gam_terms$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       x = "perc.alumni",
+       y = expression(f[1](perc.alumni)))
+
+## lo(Room.Board)
+data_frame(x = c_gam_terms$`lo(Expend)`$x,
+           y = c_gam_terms$`lo(Expend)`$y,
+           se.fit =  c_gam_terms$`lo(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       x = "Expend",
+       y = expression(f[1](Expend)))
+
+
+## lo(Top10perc)
+data_frame(x = c_gam_terms$`lo(PhD)`$x,
+           y = c_gam_terms$`lo(PhD)`$y,
+           se.fit =  c_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       x = 'PhD',
+       y = expression(f[1](PhD)))
+
+```
+Top three statistically significant quantitative variables are lo(perc.alumni), lo(Expend), lo(PhD), so we graphed each of these three terms. As perc.alumni increases, the outstate value contiuously increase. As Expend increases, outstate firstly increases and then decreases as Expend reaches around 3000. The parabola shape suggests that there is a quadratic relationship between Expend and Outstate. As PhD increases, outstate continuously increases as well. It seems to be a linear relationship.
+
+
+```{R College(GAM) 4} 
+mse(ols, c_split$test) 
+mse(c_gam, c_split$test)
+```
+4.MSE value of GAM model on the test set has a slighter smaller value than the OLS model. This shows that the GAM model indeed is a better model than OLS.
+
+
+```{R College(GAM) 5}
+summary(c_gam)
+
+gam_li_e <-gam(Outstate ~ Private +lo(perc.alumni) + lo(PhD) + Expend + lo(Grad.Rate) + lo(Room.Board) , data = train)
+
+anova(gam_li_e, c_gam)
+```
+5.Looking at the ANOVA test, only lo(Expend) has a statistically significant result from the Nonparametric Effect. This might be due to the fact that the relationship between it and outstate is nonlinear as we have found out in the last part. Thus, we performed an ANOVA test between the original model and a GAM with linear Expend. In the test, the original model is more significant. This shows that Expend is indeed nonlinear. All the other variables should be linear.
