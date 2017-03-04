@@ -394,6 +394,167 @@ I hope I don't have to explain how to interpret a decision tree again, so here y
 
 #### 2. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 
-```{r svm_5}
 
+```{r svm_lin, warning = FALSE}
+calc_svm_auc <- function(svm, split, pred_value){
+  fitted <- predict(svm, as_tibble(split$test), decision.values = TRUE) %>%
+    attributes
+  auc <- auc(as_tibble(split$test)[[pred_value]], as.numeric(fitted$decision.values))
+  return(auc)
+}
+
+svm_lin <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'linear',
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svms <-  list(svm_lin)
+aucs <- calc_svm_auc(svm_lin, mhealth.split, 'vote96')
 ```
+
+```{r svm_2poly, warning = FALSE}
+svm_2poly <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', degree = 2,
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svms <- append(svms, svm_2poly)
+aucs <- append(aucs, calc_svm_auc(svm_2poly, mhealth.split, 'vote96'))
+```
+
+```{r svm_3poly, warning = FALSE}
+svm_3poly <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', # default degree is 3
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svms <- append(svms, svm_3poly)
+aucs <- append(aucs, calc_svm_auc(svm_3poly, mhealth.split, 'vote96'))
+```
+
+```{r svm_4poly}
+svm_4poly <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', degree = 4,
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svms <- append(svms, svm_4poly)
+aucs <- append(aucs, calc_svm_auc(svm_4poly, mhealth.split, 'vote96'))
+```
+
+```{r svm_radial}
+svm_rad <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'radial',
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svms <- append(svms, svm_rad)
+aucs <- append(aucs, calc_svm_auc(svm_rad, mhealth.split, 'vote96'))
+```
+
+```{r get_auc}
+svm_aucs <- data_frame(svm_types = c('Linear', '2nd Degree Polynomial', '3rd Degree Polynomial', 
+                                    '4th Degree Polynomial', 'Radial Kernel'),
+                      auc = aucs)
+
+svm_aucs %>%
+  ggplot(aes(svm_types, auc)) +
+    geom_col() +
+    labs(title = 'AUC for different SVM types',
+         subtitle = 'Each SVM has had the cost parameter tuned',
+         x = 'SVM Type',
+         y = 'AUC (Area Under ROC Curve)') +
+    theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+```
+
+According to the graph, the SVM with the 3rd degree polynomial results in the highest AUC, so we will select that as our best model. Let's go ahead and plot the ROC curve for this SVM and check out it's call.
+
+```{r svm_3poly_roc}
+fitted <- predict(svm_3poly, as_tibble(mhealth.split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(mhealth.split$test)$vote96, fitted$decision.values)
+plot(roc_line, main = 'ROC Curve for SVM with 3rd Degree polynomial')
+```
+
+```{r svm_3poly_call}
+svm_3poly
+```
+
+***
+
+# Part 3: OJ Simpson
+
+#### 1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
+
+For this problem we will opt for a pruned decision tree trained on a set of training data, where the degree of pruning will be controlled by minmizing the test error of a validation set. A single pruned decision tree is simple to interpret, as one can simply trace follow the decision making process visually. Additionally, as opposed to logistic regression, where one must contend with with choosing a threshold value, a decision tree quickly leads to predictions.
+
+```{r}
+df.oj <- read_csv('data/simpson.csv') %>%
+  mutate(guilt = factor(guilt),
+         dem = factor(dem),
+         rep = factor(rep),
+         ind = factor(ind),
+         female = factor(female),
+         black = factor(black),
+         hispanic = factor(hispanic),
+         educ = factor(educ))
+
+set.seed(1234) # For reproducibility
+oj.split <- resample_partition(df.oj, c(test = .3, train = .7))
+
+
+
+# Optimally Pruned Decision Tree
+ftree.oj <- tree(guilt ~ black + hispanic, data = oj.split$train, control = 
+                        tree.control(nobs = nrow(oj.split$train), mindev = 0))
+
+data_frame(nodes = 2:4,
+           err_rates = map_dbl(nodes, ~ 
+                               err.rate.tree(prune.tree(ftree.oj, best = .), oj.split$test))) %>%
+  {.$nodes[which.min(.$err_rates)]} %>%
+  prune.tree(ftree.oj, best = .) %>%
+  {.} -> ptree.oj
+
+
+# plot tree
+tree_data <- dendro_data(ptree.oj, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Pruned Decision Tree for OJ Guilt Belief',
+       subtitle = '(1 = Probably Guilty) (0 = Probably Not Guilty)')
+```
+
+The above decision tree predicts that if you are not black (`black = FALSE`), then you think that OJ is probably guilty (`1`), and if you are black, that you think he is probably not guilty (`0`). Additionally this tree, only results in about a `17%` error rate when run on the test set of our data, so race is definitely a powerful predictor of `guilt`.
+
+
+#### 2. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
+
+For this one I am also going to use a pruned decision tree. A lot of the variables in the OJ simpson dataset are binary, and thus the splitting utilized in a decision tree makes a lot of intuitive sense.
+
+```{r}
+# Optimally Pruned Decision Tree
+ftree.oj <- tree(guilt ~ ., data = oj.split$train, control = 
+                        tree.control(nobs = nrow(oj.split$train), mindev = 0))
+
+data_frame(nodes = 2:116,
+           err_rates = map_dbl(nodes, ~ 
+                               err.rate.tree(prune.tree(ftree.oj, best = .), oj.split$test))) %>%
+  {.$nodes[which.min(.$err_rates)]} %>%
+  prune.tree(ftree.oj, best = .) %>%
+  {.} -> ptree.oj
+
+
+# plot tree
+tree_data <- dendro_data(ptree.oj, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Pruned Decision Tree for OJ Guilt Belief',
+       subtitle = '(1 = Probably Guilty) (0 = Probably Not Guilty)')
+```
+
+The above decision tree still shows us that if you are black, you probably don't think OJ is guilty (`guilt = 0`). However, if you are not black, then if you are over 28.5 years old, then no matter what level of education you have, you think OJ is probably guilty (`guilt = 1`). If you are not black and between `19.5` and `28.5` years old then you also thnk OJ is probably guilty. If you are not black and are under `19.5` years old you think OJ is probably not guilty. (Note that in our dataset age only existed in the natural numbers, so when the decision tree says `age < 28.5` it is actually means $age\leq 28$.)
+
+Even though this pruned decision tree was made from a full tree built on all the possible predictors, the test error rate
