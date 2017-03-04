@@ -24,6 +24,7 @@ library(gbm)
 library(ggdendro)
 library(devtools)
 library(rcfss)
+library(e1071)
 knitr::opts_chunk$set(cache = TRUE,
                       message = FALSE,
                       warning = FALSE,
@@ -174,7 +175,7 @@ set.seed(1234) # Need reproducible bootstrap
                               ntree = 500))
 
 # Calculate rforest MSE
-mse_rforest <- calc_mse(biden_rforest, biden_split$test)
+mse_rforest <- calc_mse(biden_rforest, biden.split$test)
 
 # Get variable importance
 var_import <- importance(biden_rforest, type = 1)
@@ -284,7 +285,7 @@ shrink_df <- data_frame(shrinkage = seq(0.001, .1, length.out = 100),
                                          n.trees = 1000, interaction.depth = 3, shrinkage = .)),
            mse_boost = map_dbl(boosts, 
                            ~ mean((biden.split$test$data$biden - predict(., 
-                                                                         n.trees = num_trees,
+                                                                         n.trees = pred_trees,
                                                                   newdata = biden.split$test)) ^ 2)))
 shrink_df %>%
   ggplot(aes(shrinkage, mse_boost)) +
@@ -301,20 +302,63 @@ As we can see from the above graph, at least with our biden data, lowering the s
 
 #### 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 
-```{r}
-df.mh.10fold <- crossv_kfold(na.omit(df.mhealth), k = 10)
+```{r voter_trees}
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = 'class')
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+
+err_rate_comp = data_frame(tree_types = c('Standard Tree', 'Optimally Pruned', 'Bagged', 'Random Forest', 'Boosted'))
+
+df.mhealth <- df.mhealth %>%
+  mutate(vote96 = factor(vote96),
+         black = factor(black), 
+         female = factor(female),
+         married = factor(married))
+
+set.seed(1234)
+mhealth.split <- resample_partition(na.omit(df.mhealth), c(test = .3, train = .7))
 
 # Standard Decision Tree
-trees.mhealth <- map(df.mh.10fold$train, ~ tree(vote96 ~ ., data = .))
+tree.mhealth <- tree(vote96 ~ ., data = mhealth.split$train)
+test_error <- err.rate.tree(tree.mhealth, mhealth.split$test)
 
 # Optimally Pruned Decision Tree
+ftree.mhealth <- tree(vote96 ~ ., data = mhealth.split$train, control = 
+                        tree.control(nobs = nrow(mhealth.split$train), mindev = 0))
+
+data_frame(nodes = 2:107,
+           err_rates = map_dbl(nodes, ~ 
+                               err.rate.tree(prune.tree(ftree.mhealth, best = .), mhealth.split$test))) %>%
+  {which.min(.$err_rates)} %>%
+  prune.tree(ftree.mhealth, best = .) %>%
+  {.} -> ptree.mhealth
+
+test_error <- append(test_error, err.rate.tree(ptree.mhealth, mhealth.split$test))
 
 # Bagged Decision Tree
+set.seed(1234) # Need reproducible bootstrap
+mhealth_bag <- randomForest(vote96 ~ ., data = mhealth.split$train,
+                           mtry = length(df.mhealth) - 1, importance = TRUE,
+                           ntree = 500)
+test_error <- append(test_error, err.rate.tree(mhealth_bag, mhealth.split$test))
 
 # Random Forest
+mhealth_rforest <- randomForest(vote96 ~ ., 
+                               data = mhealth.split$train,
+                              importance = TRUE,
+                              ntree = 500)
+test_error <- append(test_error, err.rate.tree(mhealth_rforest, mhealth.split$test))
 
 # Boosted Decision Tree
-models.kfolds <- map(df.kfolds$train, ~ lm(biden ~ ., data = .))
-mse.kfolds <- map2_dbl(models.kfolds, df.kfolds$test, calc_mse)
-mse <- mean(mse.kfolds)
+mhealth_boost <- gbm(vote96 ~ ., 
+                   data = mhealth.split$train, distribution = 'huberized',
+                   n.trees = 5000, interaction.depth = int_depth)
+predict(mhealth_boost, mhealth.split$test$data, n.trees = 100, class = 'response')
 ```
