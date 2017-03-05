@@ -1,0 +1,12 @@
+---
+title: 'Perspectives on Computational Modeling: Problem Set #8'
+author: "Xingyun Wu"
+date: "2017/3/5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+li
+```
+
