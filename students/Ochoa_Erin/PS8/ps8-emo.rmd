@@ -13,7 +13,7 @@ output:
 knitr::opts_chunk$set(cache = TRUE)
 
 library(tidyverse)
-#library(forcats)
+library(forcats)
 library(broom)
 library(modelr)
 library(tree)
@@ -26,7 +26,7 @@ library(grid)
 library(pROC)
 library(gbm)
 library(ggdendro) #boltoff's fork
-library(ipred)
+
 
 options(digits = 3)
 set.seed(1234)
@@ -260,13 +260,39 @@ We use the bagging approach to analyze this data, computing 1000 trees using the
 
 set.seed(1234)
 
-bag_biden = bagging(biden ~ female + age + educ + dem + rep, biden_train70, nbagg=1000, coob=TRUE)
-pred_bag_biden = predict(bag_biden, biden_test30, type="prob")
-mse_bag_biden = mse(bag_biden, biden_test30)
+biden_bag_data_train = biden_train70 %>%
+                       select(-Party) %>%
+                       mutate_each(funs(as.factor(.)), dem, rep) %>%
+                       na.omit
+
+biden_bag_data_test = biden_test30 %>%
+                      select(-Party) %>%
+                      mutate_each(funs(as.factor(.)), dem, rep) %>%
+                      na.omit
+
+(bag_biden <- randomForest(biden ~ ., data = biden_bag_data_train, mtry = 5, ntree = 500, importance=TRUE))
+
+mse_bag_biden = mse(bag_biden, biden_bag_data_test)
 ```
 
-Using the validation data, the model returns a test MSE of `r mse_bag_biden`, which is higher than the MSE found when pruning the tree earlier (`r mse_test30_2`).
+Using the validation data, the model returns a test MSE of `r mse_bag_biden`, which is considerably higher than the MSE found when pruning the tree earlier (`r mse_test30_2`).
 
+Next, we review variable importance measures:
+
+```{r biden_bag_importance}
+
+bag_biden_importance = as.data.frame(importance(bag_biden))
+
+
+ggplot(bag_biden_importance, mapping=aes(x=rownames(bag_biden_importance), y=IncNodePurity)) +
+       geom_bar(stat="identity", aes(fill=IncNodePurity)) +
+       labs(title = "Average Increased Node Purity Across 500 Regression Trees",
+       subtitle = "Predicted Warmth Toward Joe Biden (2008)",
+       x = "Variable",
+       y = "Mean Increased Node Purity") + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
+```
 1. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
 
 1. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of $m$, the number of variables considered at each split, on the error rate obtained.

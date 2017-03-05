@@ -215,17 +215,61 @@ The tree indicates that for Democrats, age is the next most important variable a
 
 Pruning the tree reduces the MSE from 406.417 to 401.075.
 
+We use the bagging approach to analyze this data, computing 1000 trees using the training data and testing the resulting model with the validation set:
+
 ``` r
-bag_biden = bagging(biden ~ female + age + educ + dem + rep, biden_train70, nbagg=500, coob=TRUE)
-pred_bag_biden = predict(bag_biden, biden_test30, type="prob")
-mse_bag_biden = mse(bag_biden, biden_test30)
+set.seed(1234)
+
+biden_bag_data_train = biden_train70 %>%
+                       select(-Party) %>%
+                       mutate_each(funs(as.factor(.)), dem, rep) %>%
+                       na.omit
+
+biden_bag_data_test = biden_test30 %>%
+                      select(-Party) %>%
+                      mutate_each(funs(as.factor(.)), dem, rep) %>%
+                      na.omit
+
+(bag_biden <- randomForest(biden ~ ., data = biden_bag_data_train, mtry = 5, ntree = 500, importance=TRUE))
 ```
 
-1.  Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+    ## 
+    ## Call:
+    ##  randomForest(formula = biden ~ ., data = biden_bag_data_train,      mtry = 5, ntree = 500, importance = TRUE) 
+    ##                Type of random forest: regression
+    ##                      Number of trees: 500
+    ## No. of variables tried at each split: 5
+    ## 
+    ##           Mean of squared residuals: 494
+    ##                     % Var explained: 9.49
 
-2.  Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of *m*, the number of variables considered at each split, on the error rate obtained.
+``` r
+mse_bag_biden = mse(bag_biden, biden_bag_data_test)
+```
 
-3.  Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter *λ* influence the test MSE?
+Using the validation data, the model returns a test MSE of 484.358, which is considerably higher than the MSE found when pruning the tree earlier (401.075).
+
+Next, we review variable importance measures:
+
+``` r
+bag_biden_importance = as.data.frame(importance(bag_biden))
+
+
+ggplot(bag_biden_importance, mapping=aes(x=rownames(bag_biden_importance), y=IncNodePurity)) +
+       geom_bar(stat="identity", aes(fill=IncNodePurity)) +
+       labs(title = "Average Increased Node Purity Across 500 Regression Trees",
+       subtitle = "Predicted Warmth Toward Joe Biden (2008)",
+       x = "Variable",
+       y = "Mean Increased Node Purity") + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
+```
+
+![](ps8-emo_files/figure-markdown_github/biden_bag_importance-1.png) 1. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+
+1.  Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of *m*, the number of variables considered at each split, on the error rate obtained.
+
+2.  Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter *λ* influence the test MSE?
 
 Part 2: Modeling voter turnout \[3 points\]
 ===========================================
