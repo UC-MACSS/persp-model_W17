@@ -109,7 +109,7 @@ tibble(num_nodes = num_nodes, test_mse = test_mses) %>%
 
 According to the graph, the minimum test MSE occurs at `r summary(tree.opt)$size` terminal nodes in the tree. Clearly, pruning the tree helps reduce the test MSE. Indeed, the original tree had `r summary(tree.base)$size` terminal nodes and a test MSE of `r base_test_mse`, and yet the optimal tree has only `r summary(tree.opt)$size` terminal nodes and a test MSE of `r opt_test_mse`.
 
-Now let's plot the optimal tree.
+Now let's plot this optimal tree.
 
 ```{r biden_prune_121}
 # plot tree
@@ -156,12 +156,12 @@ data_frame(var = rownames(importance(biden_bag)),
   labs(title = "Predicting Biden Warmth Score",
        subtitle = "Bagging: 500 Trees",
        x = NULL,
-       y = "% Average Decrease in Out of Bag MSE")
+       y = "% Median Decrease in Out of Bag MSE")
 ```
 
 The test MSE for the bagging approach is `r mse_bag`. 
 
-Looking at the variable importance graph above, our x-axis is the median % decrease in OOB MSE. Clearly, splitting on `dem` reduces the OOB MSE by the greatest margin, at an `r var_import[4]`% median decrease. Splitting on `rep` also provides a decent median reduction, with  a `r var_import[5]`%. Splitting on the other variables, however, do not help reduce OOB MSE by much. Indeed, splitting on `female` and `educ` actually *increases* the OOB MSE by median values of `r -1 * var_import[1]` and `r -1 * var_import[3]` respectively, while splitting on `age` only provides a median decrease of the OOB MSE by `r var_import[2]`%.
+Looking at the variable importance graph above, our x-axis is the median % decrease in OOB MSE. Clearly, splitting on `dem` reduces the OOB MSE by the greatest margin, at an `r var_import[4]`% median decrease. Splitting on `rep` also provides a decent median reduction, with  a `r var_import[5]`%. Splitting on the other variables, however, do not help reduce OOB MSE by much. Indeed, splitting on `female` and `educ` actually *increases* the OOB MSE by median values of `r -1 * var_import[1]`% and `r -1 * var_import[3]`% respectively, while splitting on `age` only provides a median decrease of the OOB MSE by `r var_import[2]`%.
 
 *** 
 
@@ -187,7 +187,7 @@ data_frame(var = rownames(importance(biden_rforest)),
   ggplot(aes(var, MeanDecreaseGini)) +
   geom_col() +
   coord_flip() +
-  labs(title = "Predicting Biden Warmth Score",
+  labs(title = "Variable Importance Measures",
        subtitle = sprintf("Random Forest: 500 trees: %d randomly chosen predictors at each split", 
                           floor(sqrt(length(df.biden) - 1))),
        x = NULL,
@@ -210,12 +210,13 @@ wut %>%
   ggplot(aes(var, gini)) +
   geom_col(aes(fill = model), position = 'dodge') +
     coord_flip() +
-    labs(title = "Predicting Biden Warmth Score",
+    labs(title = "Variable Importance Measure Comparison",
          subtitle = "Random Forest vs. Bagging",
          x = NULL,
          y = "Average % decrease in the OOB MSE",
          fill = "Method")
 ```
+
 The random forest obtains a test MSE of `r mse_rforest`.
 
 As we can see, utilizing a random forest changes our variable importance measures somewhat. Previously, `dem` had a large median decrease at `~80%`. now it only has a `r var_import[4]`% median decrease for OOB MSE. The other variables all have had their median decrease in OOB MSE increase to varying levels. Indeed, `female` now provides a higher median decrease in OOB MSE than `age` and `educ`. Also noteworthy is the fact that `female` and `educ` actually have median *decreases* in OOB MSE rather than increases as there was previously.  
@@ -303,7 +304,7 @@ As we can see from the above graph, at least with our biden data, lowering the s
 #### 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 
 ```{r voter_trees}
-err.rate.tree <- function(model, data) {
+calc_tree_er <- function(model, data) {
   data <- as_tibble(data)
   response <- as.character(model$terms[[2]])
   
@@ -313,8 +314,11 @@ err.rate.tree <- function(model, data) {
   return(mean(pred != actual, na.rm = TRUE))
 }
 
-
-err_rate_comp = data_frame(tree_types = c('Standard Tree', 'Optimally Pruned', 'Bagged', 'Random Forest (500)', 'Random Forest (2500)'))
+calc_tree_auc <- function(tree, split, pred_value) {
+  pred <- as.vector(predict(tree, split$test, type = 'class'))
+  auc <- auc(as_tibble(split$test)[[pred_value]], as.numeric(as.vector(pred)))
+  return(auc)
+}
 
 df.mhealth <- df.mhealth %>%
   mutate(vote96 = factor(vote96),
@@ -325,9 +329,13 @@ df.mhealth <- df.mhealth %>%
 set.seed(1234)
 mhealth.split <- resample_partition(na.omit(df.mhealth), c(test = .3, train = .7))
 
+
+tree_comp <-  data_frame(tree_types = c('Standard Tree', 'Optimally Pruned', 'Bagged', 'Random Forest (500)', 'Random Forest (2500)'))
+trees <-  list()
+
 # Standard Decision Tree
 tree.mhealth <- tree(vote96 ~ ., data = mhealth.split$train)
-test_error <- err.rate.tree(tree.mhealth, mhealth.split$test)
+trees <- rbind(trees, list(tree.mhealth))
 
 # Optimally Pruned Decision Tree
 ftree.mhealth <- tree(vote96 ~ ., data = mhealth.split$train, control = 
@@ -339,22 +347,22 @@ data_frame(nodes = 2:107,
   {.$nodes[which.min(.$err_rates)]} %>%
   prune.tree(ftree.mhealth, best = .) %>%
   {.} -> ptree.mhealth
+trees <- rbind(trees, list(ptree.mhealth))
 
-test_error <- append(test_error, err.rate.tree(ptree.mhealth, mhealth.split$test))
 
 # Bagged Decision Tree
 set.seed(1234) # Need reproducible bootstrap
 mhealth_bag <- randomForest(vote96 ~ ., data = mhealth.split$train,
                            mtry = length(df.mhealth) - 1, importance = TRUE,
                            ntree = 500)
-test_error <- append(test_error, err.rate.tree(mhealth_bag, mhealth.split$test))
+trees <- rbind(trees, list(mhealth_bag))
 
 # Random Forest 500 Trees
 mhealth_rforest <- randomForest(vote96 ~ ., 
                                data = mhealth.split$train,
                               importance = TRUE,
                               ntree = 500)
-test_error <- append(test_error, err.rate.tree(mhealth_rforest, mhealth.split$test))
+trees <- rbind(trees, list(mhealth_rforest))
 
 # Random Forest 2500 Trees
 mhealth_rforest2 <- randomForest(vote96 ~ ., 
@@ -362,19 +370,35 @@ mhealth_rforest2 <- randomForest(vote96 ~ .,
                               importance = TRUE,
                               ntree = 2500)
 
-test_error <- append(test_error, err.rate.tree(mhealth_rforest2, mhealth.split$test))
+trees <- rbind(trees, list(mhealth_rforest2))
 
-err_rate_comp %>%
- mutate(test_error = test_error) %>%
+tree_comp <- tree_comp %>%
+ mutate(trees = trees,
+        test_error = map_dbl(trees, ~ calc_tree_er(., mhealth.split$test)),
+        auc = map_dbl(trees, ~ calc_tree_auc(., mhealth.split, 'vote96')))
+
+tree_comp %>%
   ggplot(aes(tree_types, test_error)) +
     geom_col() + 
     theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
     labs(title = 'Test Set Error Rate for different Decision Tree Types', 
          x = 'Decision Tree Types',
          y = 'Test Error Rate')
+
+tree_comp %>%
+  ggplot(aes(tree_types, auc)) +
+    geom_col() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+    labs(title = 'AUC for different Decision Tree Types',
+         x = 'Decision Tree Types',
+         y = 'AUC (Area Under ROC Curve')
+
+# tree_comp %>%
+#   select(-trees) %>%
+#   knitr::kable(tree_comp, digits = 2, align = 'c')
 ```
 
-Looking at the graph then, the Optimally Pruned Tree appears to have the lowest test MSE, so we will use that. Additionally, it is relatively straightforward to interpret a single pruned decision tree. Let's go ahead and plot it and see what we think.
+Looking at the above 2 graphs then, the Optimally Pruned Tree appears to have the lowest test MSE and the highest AUC, so we will use that. Additionally, it is relatively straightforward to interpret a single pruned decision tree. Let's go ahead and plot it and see what we think.
 
 ```{r tree_interpret}
 tree_data <- dendro_data(ptree.mhealth, type = 'uniform')
@@ -403,49 +427,57 @@ calc_svm_auc <- function(svm, split, pred_value){
   return(auc)
 }
 
+calc_svm_er <- function(svm, split, pred_value){
+  pred <- as.numeric(as.vector(
+    predict(svm, as_tibble(split$test, decision.values = TRUE))))
+  
+  actual <- as_tibble(split$test)[[pred_value]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+svms <-  list()
+
 svm_lin <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
                      kernel = 'linear',
                      ranges = list(cost = c(.1, 1, 10, 100, 1000)))
-svms <-  list(svm_lin)
-aucs <- calc_svm_auc(svm_lin, mhealth.split, 'vote96')
+svms <- append(svms, list(svm_lin))
 ```
 
 ```{r svm_2poly, warning = FALSE}
 svm_2poly <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
                      kernel = 'polynomial', degree = 2,
                      ranges = list(cost = c(.1, 1, 10, 100, 1000)))
-svms <- append(svms, svm_2poly)
-aucs <- append(aucs, calc_svm_auc(svm_2poly, mhealth.split, 'vote96'))
+svms <- append(svms, list(svm_2poly))
 ```
 
 ```{r svm_3poly, warning = FALSE}
 svm_3poly <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
                      kernel = 'polynomial', # default degree is 3
                      ranges = list(cost = c(.1, 1, 10, 100, 1000)))
-svms <- append(svms, svm_3poly)
-aucs <- append(aucs, calc_svm_auc(svm_3poly, mhealth.split, 'vote96'))
+svms <- append(svms, list(svm_3poly))
 ```
 
 ```{r svm_4poly}
 svm_4poly <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
                      kernel = 'polynomial', degree = 4,
                      ranges = list(cost = c(.1, 1, 10, 100, 1000)))
-svms <- append(svms, svm_4poly)
-aucs <- append(aucs, calc_svm_auc(svm_4poly, mhealth.split, 'vote96'))
+svms <- append(svms, list(svm_4poly))
 ```
 
 ```{r svm_radial}
 svm_rad <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
                      kernel = 'radial',
                      ranges = list(cost = c(.1, 1, 10, 100, 1000)))
-svms <- append(svms, svm_rad)
-aucs <- append(aucs, calc_svm_auc(svm_rad, mhealth.split, 'vote96'))
+svms <- append(svms, list(svm_rad))
 ```
 
 ```{r get_auc}
 svm_aucs <- data_frame(svm_types = c('Linear', '2nd Degree Polynomial', '3rd Degree Polynomial', 
                                     '4th Degree Polynomial', 'Radial Kernel'),
-                      auc = aucs)
+                       svms = svms,
+                      auc = map_dbl(svms, ~ calc_svm_auc(., mhealth.split, 'vote96')),
+                      test_err = map_dbl(svms, ~ calc_svm_er(., mhealth.split, 'vote96')))
 
 svm_aucs %>%
   ggplot(aes(svm_types, auc)) +
@@ -455,9 +487,18 @@ svm_aucs %>%
          x = 'SVM Type',
          y = 'AUC (Area Under ROC Curve)') +
     theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+svm_aucs %>%
+  ggplot(aes(svm_types, test_err)) +
+    geom_col() +
+    labs(title = 'Test Error Rate for different SVM types',
+         subtitle = 'Each SVM has had the cost parameter tuned',
+         x = 'SVM Type',
+         y = 'Test Error Rate') +
+    theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
 ```
 
-According to the graph, the SVM with the 3rd degree polynomial results in the highest AUC, so we will select that as our best model. Let's go ahead and plot the ROC curve for this SVM and check out it's call.
+According to the graphs, the SVM with the 3rd degree polynomial results in the highest AUC and the lowest test error rate, so we will select that as our best model. Let's go ahead and plot the ROC curve for this SVM and check out it's call.
 
 ```{r svm_3poly_roc}
 fitted <- predict(svm_3poly, as_tibble(mhealth.split$test), decision.values = TRUE) %>%
@@ -477,7 +518,7 @@ svm_3poly
 
 #### 1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
 
-For this problem we will opt for a pruned decision tree trained on a set of training data, where the degree of pruning will be controlled by minmizing the test error of a validation set. A single pruned decision tree is simple to interpret, as one can simply trace follow the decision making process visually. Additionally, as opposed to logistic regression, where one must contend with with choosing a threshold value, a decision tree quickly leads to predictions.
+For this problem we will opt for a pruned decision tree trained on a set of training data, where the degree of pruning will be controlled by minmizing the test error of a validation set. A single pruned decision tree is simple to interpret, as one can simply trace follow the decision making process visually. Additionally, as opposed to logistic regression, where one must contend with with choosing a threshold value, a decision tree quickly leads to predictions. (Although to be fair, AUC for logistic regression does not have to contend with setting any *one* threshold value.).
 
 ```{r}
 df.oj <- read_csv('data/simpson.csv') %>%
@@ -517,7 +558,7 @@ ggplot(segment(tree_data)) +
   geom_text(data = leaf_label(tree_data), 
             aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
   theme_dendro() +
-  labs(title = 'Pruned Decision Tree for OJ Guilt Belief',
+  labs(title = 'Pruned Decision Tree for OJ Guilt Belief (Race Only)',
        subtitle = '(1 = Probably Guilty) (0 = Probably Not Guilty)')
 ```
 
@@ -557,4 +598,4 @@ ggplot(segment(tree_data)) +
 
 The above decision tree still shows us that if you are black, you probably don't think OJ is guilty (`guilt = 0`). However, if you are not black, then if you are over 28.5 years old, then no matter what level of education you have, you think OJ is probably guilty (`guilt = 1`). If you are not black and between `19.5` and `28.5` years old then you also thnk OJ is probably guilty. If you are not black and are under `19.5` years old you think OJ is probably not guilty. (Note that in our dataset age only existed in the natural numbers, so when the decision tree says `age < 28.5` it is actually means $age\leq 28$.)
 
-Even though this pruned decision tree was made from a full tree built on all the possible predictors, the test error rate
+Even though this pruned decision tree was made from a full tree built on all the possible predictors, the test error rate. Is still `16.8%`, only `.2%` lower than the decision tree built on only `black`, a single predictor!
