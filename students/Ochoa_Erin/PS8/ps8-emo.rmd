@@ -254,14 +254,18 @@ The tree indicates that for Democrats, age is the next most important variable a
 
 Pruning the tree reduces the MSE from `r mse_test30` to `r mse_test30_2`.
 
+We use the bagging approach to analyze this data, computing 1000 trees using the training data and testing the resulting model with the validation set:
 
 ```{r bagging_biden}
 
-bag_biden = bagging(biden ~ female + age + educ + dem + rep, biden_train70, nbagg=500, coob=TRUE)
+set.seed(1234)
+
+bag_biden = bagging(biden ~ female + age + educ + dem + rep, biden_train70, nbagg=1000, coob=TRUE)
 pred_bag_biden = predict(bag_biden, biden_test30, type="prob")
 mse_bag_biden = mse(bag_biden, biden_test30)
 ```
 
+Using the validation data, the model returns a test MSE of `r mse_bag_biden`, which is higher than the MSE found when pruning the tree earlier (`r mse_test30_2`).
 
 1. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
 
