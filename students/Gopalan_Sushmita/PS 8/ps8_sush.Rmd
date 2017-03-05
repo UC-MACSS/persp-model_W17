@@ -1,0 +1,303 @@
+---
+title: "Problem set #7: Re-Sampling and Non-Linearity"
+author: "Sushmita V Gopalan"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(titanic)
+#library(rcfss)
+library(pROC)
+library(gbm)
+library(caret)
+# to get the tree graphs with the labels and values, use the forked
+# version of ggdendro
+# devtools::install_github("bensoltoff/ggdendro")
+library(ggdendro)
+
+theme_set(theme_minimal())
+
+# read in data
+biden <- read_csv("biden.csv")
+```
+
+## Question 1
+
+[1] Split the data into a training set (70%) and a validation set (30%). Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.
+
+```{r}
+set.seed(1234) # For reproducibility
+biden.split <- resample_partition(biden, c(test = .3, train = .7))
+```
+
+**********************************************************
+
+[2] Fit a decision tree to the training data, with biden as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?
+
+```{r}
+# estimate model
+biden_tree <- tree(biden ~ ., data = biden.split$train)
+
+# plot tree
+tree_data <- dendro_data(biden_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Decision Tree for Biden Scores',
+       subtitle = 'All predictors, Default Controls')
+
+# function to get MSE
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse_biden_1 = mse(biden_tree,biden.split$test)
+leaf_vals <- leaf_label(tree_data)$yval
+ptree
+
+```
+
+Having only default tree controls in the model makes it straightforward to interpret. Only 'dem' and 'rep' were used to predict Biden Score. 
+
+If the value of 'dem' > 0.5, in our case, dem = 1, i.e. a person is a democrat, the model predicts a Biden score of r leaf_vals[3] 
+
+If the value of dem is < 0.5, i.e. the person is either a Republican or neither, we go down the left side of the decision tree. Here we see that if rep > 0.5, we go down the right side of that sub-tree to find that the model predicts a Biden value of r leaf_vals[2]
+We go down the left of side of the sub-tree to find that, for individuals who are neither Republican nor Democrat, our model predicts a Biden score of r leaf_vals[1]
+
+The value of the MSE is r mse_biden_1
+
+**********************************************************
+[3] Now fit another tree to the training data with the following control options:
+
+tree(control = tree.control(nobs = # number of rows in the training set,mindev = 0))
+
+Use cross-validation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?
+
+```{r}
+set.seed(1234) # For reproducibility
+
+biden_tree_2 <- tree(biden ~ ., data = biden.split$train,
+     control = tree.control(nobs = nrow(biden.split$train),
+                            mindev = 0))
+mod <- biden_tree_2
+
+mse_biden_2 <- mse(biden_tree_2, biden.split$test)
+
+num_nodes <- 2:25
+pruned_trees <- map(num_nodes, prune.tree, tree = biden_tree_2, k = NULL)
+test_mses <- map_dbl(pruned_trees, mse, data = biden.split$test)
+
+tree.opt <- pruned_trees[[which.min(test_mses)]]
+opt_test_mse <- mse(tree.opt, biden.split$test)
+
+tibble(num_nodes = num_nodes, test_mse = test_mses) %>%
+  ggplot(aes(x = num_nodes, y = test_mse)) +
+  geom_line() + 
+  labs(title = 'Test MSE for Different Numbers of Terminal Nodes',
+       subtitle = '(Test MSE calculated on Test data defined in Step 1)',
+       x = 'Terminal Nodes in Tree',
+       y = 'Test MSE')
+```
+ 
+Using cross validation, we find from this graph that the MSE is lowest for a tree with 11 nodes. Pruning to 11 nodes reduces the MSE from r mse_biden_2 to r mse_pruned. Here's what a plot of the tree with 11 nodes looks like -
+ 
+```{r}
+biden_pruned <- prune.tree(biden_tree_2, best=11)
+mse_pruned = mse(biden_pruned,biden.split$test)
+
+plot(biden_pruned, col='purple', lwd=2.5)
+title("Best 11 Regression Tree for Biden Scores\n")
+text(biden_pruned, col='red')
+```
+
+The model suggests that for democrats, age is the most important predictor of Biden scores, followed by education. Gender does not appear to influence Biden scores.
+
+For Republicans too, gender does not appear to be important in predicting Biden score. Age is again, the most important predictor. In the 44-47 age group, education also influences Biden scores.
+
+For the unaffiliated, gender is an important predictor. For women, education and age influence Biden scores, but they do not for men.
+
+**********************************************************
+[4] Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+
+
+```{r}
+# prep data for bagging
+# defining new datasets for train and test because the 'select' method
+# can't be applied to an object of class 'resample'
+
+df = read.csv('biden.csv')
+df$Party[df$dem == 1] = 'Democrat'
+df$Party[df$dem == 0 & df$rep == 0] = 'No Affiliation'
+df$Party[df$rep == 1] = 'Republican'
+
+set.seed(1234)
+
+biden_split7030 = resample_partition(df, c(test = 0.3, train = 0.7))
+biden_train70 = biden_split7030$train %>%
+                tbl_df()
+biden_test30 = biden_split7030$test %>%
+               tbl_df()
+```
+
+# bagging
+```{r}
+set.seed(1234)
+
+biden_bag_data_train = biden_train70 %>%
+                       select(-Party) %>%
+                       mutate_each(funs(as.factor(.)), dem, rep) %>%
+                       na.omit
+
+biden_bag_data_test = biden_test30 %>%
+                      select(-Party) %>%
+                      mutate_each(funs(as.factor(.)), dem, rep) %>%
+                      na.omit
+
+# estimate model
+(bag_biden <- randomForest(biden ~ ., data = biden_bag_data_train, mtry = 5, ntree = 500, importance=TRUE))
+# find MSE
+mse_bag_biden = mse(bag_biden, biden_bag_data_test)
+
+``` 
+
+The MSE for the model with bagging is r mse_bag_biden , which is much higher than we had for the pruned tree with r mse_pruned 
+The % variation explained is also very low, at 8.91%.
+
+```{r}
+set.seed(1234)
+
+bag_biden_importance = as.data.frame(importance(bag_biden))
+
+ggplot(bag_biden_importance, mapping=aes(x=rownames(bag_biden_importance), y=IncNodePurity)) +
+       geom_bar(stat="identity", aes(fill=IncNodePurity)) +
+       labs(title = "Average Increased Node Purity Across 500 Regression Trees",
+       subtitle = "Predicted Warmth Toward Joe Biden (2008)",
+       x = "Variable",
+       y = "Mean Increased Node Purity") + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
+```
+
+As per the above graph, we see that 'age' and 'dem' are the variables which produce the highest average decreases in node impurity across 500 bagged regression trees. The bagging model uses bootstrapping to create 500 different training datasets, while the pruned tree uses only one set of training data. The bagging model looks at the mean variance across all the bootstrapped trees and estimates that 'age' and 'dem' are the most indicative variables in the model, while 'female' is the least.
+
+**********************************************************
+
+[5] Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of m, the number of variables considered at each split, on the error rate obtained.
+
+```{r}
+# estimate RF model
+set.seed(1234)
+
+(biden_rf <- randomForest(biden ~ ., data = biden_bag_data_train,mtry =2,ntree = 500))
+mse_rf = mse(biden_rf, biden_bag_data_test)
+
+# try to plot a graph that shows MSE is minimum for mtry = 2
+``` 
+
+```{r}
+set.seed(1234)
+
+rf_biden_importance = as.data.frame(importance(biden_rf))
+
+ggplot(rf_biden_importance, mapping=aes(x=rownames(rf_biden_importance), y=IncNodePurity)) +
+       geom_bar(stat="identity", aes(fill=IncNodePurity)) +
+       labs(title = "Average Increased Node Purity Across 500 Regression Trees",
+       subtitle = "Predicted Warmth Toward Joe Biden (2008)",
+       x = "Variable",
+       y = "Mean Increased Node Purity") + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
+```
+
+The MSE for this model is r mse_rf which we see is much less than r mse_bag_biden.
+
+```{r}
+# alternate plot and table for the same thing as above 
+varImpPlot(biden_rf)
+importance(biden_rf)
+```
+
+The random forest model with mtry = 2 suggests that 'dem' and 'rep' are the most important variables in the model, i.e. they yield the highest decreases in node impurity. 
+
+Random forests offer an improvement over bagged trees by 'decorrelating' the trees. We still build a number of decision trees on bootstrapped training samples. In a random forest model, each time a split in a tree is considered, a random sample of m predictors is chosen as split candidates from the full set of p predictors. We restrict ourselves to a random subset m of all predictors in order to avoid the possibility of all trees looking extremely similar like in a bagged model, where all the trees would end up using the same strongest predictor in the top split. In such a situation, averaging across highly correlated predictions would not lead to a substantial decrease in variance. In the random forest model, we overcome this issue by restricting each split to only a subset of predictors - basically, about (p-m)/p of the splits wouldn't even consider the strongest predictor, allowing the influence of the other predictors to become discernible. Conventionally, using m approximately equal to the square root of p leads to a reduction in both test error and OOB error of bagging.
+
+[6] Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter λ influence the test MSE?
+
+```{r}
+# plot all models
+set.seed(1234)
+biden_models <- list("Bagging" = randomForest(biden ~ ., data = biden_bag_data_train,
+                                                mtry = 5, ntree = 500),
+                       "Random Forest (m=2)" = randomForest(biden ~ ., data = biden_bag_data_train,
+                                                 mtry = 2, ntree = 500),
+                       "boosting_depth1" = gbm(as.numeric(biden) - 1 ~ .,
+                                               data = biden_bag_data_train,
+                                               n.trees = 10000, interaction.depth = 1),
+                       "boosting_depth2" = gbm(as.numeric(biden) - 1 ~ .,
+                                               data = biden_bag_data_train,
+                                               n.trees = 10000, interaction.depth = 2),
+                       "boosting_depth4" = gbm(as.numeric(biden) - 1 ~ .,
+                                               data = biden_bag_data_train,
+                                               n.trees = 10000, interaction.depth = 4))
+```
+
+```{r}
+data_frame(depth = c(1, 2, 4),
+           model = biden_models[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) %>%
+  select(-model) %>%
+  knitr::kable(caption = "Optimal number of boosting iterations",
+               col.names = c("Depth", "Optimal number of iterations"))
+```
+
+```{r}
+set.seed(1234)
+
+biden_boost_1 = gbm(as.numeric(biden) - 1 ~ .,
+                                               data = biden_bag_data_train,
+                                               n.trees = 3293, interaction.depth = 1)
+
+biden_boost_2 = gbm(as.numeric(biden) - 1 ~ .,
+                                               data = biden_bag_data_train,
+                                               n.trees = 2620, interaction.depth = 2)
+
+biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
+                                               data = biden_bag_data_train,
+                                               n.trees = 2103, interaction.depth = 4)
+```
+
+```{r}
+# get MSE
+
+yhat=predict(biden_tree ,newdata=biden.split$test)
+boston.test=biden.split$test["biden"]
+yhat.boost=predict(biden_boost_1,newdata=biden_bag_data_test, n.trees=3293)
+mean((yhat.boost -boston.test)^2)
+ 
+
+mse_1 = mse(biden_boost_1,biden_bag_data_test)
+mse_2 = mse(biden_boost_2,biden_bag_data_test)
+mse_4 = mse(biden_boost_4,biden_bag_data_test)
+``` 
