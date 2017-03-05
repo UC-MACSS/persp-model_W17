@@ -1,0 +1,354 @@
+---
+title: "Homework 7 "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(ggplot2)
+library(modelr)
+library(dplyr)
+library(broom)
+library(ISLR)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Part 1
+
+```{r 1, echo=TRUE}
+biden <- read_csv("data/biden.csv")
+fit <- lm(biden ~ age + female + educ + dem + rep, data=biden)
+# summary(fit) 
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+mse(fit, biden)
+```
+
+1. From the simple linear regression I get a MSE of 395.2702.
+
+```{r 2, echo=TRUE}
+set.seed(1234)
+biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+
+train_model <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+summary(train_model)
+mse(train_model, biden_split$test)
+```
+
+2. From my 30/70 testing/training split I get a MSE of 399.8303.  This is higher than my previous MSE using all the data to train the model and testing on the same dataset.  This makes sense to me because I suspect since we were previously training and testing on the same dataset the model overfitted to our datapoints.
+
+
+```{r 3, echo=TRUE}
+mses <- c()
+for (i in 1:100){
+  biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+
+  train_model <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+  # summary(train_model)
+  mses[i] <- mse(train_model, biden_split$test)
+  # print(paste(i, mse(train_model, biden_split$test)))
+}
+#sd(mses)
+#min(mses)
+#max(mses)
+mean(mses)
+```
+3. The average MSE from the 100 splits I did was 398.649.  This was close to my previous result but the this was probably by chance.  The min MSE I got was 347.8719, the max was 451.7266 and the sd was 23.46352.
+
+
+
+```{r 4, echo=TRUE, warning=FALSE}
+library(modelr)
+library(ISLR)
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+suppressWarnings(suppressMessages(library(tidyverse)))
+library(modelr)
+library(broom)
+library(forcats)
+suppressWarnings(suppressMessages(library(pROC)))
+loocv_data <- crossv_kfold(biden, k = nrow(biden))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = biden))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+#min(loocv_mse)
+#max(loocv_mse)
+#sd(loocv_mse)
+#hist(loocv_mse)
+mean(loocv_mse)
+```
+4. Using LOOCV I got an average MSE of 395.2702.  This is pretty close to what I got for my 100 simulations.  The min MSE was 0.0005315541, max was 5707.195 and SD was 620.8885.  Thus the MSE seem more spread out compared to my 100 simulations.  The result did take a little longer to compute compared to my 100 simulations but not by much.  Overall my data size is not too big with only 1,807 observations.
+
+```{r 5, echo=TRUE}
+cv10_data <- crossv_kfold(biden, k = 10)
+
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+#cv10_mse
+#min(cv10_mse)
+#max(cv10_mse)
+#sd(cv10_mse)
+mean(cv10_mse)
+```
+5. Using the 10-fold cross validation approcah I get a average MSE of 399.096.  This is close to my previous results.  My min MSE is 347, max Is 454 and SD is 35.  This distribution of MSE is a lot tigher than my previous LOOCV approach.
+
+
+```{r 6, echo=TRUE}
+mses <- c()
+
+for (i in 1:100){
+  biden_shuffle <- biden[sample(nrow(biden)),]
+  cv10_data <- crossv_kfold(biden_shuffle, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  mses[i] <- mean(cv10_mse)
+}
+#mses
+#min(cv10_mse)
+#max(cv10_mse)
+#sd(cv10_mse)
+mean(cv10_mse)
+```
+
+6.  After running 100 simulations the average MSE I recieved was 398.2413.  This is very close to the 10-fold cross validation approach I got in the previous example.  This is expected.  The standard deviation of MSEs is also similar at 26.523.
+
+
+```{r 7-bootstrap, echo=TRUE}
+# bootstrapped estimates of the parameter estimates and standard errors
+biden_boot <- biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ age + female + educ + dem + rep, data = .)),
+         coef = map(model, tidy))
+
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+
+fit <- lm(biden ~ age + female + educ + dem + rep, data=biden)
+summary(fit) 
+```
+7. I performed the bootstrap with 1000 observations and got the above beta values and se.  I was kind of surpised how closely this allgins to the values from the model without bootstrapping.  In general the beta and se values are within 0.1.
+
+## Part 2
+
+```{r 2. college bivaraite}
+college <- read_csv("data/college.csv")
+#glimpse(college)
+#summary(college)
+
+model1 <- lm(Outstate ~ Top10perc, data=college)
+model2 <- lm(Outstate ~ Enroll, data=college)
+model3 <- lm(Outstate ~ Expend, data=college)
+#summary(model1)
+
+# mses <- c()
+# college_split <- resample_partition(college, c(test = 0.3, train = 0.7))
+# train_model <- lm(Outstate ~ Expend, data=college_split$train)
+# summary(train_model)
+# mse(train_model, biden_split$test)
+
+# model 1 lm(Outstate ~ Expend, data = .)
+for (i in 1:100){
+  college_shuffle <- college[sample(nrow(college)),]
+  cv10_data <- crossv_kfold(college_shuffle, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ Expend + I(Expend^2) + I(Expend^3) + I(Expend^4) + I(Expend^5), data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  mses[i] <- mean(cv10_mse)
+}
+
+# mean(cv10_mse)
+library(ggplot2)
+
+x <- c(1, 2, 3, 4, 5)
+y <- c(9146056, 6904907, 6495791, 6596600, 7398928)
+polynomial <- data.frame(x, y)
+ggplot(polynomial, aes(x=x, y=y)) + geom_point() + labs(title = "Polynomial regression of Out State Tution vs Polynomial of Expend",
+       x = "Highest degree polynomial",
+       y = "Average MSE"
+)
+```
+
+
+I created serveral polynomial bi-varaite models and validated them by using a 100 iterations of a 10-fold validation approach using the Mean Squared Error as my validation function.  The models I built were:
+
+1. linear: $outstate$ = $\beta_1 * Expend$ + $\epsilon$, $MSE$ = 9,146,056
+2. $outstate$ = $\beta_1 * Expend$ + $\beta_2 * Expend^2$ + $\epsilon$, $MSE$ = 6,904,907 
+3. $outstate$ = $\beta_1 * Expend$ + $\beta_2 * Expend^2$ + $\beta_3 * Expend^3$ + $\epsilon$, $MSE$ = 6,495,791 
+4. $outstate$ = $\beta_1 * Expend$ + $\beta_2 * Expend^2$ + $\beta_3 * Expend^3$ + $\beta_4 * Expend^4$ + $\epsilon$, $MSE$ = 6,596,600 
+5. $outstate$ = $\beta_1 * Expend$ + $\beta_2 * Expend^2$ + $\beta_3 * Expend^3$ + $\beta_4 * Expend^4$ + $\beta_5 * Expend^5$ + $\epsilon$, $MSE$ = 7,398,928 
+    
+From this analysis I showed that the relationship between out of state tuition and expenditures is not linear.  From the polynomial functions I had the lowest MSE was from the 3rd degree polynomial.  This makes intuitive sense to me and shows that the increase in out of state tuition is not equal for all 1 unit increases in expenditures.  There is probably some economies of scale.
+
+
+```{r 2. college step-function}
+college <- read_csv("data/college.csv")
+#glimpse(college)
+#summary(college)
+
+
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+for (i in 1:100){
+  
+  college["col_2"] <- cut(college$F.Undergrad, 4)
+  college_shuffle <- college[sample(nrow(college)),]
+  cv10_data <- crossv_kfold(college_shuffle, k = 10)
+
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ col_2, data=.))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  mses[i] <- mean(cv10_mse)
+}
+
+#mean(cv10_mse)
+library(ggplot2)
+
+x <- c(2, 3, 4, 5)
+y <- c(16038841, 15785663, 15406204, 15311309)
+polynomial <- data.frame(x, y)
+ggplot(polynomial, aes(x=x, y=y)) + geom_point() + labs(title = "Step Regression of Outstate vs Step Function of # Full-Time Undergrads",
+       x = "Number of Steps",
+       y = "Average MSE"
+       )
+```
+
+I applied a step function to F.Undergrad, basically dividing the F.Undergrad variable into buckets.  I think this might be a good approach because it could be that all Out of State tuition is affected the same way by the number of students in one bucket. (ie it doesn't matter if there are 1,000 undergrads or 1,500 as long as they are in the same bucket they will have the same tuition).  I tried breaking F.Undergrad into different # of buckets to find the optimal bucket size.
+
+1.  $outstate$ = $\beta_1 * F.Undergrad$ + $\epsilon$, $MSE$ = 9,146,056
+2.  $outstate$ = $\beta_1 * C_1*F.Undergrad$ + $\beta_2 * C_2*F.Undergrad$ + $\epsilon$, $MSE$ = 16,038,841
+3.  $outstate$ = $\beta_1 * C_1*F.Undergrad$ + $\beta_2 * C_2*F.Undergrad$ + $\beta_3 * C_3 * F.Undergrad$ + $\epsilon$, $MSE$ = 15,785,663 
+4.  $outstate$ = $\beta_1 * C_1*F.Undergrad$ + $\beta_2 * C_2*F.Undergrad$ + $\beta_3 * C_3 * F.Undergrad$ + $\beta_4 * C_4 * F.Undergrad$ + $\epsilon$, $MSE$ = 15,406,204
+5.  $outstate$ = $\beta_1 * C_1*F.Undergrad$ + $\beta_2 * C_2*F.Undergrad$ + $\beta_3 * C_3 * F.Undergrad$ + $\beta_4 * C_4 * F.Undergrad$ + $\beta_5 * C_5 * F.Undergrad$ + $\epsilon$, $MSE$ = 15,311,309
+
+It is inconslusive if this approach helped.  As I add more buckets my MSE decreases but my MSE is also very high compared to the linear model.  For this approach to be sucessful I would have hoped to see a minimum value MSE that does not continually decrease as the number of steps increases (minimum is not at the edge).
+
+```{r 2. college log transformation, echo=TRUE}
+college <- read_csv("data/college.csv")
+#glimpse(college)
+#summary(college)
+
+ggplot(college, aes(age)) +
+  geom_point(data = college, aes(Outstate, S.F.Ratio), alpha = .05) +
+  
+  labs(title = "Outstate Tuition vs Expenditure per Student",
+       subtitle = "With 95% confidence interval",
+       x = "Age",
+       y = "Predicted Biden thermometer rating")
+
+for (i in 1:100){
+  college_shuffle <- college[sample(nrow(college)),]
+  cv10_data <- crossv_kfold(college_shuffle, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(Outstate ~ S.F.Ratio, data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  mses[i] <- mean(cv10_mse)
+}
+
+```   
+
+Lastly I noticed that there appeared to be a non-linear relationship between Tuition and S.F. Ratio.  In order to analyze this I fited a linear model and a log model and compared the MSE.  As can be seen below, I was able to reduce my MSE by about 0.5% using a log model.
+1.  Linear: $outstate$ = $S.F.Ratio$ + $\epsilon$, $MSE$ = 11,291,583
+2.  Log: $outstate$ = log($S.F.Ratio$) + $\epsilon$, $MSE$ = 11,234,145
+
+## Part 3
+
+```{r 3. GAM Model, echo=TRUE}
+
+college <- read_csv("data/college.csv")
+#glimpse(college)
+#summary(college)
+
+college_split <- resample_partition(college, c(test = 0.3, train = 0.7))
+model <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data=college)
+summary(model)
+```
+Above is the summary of the linear regression.  These results show significance of all variables at the .001 p-value.
+
+```{r 3. GAM Model1, echo=TRUE}
+suppressWarnings(suppressMessages(library(gam)))
+#model_ols
+model_gam <- gam(Outstate ~ Private + bs(Room.Board, df=5) + bs(PhD, df=5) + bs(perc.alumni, df=5) + bs(Expend, df=5) + Grad.Rate, data=college)
+#summary(model_gam)
+
+college_gam_terms <- preplot(model_gam, se = TRUE, rug = FALSE)
+
+## age
+data_frame(x = college_gam_terms$`bs(Room.Board, df = 5)`$x,
+           y = college_gam_terms$`bs(Room.Board, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Room.Board, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Room & Board",
+       y = expression(f[1](Room.Board)))
+
+## age
+data_frame(x = college_gam_terms$`bs(PhD, df = 5)`$x,
+           y = college_gam_terms$`bs(PhD, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(PhD, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "PhD",
+       y = expression(f[1](PhD)))
+
+## age
+data_frame(x = college_gam_terms$`bs(perc.alumni, df = 5)`$x,
+           y = college_gam_terms$`bs(perc.alumni, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(perc.alumni, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Percent Alumni who Donate",
+       y = expression(f[1](perc.alumni)))
+
+## age
+data_frame(x = college_gam_terms$`bs(Expend, df = 5)`$x,
+           y = college_gam_terms$`bs(Expend, df = 5)`$y,
+           se.fit = college_gam_terms$`bs(Expend, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out of State Tuition",
+       subtitle = "Cubic spline",
+       x = "Expend",
+       y = expression(f[1](Expend)))
+```   
+
+3. Above I did a GAM with the same dataset as before.  I chose to use a cubic spline on Room.Baord, PhD, perc.alumni, and Expend.  I did not transform the Private and Grad.Rate variables.  I graphed the results with the 95% confidence interval for some of the variables.  Intepreting the graphs you can see that for PhD the value is pretty close to zero with a small confidence interval.  This tells me that this variable does not have a large influence on Out of State Tutition.  Alternatively, Room and Board has a positive slope and small confidence interval this tells me that there is a strong postive relationship between Room and Board and out of State Tuition.
+
+```{r 3. GAM Model 4, echo=TRUE}
+
+model_ols <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data=college)
+mse(model_ols, college_split$test)
+mse(model_gam, college_split$test)
+```
+
+4. Using the GAM Model I get a MSE of 3,947,251 against the test set while using an OLS model I get a MSE of 4,107,739.  This is about a 4% lower MSE for the GAM model over teh OLS Model.  This makes sense because the GAM model is more fitted to the data.  By using GAM with splines we train the model locally and use non-linear terms so the model is more tuned to specific regions and different relationships.
+
+5. From my graphs above, there is a non-linear relationship between Expenditure and Out of State Tuition.  This is also verified with my results from part 2.
