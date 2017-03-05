@@ -1,0 +1,439 @@
+---
+title: "PS7 PCM"
+author: "Rodrigo Valdes"
+date: "February 26, 2017"
+output:
+    github_document:
+      toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd('/Users/ruy/Documents/UChicago/Winter_2017/pcm/persp-model/students/valdesortiz_rodrigo/ps7/')
+library(tidyverse)
+library(modelr)
+library(pROC)
+library(modeest)
+library(broom)
+library(forcats)
+library(splines)
+library(gam)
+
+
+set.seed(1234)
+options(digits = 6)
+theme_set(theme_minimal())
+
+data1 <- read_csv('biden.csv')
+data2 <- read_csv('College.csv')
+```
+
+## 1.1
+
+```{r pressure, echo=FALSE}
+biden1 <- lm(biden ~ age + female + educ + dem + rep, data = data1)
+summary(biden1)
+# tidy(biden1)
+
+data1 <- data1 %>% 
+  add_predictions(biden1)
+
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+The MSE of the initial model, using all the train set, is:
+```{r}
+mse1 <- mse(biden1, data1) 
+mse1
+```
+
+## 1.2
+
+The MSE is higher when the model is evaluated with the testing set, which is expected. The model is less fit to the data.
+
+```{r}
+# To split the data in testing and training
+set.seed(1234)
+biden_split <- resample_partition(data1, c(test = 0.3, train = 0.7))
+
+train_model <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+
+summary(train_model)
+
+mse2 <- mse(train_model, biden_split$test) 
+mse2
+```
+
+## 1.3
+
+The result widely varies for each of the 100 results. However, in the mean, the results are similar to those obtained in the two previous models. The mean MSE of the 100 times is 401.66.
+
+```{r}
+mse_variable <- function(Auto){
+  auto_split <- resample_partition(Auto, c(test = 0.3, train = 0.7))
+  auto_train <- auto_split$train %>%
+    tbl_df()
+  auto_test <- auto_split$test %>%
+    tbl_df()
+
+  results <- data_frame(terms = 1, model = map(terms,
+                                    ~ lm(biden ~ age + female + educ + dem + rep,
+                                          data = auto_train)),
+                        MSE = map_dbl(model, mse, data = auto_test))
+
+  return(results)
+}
+
+# Store the MSE
+MSE_matrix = vector("numeric", 100)
+terms <- 1:100
+set.seed(1234)
+
+for(i in terms){
+  MSE_matrix[[i]] <- mse_variable(data1)$MSE
+}
+
+MSE_matrix
+
+mean(MSE_matrix)
+
+# rerun(10, mse_variable(data1))
+```
+
+## 1.4
+
+I got the minimum values for MSE with these model, only 397.96. However, the calculation time was longer. 
+
+```{r}
+loocv_data <- crossv_kfold(data1, k = nrow(data1))
+
+set.seed(1234)
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+
+## 1.5
+
+The MSE for this case was 397.88, with is even higher that the LOOCV. Then, it is recommended, at least in this case, utilize the 10-fold cross-validation approach. It is less computationally intensive, and it got similar results.
+
+```{r}
+loocv_data <- crossv_kfold(data1, k = 10)
+
+set.seed(1234)
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+
+## 1.6
+
+The MSE is 398.06, which is very close to the former estimations.Apparently, simpler models are enough.
+
+```{r}
+# <Function Definition>
+FUNC_MSE = function(model, data){
+  x = modelr:::residuals(model, data)
+  mean(x^2, na.rm=TRUE)
+}
+
+FUNC_FOLD_2 = function(data, nrow){
+  FOLD_DATA = crossv_kfold(data, nrow)
+  FOLD_MODEL = map(FOLD_DATA$train, ~ lm(biden ~ ., data=.))
+  FOLD_MSE = map2_dbl(FOLD_MODEL, FOLD_DATA$test, FUNC_MSE)
+
+  return(data_frame(FOLD_MSE))
+}
+
+# <MSE Calculation>
+set.seed(1234)
+MSE_6A = rerun(100, FUNC_FOLD_2(data1, 10)) %>%
+  bind_rows()
+MSE_6 = mean(MSE_6A$FOLD_MSE)
+MSE_6
+```
+
+## 1.7
+
+```{r}
+# Traditional Model
+
+biden1 <- lm(biden ~ age + female + educ + dem + rep, data = data1)
+tidy(biden1)
+```
+
+```{r}
+
+# bootstrapped estimates of the parameter estimates and standard errors
+auto_boot <- data1 %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ age + female + educ + dem + rep, data = .)), coef = map(model, tidy))
+
+auto_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+
+```
+
+The result of both models is quite similar, especially regarding the coefficients. However, the standard errors of the bootstrap method tend to be higher although not for all variables. From the six independent variables, two have less standard errors, female and the intercept, while the other four report slightly bigger standard errors.
+
+# 2
+
+## 2.1 
+
+The first model that I will implement requires a monotonic transformation of the variable Top10perc. As depicted by the scatter plot, the distribution of this variable is a slightly positive skew. Then, I will use the square root of the variable. The MSE of the models with or without the transformations shows that transforming the variable had a negative effect. The MSE for the model with the linear transformation for Top10perc is bigger than the base model. Then, this needs to be approached in a different way, maybe with a polynomial relationship. 
+
+```{r}
+hist(data2$Top10perc)
+data2$sqr_Top10perc = data2$Top10perc ^ .5
+hist(data2$sqr_Top10perc)
+
+ggplot(data2, aes(x=Outstate, y=Top10perc), colour=factor(colour)) + 
+  geom_point(data=data2, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3")
+
+ggplot(data2, aes(x=Outstate, y=sqr_Top10perc), colour=factor(colour)) + 
+  geom_point(data=data2, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3")
+
+set.seed(1234)
+college_split <- resample_partition(data2, c(test = 0.3, train = 0.7))
+
+# Model without variable transformations
+train_model_college_org <- lm(Outstate ~ Top10perc, data = college_split$train)
+summary(train_model_college_org)
+
+# Model WITH variable transformations
+train_model_college <- lm(Outstate ~ sqr_Top10perc, data = college_split$train)
+summary(train_model_college)
+
+# Compare MSE
+mse_college_1 <- mse(train_model_college, college_split$test) 
+mse_college_1
+
+mse_college_2 <- mse(train_model_college_org, college_split$test) 
+mse_college_2
+```
+
+The second model that I will use is a linear model between Outstate and Grad.Rate. I choose this because none of the variables has clear outliers, in fact, both appears to be closer to normal than many other variables. Also, the relationship between the variables looks linear.
+
+
+```{r}
+hist(data2$Grad.Rate)
+hist(data2$Outstate)
+
+ggplot(data2, aes(x=Outstate, y=Grad.Rate), colour=factor(colour)) + 
+  geom_point(data=data2, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3")
+
+
+# Model without variable transformations
+train_model_grate <- lm(Outstate ~ Grad.Rate, data = college_split$train)
+summary(train_model_grate)
+
+# MSE
+mse_grate <- mse(train_model_grate, college_split$test) 
+mse_grate
+```
+
+The third approach will be a regression spline for the independent variable Terminal. According to the scatter plot, the relationship between the dependent and independent variable changes with the size of the Outstate variable. For instance, the effect with small values of Outstate does not have a clear trend, while in bigger numbers for Outstate, the values for Terminal are also high.
+
+To evaluate the perforce of this model, I compare the MSE of this model with a simple linear one. None of the models is accurate. However, the one with the regression spline is significantly better than the linear one, after evaluation with the testing data.
+
+```{r}
+hist(data2$Terminal)
+ggplot(data2, aes(x=Outstate, y=Terminal), colour=factor(colour)) + 
+  geom_point(data=data2, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3")
+
+# estimate models
+sim_piece_smooth <- glm(Outstate ~ bs(Terminal, knots = c(10)), data = college_split$train)
+
+# draw the plot
+data2 %>%
+  add_predictions(sim_piece_smooth) %>%
+  ggplot(aes(y = Terminal, x = Outstate)) +
+  geom_point(aes(x = Outstate)) +
+  geom_line(aes(x = pred), size = 1.5, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3") +
+  labs(title = "Cubic spline",
+       x = "Outstate",
+       y = "Terminal") +
+  theme(legend.position = "none")
+
+# Compare MSE
+mse_smooth_test <- mse(sim_piece_smooth, college_split$test) 
+mse_smooth_test
+
+mse_smooth_train <- mse(sim_piece_smooth, college_split$train) 
+mse_smooth_train
+
+# Compare agaist a linear simple one
+linear_terminal <- lm(Outstate ~ Terminal, data = college_split$train)
+linear_terminal_test <- mse(linear_terminal, college_split$test) 
+linear_terminal_test
+
+linear_terminal_train <- mse(linear_terminal, college_split$train) 
+linear_terminal_train
+```
+
+# 3. College (GAM)
+
+## 3.1 Split the data
+
+```{r}
+college_split <- resample_partition(data2, c(test = 0.3, train = 0.7))
+college_split
+```
+
+## 3.2 Estimate OLS
+
+The model perform well. For instance, the regression line depicted in the graph shows that there are almost the same number of positive errors than negative errors. All the variables are significant and the R square is high.
+
+```{r}
+outstate_model <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = college_split$train)
+summary(outstate_model)
+
+data2 <- data2 %>% 
+  add_predictions(outstate_model)
+
+ggplot(data2, aes(x=Outstate, y=pred), colour=factor(colour)) + 
+  geom_point(data=data2, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3") +
+  labs(title = "Data vs. Prediction",
+     x = "Outstate",
+     y = "Prediction") + theme(legend.position = "none")
+
+# Compare MSE
+oustate_model_test <- mse(outstate_model, college_split$test) 
+oustate_model_test
+
+mse_outstate_train <- mse(outstate_model, college_split$train) 
+mse_outstate_train
+```
+
+## 3.3 Estimate GAM
+
+The model perform well. For instance, the regression line depicted in the graph shows that there are almost the same number of positive errors than negative errors. All the variables are significant and the R square is high.
+
+```{r}
+outstate_gam <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+summary(outstate_gam)
+```
+
+```{r}
+# get graphs of each term
+outstate_gam_terms <- preplot(outstate_gam, se = TRUE, rug = FALSE)
+
+## age
+data_frame(x = outstate_gam_terms$`bs(Expend, df = 5)`$x,
+           y = outstate_gam_terms$`bs(Expend, df = 5)`$y,
+           se.fit = outstate_gam_terms$`bs(Expend, df = 5)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Outstate",
+       subtitle = "Cubic spline",
+       x = "Expend",
+       y = expression(f[4](Expend)))
+```
+
+
+```{r}
+data2 <- data2 %>% 
+  add_predictions(outstate_gam)
+
+ggplot(data2, aes(x=Outstate, y=pred), colour=factor(colour)) + 
+  geom_point(data=data2, color = "royalblue3") +
+  geom_smooth(data=data2, method = "lm", color = "brown3") +
+  labs(title = "Data vs. Prediction",
+     x = "Outstate",
+     y = "Prediction") + theme(legend.position = "none")
+
+```
+
+## 3.4 
+
+The GAM model is better that the simnple linear model. On the one hand, the graph depicts a closer fit to the data. On the second hand, the MSE reported is smaller that the one reported for the simple linear regression.
+
+```{r}
+oustate_gam_test <- mse(outstate_gam, college_split$test) 
+oustate_gam_test
+
+# Against the linear model
+oustate_model_test
+
+```
+
+## 3.5 
+
+In the case of PhD there is evidence that year must be include in the regression, againts the alternative without PhD at all. However, there is not evidence that a non-linear model is needed (p-val: 0.16).
+```{r}
+outstate_gam <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+# Test for PhD
+gam_PhD_1 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+gam_PhD_2 <- gam(Outstate ~ bs(Room.Board, df = 5) + PhD + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+anova(gam_PhD_1, gam_PhD_2, outstate_gam, test = "F")
+```
+
+
+In the case of expend, there is evidence that Expend is significative not only as linear term but also as a non-linear relationship.
+
+```{r}
+# Test for Expend
+gam_Expend_1 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+gam_Expend_2 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + Expend + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+anova(gam_Expend_1, gam_Expend_2, outstate_gam, test = "F")
+```
+
+For Graduation Rate, there is evidence that model is better including a linear variable for Grad.Rate, but the non-linear is not needed.
+
+```{r}
+outstate_gam <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+# Test for Grad Rate
+gam_GR_1 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Private, data = data2)
+
+gam_GR_2 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + Grad.Rate + Private, data = data2)
+
+anova(gam_GR_1, gam_GR_2, outstate_gam, test = "F")
+```
+
+For Roam Board, a linear term is preferred. There is no evidence that a non-linaer relatioship is needed.
+
+```{r}
+outstate_gam <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+# Test for Room Board 
+gam_RB_1 <- gam(Outstate ~ bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+gam_RB_2 <- gam(Outstate ~ Room.Board + bs(PhD, df = 5) + bs(perc.alumni, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+anova(gam_RB_1, gam_RB_2, outstate_gam, test = "F")
+```
+
+For Percent Alumni, a linear term is preferred. There is no evidence that a non-linaer relatioship is needed.
+
+```{r}
+
+# Test for Alumni
+gam_PA_1 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+gam_PA_2 <- gam(Outstate ~ bs(Room.Board, df = 5) + bs(PhD, df = 5) + perc.alumni + bs(Expend, df = 5) + bs(Grad.Rate, df = 5) + Private, data = data2)
+
+anova(gam_PA_1, gam_PA_2, outstate_gam, test = "F")
+```
