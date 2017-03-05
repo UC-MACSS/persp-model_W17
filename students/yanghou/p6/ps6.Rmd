@@ -1,0 +1,154 @@
+---
+title: "ps6"
+author: "YangHou"
+output: md_document
+---
+
+```{r setup, include=FALSE,include=FALSE,echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(ggplot2)
+library(modelr)
+library(tidyverse)
+library(broom)
+library(pROC)
+data1=read.csv('gss2006.csv')
+data2=read.csv('mental_health.csv')
+```
+
+## problem 1
+```{r}
+ggplot(data2,aes(vote96,fill=ifelse(vote96==1,'Vote','Not Vote')))+geom_bar()+labs(title='1996 Voter Turnout',x='Vote',y='Number of Voters')
+```
+
+```{r}
+sum(data2$vote96,na.rm=TRUE)/length(data2$vote96)
+```
+
+The unconditional probability is 0.6295904.
+
+```{r}
+ggplot(data2,aes(mhealth_sum,vote96))+geom_point()+geom_smooth(method=lm)+scale_y_continuous(breaks=c(0,1))+labs(title='Mental Health',y='Voting',x='Mental Health')
+```
+
+The graph indicates that people with poor mental health tend to vote less. The problem with the plot is that this is a categorical varibale but we are using value between 0 and 1, which means between two categories. It doesn't make sense. 
+
+##problem 2
+```{r}
+log_model=glm(formula=vote96~mhealth_sum,family=binomial,data=data2)
+tidy(log_model)
+```
+
+1.The relationship is significant since the p-value is very small.
+
+```{r}
+logit2prob=function(x){
+  exp(x)/(1+exp(x))
+}
+prob2odds=function(x){
+  x/(1-x)
+}
+prob2log=function(x){
+  log(prob2odds(x))
+}
+
+b2=data2%>%add_predictions(log_model,var='pred')%>%mutate(prob=logit2prob(pred))%>%mutate(odds=prob2odds(prob))%>%mutate(logodds=prob2log(prob))
+ggplot(b2,aes(x=mhealth_sum))+geom_line(aes(y=logodds))+labs(title='Log_odds',x='Mental Health',y='Log_odds')
+```
+
+2.When we use log_odds, we are saying whenever the mental health index increase by 1, the log odds of voting agains not voting decrease by 0.1434752
+
+3.
+```{r}
+ggplot(b2,aes(x=mhealth_sum))+geom_line(aes(y=odds))+labs(title='Odds',x='Mental Health',y='odds')
+```
+
+It means when the mental health index goes up 1 unit, the odds of voting will increase 1.15%.
+
+4.
+```{r}
+ggplot(b2,aes(x=mhealth_sum))+geom_line(aes(y=prob))+labs(title='Probability',x='Mentla Health',y='Probablity')
+```
+
+```{r}
+b0=1.1392097
+b1=-0.1434752
+first_diff=exp(b0+(2*b1))/(1+exp(b0+(2*b1)))-exp(b0+(1*b1))/(1+exp(b0+(1*b1)))
+second_diff=exp(b0+(6*b1))/(1+exp(b0+(6*b1)))-exp(b0+(5*b1))/(1+exp(b0+(5*b1)))
+first_diff
+second_diff
+```
+
+The firt difference from 1 to 2 is -0.02917824. The first difference form 5 yo 6 is -0.03477821.
+
+5.
+```{r}
+accuracy=data2%>%add_predictions(log_model)%>%mutate(pred=logit2prob(pred),prob=pred,pred=as.numeric(pred>0.5))
+mean(accuracy$vote96==accuracy$pred,na.rm=TRUE)
+```
+```{r}
+PRE=function(model){
+  y=model$y
+  y.hat=round(model$fitted.values)
+  E1=sum(y!=median(y))
+  E2=sum(y!=y.hat)
+  result=(E1-E2)/E1
+  return(result)
+}
+PRE(log_model)
+result=auc(accuracy$vote96,accuracy$prob)
+result
+```
+
+The accuracy rate of the model is 0.677761. The PRE is 0.01616628 and the AUC is 0.6243. I would say it is not that a good model.
+
+##problem 3
+The random component is Bernoulli distribution.
+
+$$Pr(Y_i = y_i | \pi) = \pi_i^{y_i}(1 - \pi_i)^{1-y_i}$$
+The linear predictor:
+
+$$\eta_i = \beta_0 + \beta_1 X_{mhealth_sum,i} + \beta_2 X_{age,i} + \beta_3 X_{educ,i} + \beta_4 X_{black,i} + \beta_5 X_{female,i} + \beta_6 X_{married,i} + \beta_7 X_{inc10,i}$$
+The link function:
+
+$$pi_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$$
+
+```{r}
+p32=glm(vote96~.,data=data2,family=binomial())
+tidy(p32)
+```
+
+3.
+```{r}
+accuracy2=data2%>%add_predictions(p32)%>%mutate(pred=logit2prob(pred),prob=pred,pred=as.numeric(pred>0.5))
+mean(accuracy2$vote96==accuracy2$pred,na.rm=TRUE)
+PRE(p32)
+result2=auc(accuracy2$vote96,accuracy2$prob)
+result2
+```
+
+From the result above we know that the accuracy of the model is 72.36%, and the PRE is 0.148, and the AUC is 0.7596. I would say the model works well. I would say amoung all the factors we choose, education seems to be the one factor with the most influence, since it has both relatively high estimate value and small p value. Then married or not plays a row. It has high estimation values, and acceptiable level p-value. 
+
+## problem 4
+1.The random part:Poisson distribution
+$$Pr(Y_i = yi|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+The linear predictor:
+$$\eta_i = \beta_0 + \beta_1 X_{age,i} + \beta_2 X_{childs,i} + \beta_3 X_{educ,i} + \beta_4 X_{female,i} + \beta_5 X_{grass,i} + \beta_6 X_{hrsrelax,i} +\beta_7 X_{black,i} + \beta_8 X_{social_connect, i} + \beta_9 X_{voted04} + \beta_10 X_{xmovie, i} + \beta_11 X_{zodiac, i} + \beta_12 X_{dem, i} + \beta_13 X_{rep, i} + \beta_14 X_{ind, i}$$
+Link function:
+$$\lambda_i = ln(\eta_i)$$
+2.
+```{r}
+data1=na.omit(data1)
+final=glm(tvhours~.,data=data1,family=poisson)
+tidy(final)
+
+```
+
+
+```{r,warning=FALSE}
+accuracy3=data1%>%add_predictions(final,var='pred')%>%mutate(pred=logit2prob(pred),prob=prob2odds(pred),pred=as.numeric(pred>0.5))
+mean(accuracy3$tvhours==accuracy3$pred)
+resultf=auc(accuracy3$tvhours,accuracy3$prob)
+resultf
+```
+
+3.From the data above we know that black or not play a major role here since its estimation value is large and p value is small. The second second important factor is the hrsrelax. Overall, the accuracy of the model is 22.67%, the AUC is 0.5896. I would evaluate this model as not so good. 
