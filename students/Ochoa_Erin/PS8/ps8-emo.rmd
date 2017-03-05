@@ -33,140 +33,22 @@ set.seed(1234)
 theme_set(theme_minimal())
 ```
 
-```{r functions}
+```{r function}
 
 mse = function(model, data) {
   x = modelr:::residuals(model, data)
   mean(x ^ 2, na.rm = TRUE)
 }
-
-#boltoff's function
-# hackish function to get line segment coordinates for ggplot
-partition.tree.data = function (tree, label = "yval", add = FALSE, ordvars, ...) 
-{
-  ptXlines = function(x, v, xrange, xcoord = NULL, ycoord = NULL, 
-                       tvar, i = 1L) {
-    if (v[i] == "<leaf>") {
-      y1 = (xrange[1L] + xrange[3L])/2
-      y2 = (xrange[2L] + xrange[4L])/2
-      return(list(xcoord = xcoord, ycoord = c(ycoord, y1, 
-                                              y2), i = i))
-    }
-    if (v[i] == tvar[1L]) {
-      xcoord = c(xcoord, x[i], xrange[2L], x[i], xrange[4L])
-      xr = xrange
-      xr[3L] = x[i]
-      ll2 = Recall(x, v, xr, xcoord, ycoord, tvar, i + 
-                      1L)
-      xr = xrange
-      xr[1L] = x[i]
-      return(Recall(x, v, xr, ll2$xcoord, ll2$ycoord, tvar, 
-                    ll2$i + 1L))
-    }
-    else if (v[i] == tvar[2L]) {
-      xcoord = c(xcoord, xrange[1L], x[i], xrange[3L], 
-                  x[i])
-      xr = xrange
-      xr[4L] = x[i]
-      ll2 = Recall(x, v, xr, xcoord, ycoord, tvar, i + 
-                      1L)
-      xr = xrange
-      xr[2L] = x[i]
-      return(Recall(x, v, xr, ll2$xcoord, ll2$ycoord, tvar, 
-                    ll2$i + 1L))
-    }
-    else stop("wrong variable numbers in tree.")
-  }
-  if (inherits(tree, "singlenode")) 
-    stop("cannot plot singlenode tree")
-  if (!inherits(tree, "tree")) 
-    stop("not legitimate tree")
-  frame = tree$frame
-  leaves = frame$var == "<leaf>"
-  var = unique(as.character(frame$var[!leaves]))
-  if (length(var) > 2L || length(var) < 1L) 
-    stop("tree can only have one or two predictors")
-  nlevels = sapply(attr(tree, "xlevels"), length)
-  if (any(nlevels[var] > 0L)) 
-    stop("tree can only have continuous predictors")
-  x = rep(NA, length(leaves))
-  x[!leaves] = as.double(substring(frame$splits[!leaves, "cutleft"], 
-                                    2L, 100L))
-  m = model.frame(tree)
-  if (length(var) == 1L) {
-    x = sort(c(range(m[[var]]), x[!leaves]))
-    if (is.null(attr(tree, "ylevels"))) 
-      y = frame$yval[leaves]
-    else y = frame$yprob[, 1L]
-    y = c(y, y[length(y)])
-    if (add) {
-      # lines(x, y, type = "s", ...)
-    }
-    else {
-      a = attributes(attr(m, "terms"))
-      yvar = as.character(a$variables[1 + a$response])
-      xo = m[[yvar]]
-      if (is.factor(xo)) 
-        ylim = c(0, 1)
-      else ylim = range(xo)
-      # plot(x, y, ylab = yvar, xlab = var, type = "s", ylim = ylim,
-      #      xaxs = "i", ...)
-    }
-    data_frame(x = x, y = y)
-  }
-  else {
-    if (!missing(ordvars)) {
-      ind = match(var, ordvars)
-      if (any(is.na(ind))) 
-        stop("unmatched names in vars")
-      var = ordvars[sort(ind)]
-    }
-    lab = frame$yval[leaves]
-    if (is.null(frame$yprob)) 
-      lab = format(signif(lab, 3L))
-    else if (match(label, attr(tree, "ylevels"), nomatch = 0L)) 
-      lab = format(signif(frame$yprob[leaves, label], 
-                           3L))
-    rx = range(m[[var[1L]]])
-    rx = rx + c(-0.025, 0.025) * diff(rx)
-    rz = range(m[[var[2L]]])
-    rz = rz + c(-0.025, 0.025) * diff(rz)
-    xrange = c(rx, rz)[c(1, 3, 2, 4)]
-    xcoord = NULL
-    ycoord = NULL
-    xy = ptXlines(x, frame$var, xrange, xcoord, ycoord, 
-                   var)
-    xx = matrix(xy$xcoord, nrow = 4L)
-    yy = matrix(xy$ycoord, nrow = 2L)
-
-    return(list(data_frame(xmin = xx[1L,],
-                           ymin = xx[2L,],
-                           xmax = xx[3L,],
-                           ymax = xx[4L,]),
-                data_frame(x = yy[1L,],
-                           y = yy[2L,],
-                           label = lab)))
-    # if (!add) 
-    #   plot(rx, rz, xlab = var[1L], ylab = var[2L], type = "n", 
-    #        xaxs = "i", yaxs = "i", ...)
-    # segments(xx[1L, ], xx[2L, ], xx[3L, ], xx[4L, ])
-    # text(yy[1L, ], yy[2L, ], as.character(lab), ...)
-  }
-}
 ```
 
-# Part 1: Joe Biden (redux times two) [3 points]
+# Part 1: Joe Biden (redux times two)
 
-We read in the data and create a categorical three-level variable for Party.
+We read in the data:
 
 ```{r read_data_biden}
 
 df = read.csv('data/biden.csv')
-df$Party[df$dem == 1] = 'Democrat'
-df$Party[df$dem == 0 & df$rep == 0] = 'No Affiliation'
-df$Party[df$rep == 1] = 'Republican'
 ```
-
 
 Next, we split the dataset into training and validation sets in a ratio of 7:3, then estimate a regression tree:
 
@@ -202,14 +84,14 @@ biden_tree2 = tree(biden ~ female + age + educ + dem + rep, data = biden_train70
                    control = tree.control(nobs = nrow(biden_train70), mindev = .0000001))
 ```
 
-We prune the tree 49 different times, increasing the number of branches from 2 to 50 and storing the MSE for each pruned tree:
+We prune the tree 49 different times, increasing the number of leaves from 2 to 50 and storing the MSE for each pruned tree:
 
 ```{r biden_prune_50_rounds}
 
 rounds = 50
 
 mse_list_biden_50 = vector("numeric", rounds - 1)
-branch_list_biden_50 = vector("numeric", rounds - 1)
+leaf_list_biden_50 = vector("numeric", rounds - 1)
 
 set.seed(1234)
 
@@ -218,27 +100,27 @@ for(i in 2:rounds) {
 
     mse_val = mse(biden_mod,biden_test30)
     mse_list_biden_50[[i-1]] = mse_val
-    branch_list_biden_50[[i-1]] = i
+    leaf_list_biden_50[[i-1]] = i
 }
 
 mse_df_biden_50 = as.data.frame(mse_list_biden_50)
-mse_df_biden_50$branches = branch_list_biden_50
+mse_df_biden_50$branches = leaf_list_biden_50
 ```
 
-We plot the MSE for each tree vs. the number of branches:
+We plot the MSE for each tree vs. the number of leaves:
 
 ```{r plot biden_50_mse, echo=FALSE, message=FALSE, warning=FALSE}
 ggplot(mse_df_biden_50, aes(branches, mse_list_biden_50)) +
        geom_line(color='darkturquoise',size=1) +
        labs(title = "Comparing Regression Trees for Warmth Toward Joe Biden",
        subtitle = "Using Validation Set",
-       x = "Number of Branches",
+       x = "Number of Leaves",
        y = "Mean Squared Error") + 
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
-We can clearly see that the lowest MSE is `r min(mse_df_biden_50$mse_list_biden_50)` for a tree with 11 branches.  We plot that tree:
+We can clearly see that the lowest MSE is `r min(mse_df_biden_50$mse_list_biden_50)` for a tree with 11 leaves.  We plot that tree:
 
 ```{r plotting_optimal_biden_tree}
 
@@ -254,50 +136,51 @@ The tree indicates that for Democrats, age is the next most important variable a
 
 Pruning the tree reduces the MSE from `r mse_test30` to `r mse_test30_2`.
 
-We use the bagging approach to analyze this data, computing 1000 trees using the training data and testing the resulting model with the validation set:
+We use the bagging approach to analyze this data, computing 500 bootstrapped trees using the training data and testing the resulting model with the validation set:
 
 ```{r bagging_biden}
 
 set.seed(1234)
 
 biden_bag_data_train = biden_train70 %>%
-                       select(-Party) %>%
+                       rename() %>%
                        mutate_each(funs(as.factor(.)), dem, rep) %>%
                        na.omit
 
 biden_bag_data_test = biden_test30 %>%
-                      select(-Party) %>%
+                      rename() %>%
                       mutate_each(funs(as.factor(.)), dem, rep) %>%
                       na.omit
 
 (bag_biden <- randomForest(biden ~ ., data = biden_bag_data_train, mtry = 5, ntree = 500, importance=TRUE))
 
 mse_bag_biden = mse(bag_biden, biden_bag_data_test)
+
+bag_biden_importance = as.data.frame(importance(bag_biden))
 ```
 
 Using the validation data, the model returns a test MSE of `r mse_bag_biden`, which is considerably higher than the MSE found when pruning the tree earlier (`r mse_test30_2`).
 
 Next, we review variable importance measures:
 
-```{r biden_bag_importance}
-
-bag_biden_importance = as.data.frame(importance(bag_biden))
-
+```{r biden_bag_importance, echo=FALSE}
 
 ggplot(bag_biden_importance, mapping=aes(x=rownames(bag_biden_importance), y=IncNodePurity)) +
        geom_bar(stat="identity", aes(fill=IncNodePurity)) +
-       labs(title = "Average Increased Node Purity Across 500 Regression Trees",
+       labs(title = "Average Increased Node Purity Across 500 Bagged Regression Trees",
        subtitle = "Predicted Warmth Toward Joe Biden (2008)",
        x = "Variable",
        y = "Mean Increased Node Purity") + 
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
 ```
-1. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
 
-1. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of $m$, the number of variables considered at each split, on the error rate obtained.
+The variable importance plot shows that age and Democrat are the two most important variables as these yield the greatest average decreases (of approximately 225,000 and 150,000, respectively) in node impurity across 500 bagged regression trees.  Despite the higher test MSE, the bagged tree model is likely a better model than the pruned tree above because the bagged model uses bootstrapping to create 500 different training sets, whereas the pruned tree above uses only a single training set.  The bagged model averages the variance across the bootstrapped trees, which, together, suggest that age and Democrat are the most important variables while gender is the least important.
 
-1. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
+
+5. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of $m$, the number of variables considered at each split, on the error rate obtained.
+
+6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
 
 
 
