@@ -372,7 +372,13 @@ mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
 
 [1]Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)```{r model1}
 
+
+
 ```{r}
+
+mh_tree <- tree(vote96 ~ educ, data = as_tibble(mh_split$train))
+mh_tree
+
 fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
 tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
 tree_err
@@ -489,9 +495,9 @@ Traveling down the left side of the tree, we observe that for individuals with `
 
 ```{r}
 set.seed(1234)
-(mh_data = read.csv("mental_health.csv") %>%
+mh_data = read.csv("mental_health.csv") %>%
   mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
-  na.omit)
+  na.omit
 
 mh_split <- resample_partition(mh_data, p = c("test" = .3, "train" = .7))
 
@@ -664,6 +670,8 @@ A natural starting point to the model the relationship between race and belief o
 
 When I tried including 'educ' and 'income' in my model, some dummy variables were found to be weakly significant. Educ being 'not high school grad' had a negative impact on belief in OJ's guilt, having income 'over $75000' had a positive impact on belief in OJ's guily. However, I did not include those variables because the model's overall accuracy did not benefit from their inclusion. 
 
+Including `hispanic` in the model too, resulted in discovering that being `hispanic` does not have a statistically significant impact on belief in OJ's guilt. This points to the idea that within the idea of race, specifically, being black, impacts belief in OJ's guilt.
+
 I also created a dummy variable indicating 'male' and one indicating 'neither black nor hispanic' - to see if there was an interaction effect between between race and gender - it is conceivable that black men are more likely to believe in OJ's innocence (same race-gender category as OJ) or white (roughly approximated by 'neither black nor hispanic') women (same race-gender cateogry as OJ's alleged victim) are less likely to - when I ran the regression however, I was suprised to find that the interaction term was not significant. 
 
 Other tested models:
@@ -673,6 +681,7 @@ all_vars <- glm(guilt ~black+educ+income+age+rep+dem,data = simpson, family = bi
 black_male <- glm(guilt ~black*male,data = simpson, family = binomial)
 white_female <- glm(guilt ~white*female,data = simpson, family = binomial)
 black_age <- glm(guilt~black+age,data=simpson,family=binomial)
+hispanic_black <- glm(guilt~black+hispanic,data=simpson,family=binomial)
 summary(white_female)
 ```
 
@@ -799,4 +808,4 @@ ggplot(rf_oj_importance, mapping=aes(x=rownames(rf_oj_importance), y=MeanDecreas
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
 ```
-This graph further confirms that race is the most important predictor of 'Opinion' - it yields the highest decrease in Gini Index. Its importance is followed by 'age' - just as we noticed in our logistic regression model above.
+This graph further confirms that race is the most important predictor of 'Opinion' - it yields the highest decrease in Gini Index. Its importance is followed by 'age' - just as we noticed in our logistic regression model above. The difference in the height of the bars for `black` and `hispanic` further confirms that it is specifically, `black` that influences perception of OJ's guilt - being `hispanic` has no discernible effect. 
