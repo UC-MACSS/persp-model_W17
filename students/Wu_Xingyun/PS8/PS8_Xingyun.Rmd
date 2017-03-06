@@ -23,6 +23,7 @@ library(pROC)
 library(gbm)
 library(ggdendro)
 library(dplyr)
+library(e1071)
 
 options(digits = 3)
 set.seed(1234)
@@ -31,7 +32,7 @@ theme_set(theme_minimal())
 
 ```{r read-in data, include=FALSE}
 bidenData <- read.csv("biden.csv")
-mhlthData <- read.csv("mental_health.csv")
+mhlthData <- na.omit(read.csv("mental_health.csv"))
 simpsonData <- read.csv("simpson.csv")
 ```
 
@@ -437,6 +438,7 @@ mhlth_tree <- tree(vote96 ~ mhealth_sum + age + educ + black + female + married 
 
 # plot unpruned tree
 mod2_1 <- prune.tree(mhlth_tree, best=5)
+summary(mod2_1)
 
 tree_data2_1 <- dendro_data(mod2_1)
 mhlth_tree_data <- dendro_data(mod2_1)
@@ -452,29 +454,225 @@ ggplot(segment(mhlth_tree_data)) +
        subtitle = "mental health + educ")
 ```
   According to the computation below, the test MSE of this model is 0.295.
-```{r problem2_1_testMSE, echo=FALSE}
-mhlth_test <- mhlth_split$test %>%
-  as_tibble() %>%
-  mutate(vote96 = factor(vote96, levels = 0:1, labels = c("not-voted", "voted")),
-         black = factor(black, levels = 0:1, labels = c("non-black", "black")),
-         female = factor(female, levels = 0:1, labels = c("male", "female")),
-         married = factor(married, levels = 0:1, labels = c("not-married", "married")))
+```{r problem2_1_fit, echo=FALSE}
 
-mse(mod2_1, mhlth_test)
 ```
 
 #### 1.2: Bagging approach
 
 ```{r problem2_2_model, echo=FALSE}
 mhlth_rf_data <- mhlth_split$train$data %>%
-    select(-mhealth_sum, -educ) %>%
+    select(-mhealth_sum, -age, -educ, -inc10) %>%
+    mutate_each(funs(as.factor(.)), black, female, married) %>%
     na.omit
 
-(mhlth_bag <- randomForest(vote96 ~ ., data = mhlth_rf_data,
-                             mtry = 2, ntree = 500))
+(mhlth_bag <- randomForest(as.factor(vote96) ~ ., data = mhlth_rf_data,
+                             mtry = 3, ntree = 500))
 ```
 
+#### 1.3 Random forest approach
 ```{r problem2_3_model, echo=FALSE}
-(titanic_rf <- randomForest(Survived ~ ., data = titanic_rf_data,
+(mhlth_rf <- randomForest(as.factor(vote96) ~ ., data = mhlth_rf_data,
                             ntree = 500))
 ```
+
+#### 1.4 Boosting: depth = 1
+```{r problem2_4_model, echo=FALSE}
+boosting_depth1 = gbm(as.numeric(vote96) ~ ., 
+                      data = mhlth_split$train, 
+                      n.trees = 10000, 
+                      interaction.depth = 1)
+```
+
+
+#### 1.5 Boosting: depth = 3
+```{r problem2_5_model, echo=FALSE}
+boosting_depth2 = gbm(as.numeric(vote96) ~ ., 
+                      data = mhlth_split$train, 
+                      n.trees = 10000, 
+                      interaction.depth = 3)
+```
+
+#### 1.6 model comparison
+```{r problem2_comparison1_set_models, echo=FALSE}
+mhlth_split <- resample_partition(mhlth_rf_data, p = c("test" = .3,
+                                                           "train" = .7))
+
+mhlth_models <- list("bagging" = randomForest(vote96 ~ ., data = mhlth_split$train,
+                                                mtry = 7, ntree = 10000),
+                       "boosting_depth1" = gbm(as.numeric(vote96)  ~ .,
+                                               data = mhlth_split$train,
+                                               n.trees = 10000, interaction.depth = 1),
+                       "boosting_depth2" = gbm(as.numeric(vote96)  ~ .,
+                                               data = mhlth_split$train,
+                                               n.trees = 10000, interaction.depth = 3),
+                       "boosting_depth4" = gbm(as.numeric(vote96)  ~ .,
+                                               data = mhlth_split$train,
+                                               n.trees = 10000, interaction.depth = 5))
+```
+
+
+```{r problem2_comparison1, echo=FALSE}
+boost_test_err <- data_frame(bagging = predict(mhlth_models$bagging,
+                                               newdata = as_tibble(mhlth_split$test$data),
+                                               predict.all = TRUE)[[2]] %>%
+                               apply(2, function(x) x != as_tibble(mhlth_split$test$data)$vote96) %>%
+                               apply(2, mean),
+                             
+                             boosting_depth1 = predict(mhlth_models$boosting_depth1,
+                                                       newdata = as_tibble(mhlth_split$test$data),
+                                                       n.trees = 1:10000) %>%
+                               apply(2, function(x) round(x) == as.numeric(as_tibble(mhlth_split$test$data)$vote96)) %>%
+                               apply(2, mean),
+                             
+                             boosting_depth3 = predict(mhlth_models$boosting_depth3,
+                                                       newdata = as_tibble(mhlth_split$test$data),
+                                                       n.trees = 1:10000) %>%
+                               apply(2, function(x) round(x) == as.numeric(as_tibble(mhlth_split$test$data)$vote96)) %>%
+                               apply(2, mean),
+                             
+                             boosting_depth5 = predict(mhlth_models$boosting_depth5,
+                                                       newdata = as_tibble(mhlth_split$test$data),
+                                                       n.trees = 1:10000) %>%
+                               apply(2, function(x) round(x) == as.numeric(as_tibble(mhlth_split$test$data)$vote96)) %>%
+                               apply(2, mean))
+
+boost_test_err %>%
+  mutate(id = row_number()) %>%
+  mutate_each(funs(cummean(.)), bagging:rf_mtry4) %>%
+  gather(model, err, -id) %>%
+  mutate(model = factor(model, levels = names(mhlth_models),
+                        labels = c("Bagging",
+                                   "Boosting: depth = 1",
+                                   "Boosting: depth = 3",
+                                   "Boosting: depth = 5"))) %>%
+  ggplot(aes(id, err, color = model)) +
+  geom_line() +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  labs(x = "Number of trees",
+       y = "Test classification error",
+       color = "Model")
+```
+
+
+### 2. Five SVM models
+
+#### Preparation
+  Read-in the voter turnout data and split it into a training set (70%) and a validation set(30%). We would use 10-fold CV on the training set to determine the optimal cost parameter.
+```{r preparation2, echo=FALSE, include=FALSE}
+(mh <- read_csv("mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit)
+mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
+```
+
+#### 2.1 Linear kernel
+
+```{r problem2_6_model, echo=FALSE}
+mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(mh_lin_tune)
+mh_lin <- mh_lin_tune$best.model
+#summary(mh_lin)
+fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_line)
+```
+
+```{r problem2_6_evaluation, echo=FALSE}
+auc(roc_line)
+```
+
+#### 2.2 Polynomial kernel
+```{r problem2_7, echo=FALSE}
+mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(mh_poly_tune)
+mh_poly <- mh_poly_tune$best.model
+#summary(mh_poly)
+
+fitted <- predict(mh_poly, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_poly)
+```
+
+```{r problem2_7_evaluation, echo=FALSE}
+auc(roc_poly)
+```
+
+#### 2.3 Logistic regression
+```{r problem2_8_model, echo=FALSE}
+mh_logit <- glm(vote96 ~ ., data = as_tibble(mh_split$train), family = binomial)
+#summary(mh_logit)
+fitted <- predict(mh_logit, as_tibble(mh_split$test), type = "response")
+logit_err <- mean(as_tibble(mh_split$test)$vote96 != round(fitted))
+
+roc_logit <- roc(as_tibble(mh_split$test)$vote96, fitted)
+plot(roc_logit)
+```
+
+```{r problem2_8_evaluation, echo=FALSE}
+auc(roc_logit)
+```
+
+#### 2.4 Desicion tree
+```{r problem2_9_model, echo=FALSE}
+mh_tree <- tree(vote96 ~ ., data = as_tibble(mh_split$train))
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+
+roc_tree <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree)
+```
+
+```{r problem2_9_evaluation, echo=FALSE}
+auc(roc_tree)
+```
+
+#### 2.5 Random forest
+```{r problem2_10_model, echo=FALSE}
+mh_rf <- randomForest(vote96 ~ ., data = as_tibble(mh_split$train))
+
+fitted <- predict(mh_rf, as_tibble(mh_split$test), type = "prob")[,2]
+
+roc_rf <- roc(as_tibble(mh_split$test)$vote96, fitted)
+plot(roc_rf)
+```
+
+```{r problem2_10_evaluation, echo=FALSE}
+auc(roc_rf)
+```
+
+#### Comparison
+```{r problem2_comparison2, echo=FALSE}
+plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_logit, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_tree, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_rf, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+
+## Part 3: OJ Simpson
+
+### 1. The relationship between race and belief of OJ Simpson's guilt
+  Since this question already has required resopnse variable `guilt` and predictor `black`, I would use logistic regression with resampling methods for this part.
+
+#### 1.1 logistic regression with the whole data
+
+
+#### 1.2 logistic regression with 10-fold cross-validation
+
+
+#### 1.3 logistic regression with bootstrap approach
+
+
+### 2. Predict whether individuals believe OJ Simpson to be guity
+  Since this question does not have specific predictors, I would use tree-based models for this part.
