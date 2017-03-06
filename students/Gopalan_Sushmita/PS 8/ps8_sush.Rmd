@@ -26,6 +26,7 @@ library(titanic)
 library(pROC)
 library(gbm)
 library(caret)
+library(e1071)
 # to get the tree graphs with the labels and values, use the forked
 # version of ggdendro
 # devtools::install_github("bensoltoff/ggdendro")
@@ -38,7 +39,9 @@ theme_set(theme_minimal())
 biden <- read_csv("biden.csv")
 ```
 
-## Question 1
+## Question 1 - Joe Biden
+
+** Split Dataset **
 
 [1] Split the data into a training set (70%) and a validation set (30%). Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.
 
@@ -48,6 +51,8 @@ biden.split <- resample_partition(biden, c(test = .3, train = .7))
 ```
 
 **********************************************************
+
+** Basic Decision Tree **
 
 [2] Fit a decision tree to the training data, with biden as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?
 
@@ -93,6 +98,9 @@ We go down the left of side of the sub-tree to find that, for individuals who ar
 The value of the MSE is `r mse_biden_1`
 
 **********************************************************
+
+** Decision Tree with Pruning**
+
 [3] Now fit another tree to the training data with the following control options:
 
 tree(control = tree.control(nobs = # number of rows in the training set,mindev = 0))
@@ -145,6 +153,9 @@ For Republicans too, gender does not appear to be important in predicting Biden 
 For the unaffiliated, gender is an important predictor. For women, education and age influence Biden scores, but they do not for men.
 
 **********************************************************
+
+** Bagging **
+
 [4] Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
 
 
@@ -187,6 +198,7 @@ The MSE for the model with bagging is `r mse_bag_biden` , which is much higher t
 The % variation explained is also very low, at 8.91%.
 
 
+
 ```{r}
 set.seed(1234)
 
@@ -205,6 +217,7 @@ ggplot(bag_biden_importance, mapping=aes(x=rownames(bag_biden_importance), y=Inc
 As per the above graph, we see that 'age' and 'dem' are the variables which produce the highest average decreases in node impurity across 500 bagged regression trees. The bagging model uses bootstrapping to create 500 different training datasets, while the pruned tree uses only one set of training data. The bagging model looks at the mean variance across all the bootstrapped trees and estimates that 'age' and 'dem' are the most indicative variables in the model, while 'female' is the least.
 
 **********************************************************
+** Random Forest **
 
 [5] Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of m, the number of variables considered at each split, on the error rate obtained.
 
@@ -234,18 +247,13 @@ ggplot(rf_biden_importance, mapping=aes(x=rownames(rf_biden_importance), y=IncNo
 ```
 
 The MSE for this model is `r mse_rf` which we see is much less than `r mse_bag_biden`.
-
-```{r}
-# alternate plot and table for the same thing as above 
-varImpPlot(biden_rf)
-importance(biden_rf)
-```
-
 The random forest model with mtry = 2 suggests that 'dem' and 'rep' are the most important variables in the model, i.e. they yield the highest decreases in node impurity. 
 
 Random forests offer an improvement over bagged trees by 'decorrelating' the trees. We still build a number of decision trees on bootstrapped training samples. In a random forest model, each time a split in a tree is considered, a random sample of m predictors is chosen as split candidates from the full set of p predictors. We restrict ourselves to a random subset m of all predictors in order to avoid the possibility of all trees looking extremely similar like in a bagged model, where all the trees would end up using the same strongest predictor in the top split. In such a situation, averaging across highly correlated predictions would not lead to a substantial decrease in variance. In the random forest model, we overcome this issue by restricting each split to only a subset of predictors - basically, about (p-m)/p of the splits wouldn't even consider the strongest predictor, allowing the influence of the other predictors to become discernible. Conventionally, using m approximately equal to the square root of p leads to a reduction in both test error and OOB error of bagging.
 
 **********************************************************
+** Boosting **
+
 [6] Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter λ influence the test MSE?
 
 We first run the boosting model using depths of 1,2 and 4 respoectively, to find the optimal number of iterations for lowest MSE.
@@ -290,6 +298,7 @@ biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
                                                n.trees = 2094, interaction.depth = 4)
 ```
 Using these optimal values, we run the boost model again to see what depth at its ideal number of trees gives us lowest MSE.
+
 ```{r}
 # get MSE
 
@@ -319,7 +328,7 @@ mse_4 = mse(biden_boost_4,biden_bag_data_test)
 mse_4
 ``` 
 
-We see that using a depth of 2 with 2620 trees gives us an MSE value that is lowest, although only marginal less than (depth = 1, trees = 3302) and (depth = 4, trees = 2094).
+We see that using a depth of 1 with 3302 trees gives us an MSE value that is lowest, although only marginal less than (depth = 2, trees = 2700) and (depth = 4, trees = 2094).
 
 We also see that these MSE values are much better than those obtained by our bagging and random forest models. 
 
@@ -341,6 +350,7 @@ biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
                                                n.trees = 2094, interaction.depth = 4,shrinkage=0.02)
 ```
+
 Using these optimal values, we run the boost model again to see what depth at its ideal number of trees gives us lowest MSE.
 ```{r}
 # get MSE
@@ -354,5 +364,446 @@ mse_4
 ``` 
 We notice that MSE values have increased slightly. This makes sense because given the same number of trees, a smaller value of lambda increases MSE. Lambda, essentially, is a shrinkage parameter which controls the rate at which boosting learns. So, a very small value of lambda will require a very large number of trees in order to achieve good performance. 
 
+## Part 2
 
-##
+### 1
+```{r mentalprep}
+(mh <- read_csv("mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit)
+
+set.seed(5678)
+mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
+```
+
+```{r model1}
+mh_tree <- tree(vote96 ~ educ, data = as_tibble(mh_split$train))
+mh_tree
+
+plot(mh_tree)
+text(mh_tree, pretty = 0)
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+tree_err
+
+roc_tree1 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree1)
+
+auc(roc_tree1)
+```
+
+```{r model2}
+mh_tree <- tree(vote96 ~ educ + mhealth_sum, data = as_tibble(mh_split$train))
+mh_tree
+
+plot(mh_tree)
+text(mh_tree, pretty = 0)
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+tree_err
+
+roc_tree2 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree2)
+
+auc(roc_tree2)
+```
+
+```{r model3}
+mh_tree <- tree(vote96 ~ educ + mhealth_sum + age, data = as_tibble(mh_split$train))
+mh_tree
+
+plot(mh_tree)
+text(mh_tree, pretty = 0)
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+tree_err
+
+roc_tree3 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree3)
+
+auc(roc_tree3)
+```
+
+```{r model4}
+mh_tree <- tree(vote96 ~ educ + mhealth_sum + age + inc10, data = as_tibble(mh_split$train))
+mh_tree
+
+plot(mh_tree)
+text(mh_tree, pretty = 0)
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+tree_err
+
+roc_tree4 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree4)
+
+auc(roc_tree4)
+```
+
+```{r model5}
+mh_tree <- tree(vote96 ~ ., data = as_tibble(mh_split$train))
+mh_tree
+
+plot(mh_tree)
+text(mh_tree, pretty = 0)
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+tree_err
+
+roc_tree5 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree5)
+
+auc(roc_tree5)
+```
+
+```{r compare_trees}
+plot(roc_tree1, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_tree2, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_tree3, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_tree4, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_tree5, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+The models I picked varied in terms of the predictor variables included.
+Model 1 contains only the predictor variable `educ`.
+Model 2 contains `educ` and `mhealth_sum`.
+Model 3 contains `educ`, `mhealth_sum`, and `age`.
+Model 4 contains `educ`, `mhealth_sum`, `age` and `inc10`
+Model 5 contains all possible predictor values.
+
+The areas under the curve and the test tree errors are exactly the same for models 3, 4, and 5. 
+As can be seen in the final graph above, the area under the curve for these models is the highest at 0.686. 
+
+Since the addition of the predictors of `black`, `female`, `married`, and `inc10` do not add any area under the curve or diminish the error in the tree, I believe that model 3 is the optimal model. It has the highest area under the curve and lowest error while not adding variables that do not increase the predictive abilities of the model while increasing computational cost.
+
+With an AUC of 0.686 and an error of 0.289, model 3 is the best model. Age is the most important predictor, followed by education and mental health index. We can interpret the tree for model 3 (seen below) using hypothetical observations. First, an individual who is less than 44.5 years old and has less than 13.5 years of education is predicted to not have voted. On the other hand, an individual (individual A) who is less than 44.5 years old and has greater than 13.5 years of education and a health index of less than 3.5 is predicted to have voted. If an individual has all of the same characteristics as individual A except with a mental health index greater than 3.5 is predicted to not have voted. For individuals older than 44.5 years old, the line of demarcation for education is at 12.5 years rather than 13.5. An individual older than 44.5 years old and with less than 12.5 years of education will be predicted to not have voted if they have a mental health index greater than 4.5.
+
+It is interesting to note that younger individuals who have less education are predicted to not have voted regardless of their mental health index and older individuals with more education are predicted to have voted regardless of their mental health index.
+```{r besttree}
+mh_tree <- tree(vote96 ~ educ + mhealth_sum + age, data = as_tibble(mh_split$train))
+mh_tree
+
+plot(mh_tree)
+text(mh_tree, pretty = 0)
+```
+
+##Part 2: SVMs 
+
+```{r}
+set.seed(1234)
+(mh_data = read.csv("mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit)
+
+mh_split <- resample_partition(mh_data, p = c("test" = .3, "train" = .7))
+
+```
+
+#Model 1: Linear Kernel with education, age, mhealthsum
+
+```{r}
+mh_lin_tune <- tune(svm, vote96 ~ educ + age + mhealth_sum, data = as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+
+```
+
+
+```{r}
+fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+
+roc_line <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+auc(roc_line)
+plot(roc_line, main = "ROC of Voter Turnout - Linear Kernel, Partial Model")
+
+```
+The area under the curve is 0.737.
+
+#Model 2: Linear Kernel with all variables
+```{r}
+mh_lin_all <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lall <- mh_lin_all$best.model
+summary(mh_lall)
+
+```
+
+```{r}
+fitted <- predict(mh_lall, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+
+roc_line_all <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+auc(roc_line_all)
+plot(roc_line_all, main = "ROC of Voter Turnout- Linear Kernel, Total Model")
+
+```
+Area under the curve is 0.746.
+
+#Model 3: Polynomial Kernel with education, age, mhealth
+```{r}
+mh_poly_tune <- tune(svm, vote96 ~ age + educ + mhealth_sum, data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_poly <- mh_poly_tune$best.model
+summary(mh_poly)
+
+```
+
+```{r}
+fitted <- predict(mh_poly, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_poly, main = "ROC of Voter Turnout - Polynomial Kernel, Partial Model")
+
+```
+The area under the curve is 0.743. 
+
+#Model 4: Polynomial Model A 
+
+```{r}
+mh_poly_all <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_poly <- mh_poly_all$best.model
+summary(mh_poly)
+
+```
+
+```{r}
+fitted <- predict(mh_poly, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly_all <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_poly_all, main = "ROC of Voter Turnout - Polynomial Kernel, Total Model")
+
+```
+Area under the curve: 0.741.
+
+#Model 5: Radial Kernel
+
+```{r}
+mh_rad_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_rad <- mh_rad_tune$best.model
+summary(mh_rad)
+
+```
+```{r}
+fitted <- predict(mh_rad, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_rad, main= "ROC of Voter Turnout - Radial Kernel, Total Model")
+
+```
+Area under the curve is 0.737.
+
+```{r}
+plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_line_all, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_poly, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_poly_all, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+
+```
+
+The best model, in this case is the linear kernel with only education, age, and mental health. This model has the highest area under the curve so it offers the most improvement over the useless classifier. This model has a cost of 1, so the margins are narrow around the linear hyperplane. As we can see from the plot below, the error drops to below 0.3 and remains there, regardless of the increases error. 
+
+```{r}
+plot(mh_lin_tune)
+
+```
+
+```{r}
+svm(vote96 ~ age + educ + mhealth_sum, data = as_tibble(mh_split$test), kernel = "linear", scale = FALSE, cost = 1) %>%
+  plot(as_tibble(mh_split$test), age ~ educ)
+
+```
+
+```{r}
+svm(vote96 ~ educ + mhealth_sum + age, data = as_tibble(mh_split$test), kernel = "linear", scale = FALSE, cost = 1) %>%
+  plot(as_tibble(mh_split$test), educ ~ mhealth_sum)
+
+```
+
+```{r}
+svm(vote96 ~ mhealth_sum + age + educ, data = as_tibble(mh_split$test), kernel = "linear", scale = FALSE, cost = 1) %>%
+  plot(as_tibble(mh_split$test), mhealth_sum ~ age)
+
+```
+
+
+
+## Question 3 - OJ Simpson
+
+```{r,echo=FALSE, include=FALSE}
+# read in data 
+simpson <- read_csv("simpson.csv")
+simpson$male <- with(simpson, ifelse(female == 1, 0, 1))
+simpson$white <- with(simpson, ifelse(black == 0 & hispanic == 0,1,0))
+
+```
+** Race and OJ's Guilt **
+
+[1] What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
+
+A natural starting point to the model the relationship between race and belief of OJ's guilt would be to use a logistic regression. This is because 'guilt' is a binary variable - taking 0 when the respondent believes OJ is innocent and 1 when they believe he's guilty.
+
+When I tried including 'educ' and 'income' in my model, some dummy variables were found to be weakly significant. Educ being 'not high school grad' had a negative impact on belief in OJ's guilt, having income 'over $75000' had a positive impact on belief in OJ's guily. However, I did not include those variables because the model's overall accuracy did not benefit from their inclusion. 
+
+I also created a dummy variable indicating 'male' and one indicating 'neither black nor hispanic' - to see if there was an interaction effect between between race and gender - it is conceivable that black men are more likely to believe in OJ's innocence (same race-gender category as OJ) or white (roughly approximated by 'neither black nor hispanic') women (same race-gender cateogry as OJ's alleged victim) are less likely to - when I ran the regression however, I was suprised to find that the interaction term was not significant. 
+
+Other tested models:
+```{r}
+black_educ_income <- glm(guilt ~black+educ+income,data = simpson, family = binomial)
+all_vars <- glm(guilt ~black+educ+income+age+rep+dem,data = simpson, family = binomial)
+black_male <- glm(guilt ~black*male,data = simpson, family = binomial)
+white_female <- glm(guilt ~white*female,data = simpson, family = binomial)
+black_age <- glm(guilt~black+age,data=simpson,family=binomial)
+summary(white_female)
+```
+
+Here's what a logistic regression of 'guilt' on 'black' looks like - 
+
+```{r}
+black_only <- glm(guilt ~black,data = simpson, family = binomial)
+summary(black_only)
+
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+accuracy <- simpson %>%
+  add_predictions(black_only) %>%
+  mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > .5))
+
+model_accuracy = mean(accuracy$guilt == accuracy$pred, na.rm = TRUE)
+
+PRE <- function(model){
+  # get the actual values for y from the data
+  y <- model$y
+
+  # get the predicted values for y from the model
+   y.hat <- round(model$fitted.values)
+
+  # calculate the errors for the null model and your model
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+
+  # calculate the proportional reduction in error
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+pre <- PRE(black_only)
+auc_x <- auc(accuracy$guilt, accuracy$pred)
+
+model_accuracy
+pre
+auc_x
+```
+
+We see here that the relationship between the variable 'black' and belief in OJ's guilt is highly statistically significant, with a p-value to the order of 10^-16.
+It is also substantively significant, in that being black reduces the log-odds of an individuals belief in OJ's guilt by -3.1022, i.e., lowers the likelihood of believing in OJ's guilt by ~ 14%.
+
+Model Accuracy : `r model_accuracy`
+Proportional Reduction in Error : `r pre`
+Area under Curve : `r auc_x`
+
+The model's accuracy is 81.6%, which is good. The proportional error reduction is 41%, which is substantial. The AUC shows a 0.23 increase over the useless classifier.   
+
+** Predictive Model for OJ's Guilt **
+
+Decision trees are great intuitive concepts for making predictions. Theywork by splitting the observations into a number of regions, and predictions are made based on the mean or mode of the training observations in that region.
+
+
+```{r}
+set.seed(1234) # For reproducibility
+oj = read.csv('simpson.csv')
+oj = oj[(!is.na(oj$guilt)), ]
+oj$Opinion = factor(oj$guilt, levels = c(0,1), labels = c("Innocent", "Guilty"))
+```
+
+```{r}
+oj_split7030 = resample_partition(oj, c(test = 0.3, train = 0.7))
+oj_train70 = oj_split7030$train %>%
+                tbl_df()
+oj_test30 = oj_split7030$test %>%
+               tbl_df()
+
+oj_data_train = oj_train70 %>%
+                select(-guilt) %>%
+                mutate_each(funs(as.factor(.)), dem, rep) %>%
+                na.omit
+
+oj_data_test = oj_test30 %>%
+               select(-guilt) %>%
+               mutate_each(funs(as.factor(.)), dem, rep) %>%
+               na.omit
+
+# estimate model
+oj_tree <- tree(Opinion ~ ., data = oj_data_train)
+
+# plot tree
+tree_data <- dendro_data(oj_tree)
+
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = "Decision Tree for OJ's Guilt",
+       subtitle = 'All predictors, Default Controls')
+ptree
+```
+A rudimentary decision tree confirms what we learned in part 1 - that race is the most important predictor of an individual's perception of OJ Simpson's guilt, with age being a distant second. We will now use a random forest to explore this further. I choose random forests over pruned trees bagging because it averages across a set of uncorrelated trees and reduces variance.
+```{r}
+# Let's build a random forest
+#biden.split <- resample_partition(guilt, c(test = .3, train = .7))
+# function to get MSE
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+(rf_oj = randomForest(Opinion ~ ., data = oj_data_train, mtry = 3,ntree = 500))
+```
+We notice an error rate of 19.7%, which is a success rate of ~ 80% and that's reasonably good.
+
+```{r}
+rf_oj_importance = as.data.frame(importance(rf_oj))
+
+ggplot(rf_oj_importance, mapping=aes(x=rownames(rf_oj_importance), y=MeanDecreaseGini)) +
+       geom_bar(stat="identity", aes(fill=MeanDecreaseGini)) + 
+       labs(title = "Mean Decrease in Gini Index Across 500 Random Forest Regression Trees",
+       subtitle = "Predicted Opinion of Simpson Guilt",
+       x = "Variable",
+       y = "Mean Decrease in Gini Index") + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
+```
+This graph further confirms that race is the most important predictor of 'Opinion' - it yields the highest decrease in Gini Index. Its importance is followed by 'age' - just as we noticed in our logistic regression model above.
