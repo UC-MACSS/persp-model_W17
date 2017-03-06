@@ -120,7 +120,7 @@ First, under the controlled condition, the full tree based on the training data 
 ```{r 1-tree-full}
 
 tree_biden <- tree(biden ~ ., data = biden_split$train, 
-                   control = tree.control(nobs = nrow(biden_train),
+                   control = tree.control(nobs = nrow(biden_split$train),
                             mindev = 0))
 
 tree_data<-dendro_data(tree_biden)
@@ -181,7 +181,7 @@ Therefore, under the controlled condition, I established the optimized tree for 
 ```{r 1-tree-optimized}
 # the tree before the pruning
 tree_biden <- tree(biden ~ ., data = biden_split$train, 
-                   control = tree.control(nobs = nrow(biden_train),
+                   control = tree.control(nobs = nrow(biden_split$train),
                             mindev = 0))
 # set the node number as 4
 mod <- prune.tree(tree_biden, best = 4)
@@ -598,16 +598,15 @@ pander(sum)
 ###2. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 
 
-####Model 1:  Linear Kernel with education and age
+####Model 1:  Linear Kernel with age
 
 ```{r 2-SVM-1}
-library(caret)
 library(e1071)
 set.seed(1234)
 
-mh_split <- resample_partition(na.omit(mh), p = c("test" = .3, "train" = .7))
+mh_split <- resample_partition(na.omit(mh), p = c(test = 0.3, train = 0.7))
 
-mh_lin_tune <- tune(svm, vote96 ~ educ + age, data =  as_tibble(mh_split$train),
+mh_lin_tune <- tune(svm, vote96 ~ age, data =  as_tibble(mh_split$train),
                     kernel = "linear",
                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
 summary(mh_lin_tune)
@@ -628,30 +627,30 @@ auc1<-auc(roc_line)
 #PRE
 real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
 E1 <- mean(as.numeric(real != median(real)))
-E2 <- 0.319
+E2 <- 0.292
 PRE1 <- (E1 - E2) / E1
 
 
 ```      
 
-Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 3 and has a 10-fold CV error rate 31.9%.  In addition, the AUC us 0.736 and the PRE is 4.85% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 4.85%. 
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 1 to 7 and has a 10-fold CV error rate 29.2%.  In addition, the AUC us 0.691 and the PRE is 12.9% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 12.9%. 
 
 
 ####Model 2:  Linear Kernel with all independent variables
 
 ```{r 2-SVM-2}
 set.seed(1234)
-mh_lin_tune <- tune(svm, vote96 ~ ., data =  as_tibble(mh_split$train),
+mh_lin_tune2 <- tune(svm, vote96 ~ ., data =  as_tibble(mh_split$train),
                     kernel = "linear",
                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
-summary(mh_lin_tune)
+summary(mh_lin_tune2)
 # Best 
-mh_lin <- mh_lin_tune$best.model
-summary(mh_lin)
+mh_lin2 <- mh_lin_tune2$best.model
+summary(mh_lin2)
 
 # ROC
 
-fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+fitted <- predict(mh_lin2, as_tibble(mh_split$test), decision.values = TRUE) %>%
   attributes
 
 roc_line2 <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
@@ -662,19 +661,19 @@ auc2<-auc(roc_line2)
 #PRE
 real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
 E1 <- mean(as.numeric(real != median(real)))
-E2 <- 0.297
+E2 <- 0.264
 PRE2 <- (E1 - E2) / E1
 
 
 ```      
 
-Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 6 and has a 10-fold CV error rate 29.7 %.  In addition, the AUC us 0.746 and the PRE is 11.40% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 11.40%. Based on PRE, AUC and error rate, this full model is better than the partial model above. 
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 3 to 6 and has a 10-fold CV error rate 26.4 %.  In addition, the AUC us 0.733 and the PRE is 21.3% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 21.3%. Based on PRE, AUC and error rate, this full model is better than the partial model above. 
 
 ####Model 3:  Polynomial kernel (full model)
 
 ```{r 2-SVM-3}
-set.seed(1234)
 
+set.seed(1234)
 
 mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
                     kernel = "polynomial",
@@ -698,13 +697,13 @@ auc3<-auc(roc_poly)
 #PRE
 real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
 E1 <- mean(as.numeric(real != median(real)))
-E2 <- 0.302
+E2 <- 0.263
 PRE3 <- (E1 - E2) / E1
 
 
 ```      
 
-Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 5 and has a 10-fold CV error rate 30.2 %.  In addition, the AUC us 0.741 and the PRE is 9.92% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 9.92%. It appears this polynominal kernal is worse than the linear one. 
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 4 and has a 10-fold CV error rate 26.3 %.  In addition, the AUC us 0.702 and the PRE is 21.5% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 9.92%. It appears this polynominal kernal is worse than the linear one. 
 
 ####Model 4:  Radial kernel (full model)
 
@@ -732,13 +731,13 @@ auc4<-auc(roc_rad)
 #PRE
 real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
 E1 <- mean(as.numeric(real != median(real)))
-E2 <- 0.292
+E2 <- 0.22
 PRE4 <- (E1 - E2) / E1
 
 
 ```      
 
-Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 5 and has a 10-fold CV error rate 29.2 %.  In addition, the AUC us 0.737 and the PRE is 12.9% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 12.9%. This model is stil not as good as the linear full model.
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 4 and has a 10-fold CV error rate 22.0 %.  In addition, the AUC us 0.738 and the PRE is 12.9% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 34.4%. This model is stil not as good as the linear full model.
 
 ####Model 5:  Sigmoid kernel (full model)
 
@@ -751,7 +750,7 @@ mh_sig_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
 summary(mh_sig_tune)
 
-mh_rad <- mh_sig_tune$best.model
+mh_sig <- mh_sig_tune$best.model
 summary(mh_sig)
 # ROC
 
@@ -766,23 +765,23 @@ auc5<-auc(roc_sig)
 #PRE
 real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
 E1 <- mean(as.numeric(real != median(real)))
-E2 <- 0.319
+E2 <- 0.247
 PRE5 <- (E1 - E2) / E1
 
 
 ```      
 
-Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 3 and has a 10-fold CV error rate 31.9 %.  In addition, the AUC us 0.737 and the PRE is 4.85% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 4.85%. This model is even worse than the radial kernal. 
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 3 and has a 10-fold CV error rate 26.3 %.  In addition, the AUC us 0.603 and the PRE is 24.7% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 24.7%. This model is even worse than the radial kernal. 
 
 ```{r 2-SVM-sum}
 
 
-plot(roc_line, print.auc = TRUE, col = "black", print.auc.y = .1, add = TRUE)
-plot(roc_line2, print.auc = TRUE, col = "red")
-plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.y = .4, add = TRUE)
-plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.y = .3, add = TRUE)
-plot(roc_sig, print.auc = TRUE, col = "green", print.auc.y = .2, add = TRUE)
 
+#plot(roc_line2, print.auc = TRUE, col = "red", main ="ROC of Voter Turnout - 5 models")
+#plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.y = .4, add = TRUE)
+#plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.y = .3, add = TRUE)
+#plot(roc_sig, print.auc = TRUE, col = "green", print.auc.y = .2, add = TRUE)
+#plot(roc_line, print.auc = TRUE, col = "black",print.auc.y = .1, add = TRUE)
 
 
 sum2<-data_frame("model"=c("model1","model2","model3","model4","model5"),
@@ -795,7 +794,8 @@ pander(sum2)
 
 ```      
 
-Based on the data summary in the above table, model 2 and model 4 both have the alomst similar and small error rate in five models. However, model 4 has a little bit larger PRE than model 2, while the model 2 has the highest AUC value. From the plot above, it is also obvious that for model 2, there are more area under the curve than the other curves. Therefore, the model 2 (linear full model) is the best one, then model 4(radial), then the model 3 (polynominal), the model 5(sigmodial), the worse one is the model 1(partial linear). However, the SVM models is good at prediction rather than interpretation and do not provide clear ways for interpreting the relative importance and influence of individual predictors on the separating hyperplane. 
+
+Based on the data summary in the above table, model 2 and model 4 both have the alomst similar and small error rate in five models. However, model 4 has a little bit larger PRE than model 2,and the model 4 has the highest AUC value. From the plot above, it is also obvious that for model 4, there are more area under the curve than the other curves. Therefore, the model 4(radial) is the best one, then model 2(full linear), then the model 3 (polynominal), the model 5(sigmodial), the worse one is the model 1(partial linear). However, the SVM models is good at prediction rather than interpretation and do not provide clear ways for interpreting the relative importance and influence of individual predictors on the separating hyperplane. 
 
 
 
@@ -1012,7 +1012,7 @@ mseSd_100cv10
 
 ```    
 
-In the final step, by using the cross validation, I intend to examine the robustness of my logistic model. The model gets a `r mse_100cv10 * 100%` average error rate, which is still pretty good, with a small std of the error rate at `r mseSd_100cv10`.
+In the final step, by using the cross validation, I intend to examine the robustness of my logistic model. The model gets a `r mse_100cv10 * 100`% average error rate, which is still pretty good, with a small std of the error rate at `r mseSd_100cv10`.
 
 
 
@@ -1146,7 +1146,7 @@ simpson_sig <- simpson_sig_tune$best.model
 summary(simpson_sig)
 
 #Best
-simpson_sig <- simpson_sigtune$best.model
+simpson_sig <- simpson_sig_tune$best.model
 summary(simpson_sig)
 
 #ROC
@@ -1165,21 +1165,7 @@ E2 <- 0.191
 PRE <- (E1 - E2) / E1
 PRE
 
-# plot all the ROC curves:
-plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
-plot(roc_poly, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
-plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
-plot(roc_sig, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
 
-
-# summarize:
-sum4<-data_frame("model"=c("model1","model2","model3","model4"),
-           "Error Rate"=c(0.1905, 0.1986, 0.1905, 0.1910),
-           "PRE" =c(0.366, 0.340, 0.366, 0.365),
-           "AUC" =c(0.796, 0.766, 0.771, 0.782)
-           )
-
-pander(sum4)
 ```  
 
 Using polynomial kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). the model gets the best cost level at 4 with a 19.1% 10-fold CV error rate. Also, the AUC us 0.782 and the PRE is 36.5% (the model MSE is estimated by the 10-fold error rate). Generally, the model is still worse than the linear one.
@@ -1188,10 +1174,10 @@ Using polynomial kernel, with all predictor variables and tested at different co
 
 
 # plot all the ROC curves:
-plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
-plot(roc_poly, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
-plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
-plot(roc_sig, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+#plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2, main="ROC for Guilt of OJ Simpson - 4 models ")
+#plot(roc_poly, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+#plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+#plot(roc_sig, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
 
 
 # summarize:
@@ -1204,4 +1190,6 @@ sum4<-data_frame("model"=c("model1","model2","model3","model4"),
 pander(sum4)
 ```  
 
-According to the error rate, PRE and AUC, I think the model1 (linear kernel) is the best model I got. It has the lowest Error rate, and highest PRE as well as the highest AUC, which indicates this model has the best performance among all the four models
+![](graphics/2.png)
+
+According to the error rate, PRE and AUC, I think the model1 (linear kernel) is the best model I got. It has the lowest Error rate, and highest PRE as well as the highest AUC, which indicates this model has the best performance among all the four models. 
