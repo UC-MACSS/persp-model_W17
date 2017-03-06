@@ -4,7 +4,7 @@ Erin M. Ochoa
 2017 March 6
 
 -   [Part 1: Joe Biden (redux times two)](#part-1-joe-biden-redux-times-two)
--   [Part 2: Modeling voter turnout \[3 points\]](#part-2-modeling-voter-turnout-3-points)
+-   [Part 2: Modeling voter turnout](#part-2-modeling-voter-turnout)
 -   [Part 3: OJ Simpson \[4 points\]](#part-3-oj-simpson-4-points)
 -   [Submission instructions](#submission-instructions)
     -   [If you use R](#if-you-use-r)
@@ -14,6 +14,26 @@ Erin M. Ochoa
 mse = function(model, data) {
   x = modelr:::residuals(model, data)
   mean(x ^ 2, na.rm = TRUE)
+}
+
+
+# There seems to be a bug in the gbm function.
+# Work-around method found here: http://www.samuelbosch.com/2015/09/workaround-ntrees-is-missing-in-r.html
+
+predict.gbm = function (object, newdata, n.trees, type = "link", single.tree = FALSE, ...) {
+  if (missing(n.trees)) {
+    if (object$train.fraction < 1) {
+      n.trees = gbm.perf(object, method = "test", plot.it = FALSE)
+    }
+    else if (!is.null(object$cv.error)) {
+      n.trees = gbm.perf(object, method = "cv", plot.it = FALSE)
+    }
+    else {
+      n.trees = length(object$train.error)
+    }
+    cat(paste("Using", n.trees, "trees...\n"))
+    gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
+  }
 }
 ```
 
@@ -138,14 +158,186 @@ Next, we review variable importance measures:
 
 ![](ps8-emo_files/figure-markdown_github/biden_bag_importance-1.png)
 
-The variable importance plot shows that age and Democrat are the two most important variables as these yield the greatest average decreases (of approximately 225,000 and 150,000, respectively) in node impurity across 500 bagged regression trees. Despite the higher test MSE, the bagged tree model is likely a better model than the pruned tree above because the bagged model uses bootstrapping to create 500 different training sets, whereas the pruned tree above uses only a single training set. The bagged model averages the variance across the bootstrapped trees, which, together, suggest that age and Democrat are the most important variables while gender is the least important.
+The variable importance plot shows that age and Democrat are the two most important variables as these yield the greatest average decreases (of approximately 225,000 and 150,000, respectively) in node impurity across 500 bagged regression trees. Despite the higher test MSE, the bagged tree model is likely a better model than the pruned tree above because the bagged model uses bootstrapping to create 500 different training sets, whereas the pruned tree above uses only a single training set. The bagged model averages the variance across the bootstrapped trees, which, together, suggest that age and Democrat are the most important variables while gender is the least important. It is worth noting, however, that the bagged model only accounts for 9.49% of the variance in feelings of warmth toward Joe Biden.
 
-1.  Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of *m*, the number of variables considered at each split, on the error rate obtained.
+Next, we estimate a random forest model with 500 trees:
 
-2.  Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter *λ* influence the test MSE?
+``` r
+set.seed(1234)
 
-Part 2: Modeling voter turnout \[3 points\]
-===========================================
+m = floor(sqrt(5))
+
+(rf_biden = randomForest(biden ~ ., data = biden_bag_data_train, mtry = m, ntree = 500))
+```
+
+    ## 
+    ## Call:
+    ##  randomForest(formula = biden ~ ., data = biden_bag_data_train,      mtry = m, ntree = 500) 
+    ##                Type of random forest: regression
+    ##                      Number of trees: 500
+    ## No. of variables tried at each split: 2
+    ## 
+    ##           Mean of squared residuals: 404
+    ##                     % Var explained: 25.9
+
+``` r
+mse_rf_biden = mse(rf_biden, biden_bag_data_test)
+```
+
+The random forest model returns a test MSE of 403.306, which is much lower than the one returned by bagging (484.358). Furthermore, the random forest model explains a greater proportion of variance (25.9%) than the bagged model does (9.49%). Still, with the variane explained at only a quarter, this suggests that there are likely unobserved and unknown variables that have a notable effect on feelings of warmth for Joe Biden.
+
+The notable decrease in MSE is attributable to the effect of limiting the variables available every split to only *m* (2) randomly-selected predictors. This means that the trees in the random forest model will be uncorrelated to each other, the variance for the final model will be lower, and the test MSE will be lower.
+
+We plot the importance of the predictors:
+
+![](ps8-emo_files/figure-markdown_github/plot_rf_importance-1.png)
+
+The random forest model estimates that Democrat is the sinlge most important predictor of feelings toward Joe Biden and that Republican is next in line; these have mean increased node purity of approximately 110,000 and 70,000, respectively. As was the case with the bagging model, gender is the least important predictor.
+
+Finally, we estimate three boosting models, each of different depths and with 10,000 trees:
+
+``` r
+set.seed(1234)
+biden_models = list("boosting_depth1" = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train,
+                                            n.trees = 10000, interaction.depth = 1),
+                    "boosting_depth2" = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train,
+                                            n.trees = 10000, interaction.depth = 2),
+                    "boosting_depth4" = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train,
+                                            n.trees = 10000, interaction.depth = 4))
+```
+
+    ## Distribution not specified, assuming gaussian ...
+    ## Distribution not specified, assuming gaussian ...
+    ## Distribution not specified, assuming gaussian ...
+
+For each depth, we find the optimal number of iterations:
+
+``` r
+set.seed(1234)
+data_frame(depth = c(1, 2, 4),
+           model = biden_models[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) %>%
+           select(-model) %>%
+           knitr::kable(caption = "Optimal number of boosting iterations",
+                        col.names = c("Depth", "Optimal number of iterations"))
+```
+
+    ## Using OOB method...
+
+    ## Warning in .f(.x[[i]], ...): OOB generally underestimates the optimal
+    ## number of iterations although predictive performance is reasonably
+    ## competitive. Using cv.folds>0 when calling gbm usually results in improved
+    ## predictive performance.
+
+    ## Using OOB method...
+
+    ## Warning in .f(.x[[i]], ...): OOB generally underestimates the optimal
+    ## number of iterations although predictive performance is reasonably
+    ## competitive. Using cv.folds>0 when calling gbm usually results in improved
+    ## predictive performance.
+
+    ## Using OOB method...
+
+    ## Warning in .f(.x[[i]], ...): OOB generally underestimates the optimal
+    ## number of iterations although predictive performance is reasonably
+    ## competitive. Using cv.folds>0 when calling gbm usually results in improved
+    ## predictive performance.
+
+|  Depth|  Optimal number of iterations|
+|------:|-----------------------------:|
+|      1|                          3302|
+|      2|                          2700|
+|      4|                          2094|
+
+Now we estimate the boosting models with the optimal number of treesh for each depth:
+
+``` r
+set.seed(1234)
+
+biden_boost1 = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train, n.trees = 3302, interaction.depth = 1)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+biden_boost2 = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train, n.trees = 2700, interaction.depth = 2)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+biden_boost4 = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train, n.trees = 2094, interaction.depth = 4)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+mse_boost1_biden = mse(biden_boost1,biden_bag_data_test)
+```
+
+    ## Using 3302 trees...
+
+``` r
+mse_boost2_biden = mse(biden_boost2,biden_bag_data_test)
+```
+
+    ## Using 2700 trees...
+
+``` r
+mse_boost4_biden = mse(biden_boost4,biden_bag_data_test)
+```
+
+    ## Using 2094 trees...
+
+The boosting model with a depth of 1 has a test MSE of 405.424; for the model with a depth of 2, it is 402.541 and for the model with a depth of 4 it is 404.544. This indicates that the boosting approach yields the lowest MSE for trees with a single split compared to those with two or four splits.
+
+Next, we increase the value of the *λ* from the default of .001 to .1:
+
+``` r
+set.seed(1234)
+
+boost1_biden_lambda = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train,
+                          n.trees = 3302, interaction.depth = 1, shrinkage=0.1)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+boost2_biden_lambda = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train,
+                          n.trees = 2700, interaction.depth = 2, shrinkage=0.1)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+boost4_biden_lambda = gbm(as.numeric(biden) - 1 ~ ., data = biden_bag_data_train,
+                          n.trees = 2094, interaction.depth = 4, shrinkage=0.1)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+mse_boost1_biden_lambda = mse(boost1_biden_lambda,biden_bag_data_test)
+```
+
+    ## Using 3302 trees...
+
+``` r
+mse_boost2_biden_lambda = mse(boost2_biden_lambda,biden_bag_data_test)
+```
+
+    ## Using 2700 trees...
+
+``` r
+mse_boost4_biden_lambda = mse(boost4_biden_lambda,biden_bag_data_test)
+```
+
+    ## Using 2094 trees...
+
+The test MSE for single-split trees has increased from 405.424 to 414.067; for trees with a depth of two, it has increased from 402.541 to 431.52 and for trees of depth 4, it has increased from 404.544 to 463.908. This suggests that increasing the step size leads to the model learning faster but not as well. Ideally, the next step would be to try different values of *λ* and determine which yields the lowest MSE for each depth.
+
+Part 2: Modeling voter turnout
+==============================
 
 An important question in American politics is why do some people participate in the political process, while others do not? Participation has a direct impact on outcomes -- if you fail to participate in politics, the government and political officials are less likely to respond to your concerns. Typical explanations focus on a resource model of participation -- individuals with greater resources, such as time, money, and civic skills, are more likely to participate in politics. One area of importance is understanding voter turnout, or why people participate in elections. Using the resource model of participation as a guide, we can develop several expectations. First, women, who more frequently are the primary caregiver for children and earn a lower income, are less likely to participate in elections than men. Second, older Americans, who typically have more time and higher incomes available to participate in politics, should be more likely to participate in elections than younger Americans. Finally, individuals with more years of education, who are generally more interested in politics and understand the value and benefits of participating in politics, are more likely to participate in elections than individuals with fewer years of education.
 
