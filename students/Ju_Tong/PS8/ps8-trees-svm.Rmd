@@ -794,8 +794,9 @@ pander(sum2)
 
 ```      
 
+![](graphics/1.png)
 
-Based on the data summary in the above table, model 2 and model 4 both have the alomst similar and small error rate in five models. However, model 4 has a little bit larger PRE than model 2,and the model 4 has the highest AUC value. From the plot above, it is also obvious that for model 4, there are more area under the curve than the other curves. Therefore, the model 4(radial) is the best one, then model 2(full linear), then the model 3 (polynominal), the model 5(sigmodial), the worse one is the model 1(partial linear). However, the SVM models is good at prediction rather than interpretation and do not provide clear ways for interpreting the relative importance and influence of individual predictors on the separating hyperplane. 
+Based on the data summary in the above table, model 2 has the highest AUC value. However, model 4 has a larger PRE than model 2,and the model 4 has the lowest error rate. From the plot above, it is also obvious that for model 2, there are more area under the curve than the other curves. So it will be difficult to determine whehter model 2 or model 4 is the best model in five models. If only concerning the AUC, I bet the model 2 will be much better than model4. Therefore, the model 2(linear full) is the best one, then model 4(radir), then the model 3 (polynominal), the model 5(sigmodial), the worse one is the model 1(partial linear). However, the SVM models is good at prediction rather than interpretation and do not provide clear ways for interpreting the relative importance and influence of individual predictors on the separating hyperplane. 
 
 
 
