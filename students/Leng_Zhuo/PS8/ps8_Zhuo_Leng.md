@@ -1,4 +1,4 @@
-Problem set \#7: Re-Sampling and Non-Linearity
+Problem set \#8: tree-based methods and support vector machines
 ================
 Zhuo Leng
 

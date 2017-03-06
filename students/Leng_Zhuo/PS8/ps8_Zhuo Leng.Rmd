@@ -1,5 +1,5 @@
 ---
-title: "Problem set #7: Re-Sampling and Non-Linearity"
+title: "Problem set #8: tree-based methods and support vector machines"
 author: "Zhuo Leng"
 output:
   github_document:
