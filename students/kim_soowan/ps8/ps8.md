@@ -733,8 +733,373 @@ data_frame(var = rownames(importance(mh_rf5)),
 mse_rf5 <- mse(mh_rf5, mh_rf_test)
 ```
 
-Based on this model, income is the most influential factor affecting voter turnout, followed by education level. Mental health does not appear to have a large effect. The test MSE for this model is 0.2036966. The test accuracy rate is 0.7048711, meaning it predicted voting accurately 70.49% of the time. The PRE is 0.0964912, indicating that it outperforms the useless classifier. The AUC is 0.6874393, which is respectably close to 1.
+Based on this model, income is the most influential factor affecting voter turnout, followed by education level. Mental health does not appear to have a large effect. The test MSE for this model is 0.2036966. The test accuracy rate is 0.7048711, meaning it predicted voting accurately 70.49% of the time. The PRE is 0.0964912, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6874393, which is respectably close to 1.
 
 ### Subpart 2
 
 **Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)**
+
+I evaluate the following six models (with optimal cost parameters, as determined by 10-fold CV):
+
+1.  vote96 ~ mhealth\_sum (linear kernel)
+2.  vote96 ~ mhealth\_sum (polynomial kernel)
+3.  vote96 ~ mhealth\_sum (radial kernel)
+4.  vote96 ~ mhealth\_sum + educ + inc10 (linear kernel)
+5.  vote96 ~ mhealth\_sum + educ + inc10 (polynomial kernel)
+6.  vote96 ~ mhealth\_sum + educ + inc10 (radial kernel)
+
+``` r
+#fit each model with optimal cost parameter
+mh_svm1_tune <- tune(svm, vote96 ~ mhealth_sum, data = as_tibble(mh_rf_train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_svm2_tune <- tune(svm, vote96 ~ mhealth_sum, data = as_tibble(mh_rf_train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_svm3_tune <- tune(svm, vote96 ~ mhealth_sum, data = as_tibble(mh_rf_train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_svm4_tune <- tune(svm, vote96 ~ mhealth_sum + educ + inc10, data = as_tibble(mh_rf_train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_svm5_tune <- tune(svm, vote96 ~ mhealth_sum + educ + inc10, data = as_tibble(mh_rf_train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_svm6_tune <- tune(svm, vote96 ~ mhealth_sum + educ + inc10, data = as_tibble(mh_rf_train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_svm1 <- mh_svm1_tune$best.model
+mh_svm2 <- mh_svm2_tune$best.model
+mh_svm3 <- mh_svm3_tune$best.model
+mh_svm4 <- mh_svm4_tune$best.model
+mh_svm5 <- mh_svm5_tune$best.model
+mh_svm6 <- mh_svm6_tune$best.model
+```
+
+``` r
+#Test MSEs
+mse_svm1 <- mse(mh_svm1, mh_rf_test)
+mse_svm2 <- mse(mh_svm2, mh_rf_test)
+mse_svm3 <- mse(mh_svm3, mh_rf_test)
+mse_svm4 <- mse(mh_svm4, mh_rf_test)
+mse_svm5 <- mse(mh_svm5, mh_rf_test)
+mse_svm6 <- mse(mh_svm6, mh_rf_test)
+
+mse_list <- as.data.frame(c(mse_svm1,
+                            mse_svm2,
+                            mse_svm3,
+                            mse_svm4,
+                            mse_svm5,
+                            mse_svm6))
+
+#test error rate
+mh_model_accuracy <- mh_rf_test %>%
+  as_tibble() %>%
+  add_predictions(mh_svm1) %>% #model 1
+  mutate(pred1 = as.numeric(pred > .5)) %>%
+  rename(prob1 = pred) %>%
+  add_predictions(mh_svm2) %>% #model 2
+  mutate(pred2 = as.numeric(pred > .5)) %>%
+  rename(prob2 = pred) %>%
+  add_predictions(mh_svm3) %>% #model 3
+  mutate(pred3 = as.numeric(pred > .5)) %>%
+  rename(prob3 = pred) %>%
+  add_predictions(mh_svm4) %>%
+  mutate(pred4 = as.numeric(pred > .5)) %>%
+  rename(prob4 = pred) %>%
+  add_predictions(mh_svm5) %>%
+  mutate(pred5 = as.numeric(pred > .5)) %>%
+  rename(prob5 = pred) %>% 
+  add_predictions(mh_svm6) %>%
+  mutate(pred6 = as.numeric(pred > .5)) %>%
+  rename(prob6 = pred)
+
+mh_model_acc1 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred1, na.rm = TRUE)
+mh_model_acc2 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred2, na.rm = TRUE)
+mh_model_acc3 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred3, na.rm = TRUE)
+mh_model_acc4 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred4, na.rm = TRUE)
+mh_model_acc5 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred5, na.rm = TRUE)
+mh_model_acc6 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred6, na.rm = TRUE)
+
+acc_list <- as.data.frame(c(mh_model_acc1,
+              mh_model_acc2,
+              mh_model_acc3,
+              mh_model_acc4,
+              mh_model_acc5,
+              mh_model_acc6))
+
+#PREs
+# get the actual values for y from the data
+y <- mh_model_accuracy$vote96
+# get the predicted values for y from the model
+y.hat1 <- mh_model_accuracy$pred1
+y.hat2 <- mh_model_accuracy$pred2
+y.hat3 <- mh_model_accuracy$pred3
+y.hat4 <- mh_model_accuracy$pred4
+y.hat5 <- mh_model_accuracy$pred5
+y.hat6 <- mh_model_accuracy$pred6
+
+# calculate the errors for the null model and each rf model
+
+getmode <- function(v) { #function to calculate mode
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+vote_mode <- getmode(mh_model_accuracy$vote96)
+
+E1 <- sum(y != vote_mode)
+E2_1 <- sum(y != y.hat1)
+E2_2 <- sum(y != y.hat2)
+E2_3 <- sum(y != y.hat3)
+E2_4 <- sum(y != y.hat4)
+E2_5 <- sum(y != y.hat5)
+E2_6 <- sum(y != y.hat6)
+
+# calculate the proportional reduction in error
+pre1 <- (E1 - E2_1) / E1
+pre2 <- (E1 - E2_2) / E1
+pre3 <- (E1 - E2_3) / E1
+pre4 <- (E1 - E2_4) / E1
+pre5 <- (E1 - E2_5) / E1
+pre6 <- (E1 - E2_6) / E1
+
+pre_list <- as.data.frame(c(pre1, pre2, pre3, pre4, pre5, pre6))
+
+#put metrics in one table and report
+
+model_list <- as.data.frame(c("vote96 ~ mhealth_sum (linear kernel)",
+                              "vote96 ~ mhealth_sum (polynomial kernel)",
+                              "vote96 ~ mhealth_sum (radial kernel)",
+                              "vote96 ~ mhealth_sum + educ + inc10 (linear kernel)",
+                              "vote96 ~ mhealth_sum + educ + inc10 (polynomial kernel)",
+                              "vote96 ~ mhealth_sum + educ + inc10 (radial kernel)"
+                              ))
+
+eval_df <- cbind(model_list, mse_list)
+eval_df <- cbind(eval_df, acc_list)
+eval_df <- cbind(eval_df, pre_list)
+
+colnames(eval_df) <- c("Model", "Test MSE", "Test accuracy", "PRE")
+
+kable(eval_df, caption = "Test MSEs, accuracy rates, and PREs for SVM models", format = "html")
+```
+
+<table>
+<caption>
+Test MSEs, accuracy rates, and PREs for SVM models
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Model
+</th>
+<th style="text-align:right;">
+Test MSE
+</th>
+<th style="text-align:right;">
+Test accuracy
+</th>
+<th style="text-align:right;">
+PRE
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum (linear kernel)
+</td>
+<td style="text-align:right;">
+0.2980267
+</td>
+<td style="text-align:right;">
+0.6733524
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum (polynomial kernel)
+</td>
+<td style="text-align:right;">
+0.2962525
+</td>
+<td style="text-align:right;">
+0.6647564
+</td>
+<td style="text-align:right;">
+-0.0263158
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum (radial kernel)
+</td>
+<td style="text-align:right;">
+0.2613199
+</td>
+<td style="text-align:right;">
+0.6762178
+</td>
+<td style="text-align:right;">
+0.0087719
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + educ + inc10 (linear kernel)
+</td>
+<td style="text-align:right;">
+0.2981515
+</td>
+<td style="text-align:right;">
+0.6733524
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + educ + inc10 (polynomial kernel)
+</td>
+<td style="text-align:right;">
+0.2893324
+</td>
+<td style="text-align:right;">
+0.6676218
+</td>
+<td style="text-align:right;">
+-0.0175439
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + educ + inc10 (radial kernel)
+</td>
+<td style="text-align:right;">
+0.2508319
+</td>
+<td style="text-align:right;">
+0.6934097
+</td>
+<td style="text-align:right;">
+0.0614035
+</td>
+</tr>
+</tbody>
+</table>
+``` r
+roc1 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob1)
+roc2 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob2)
+roc3 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob3)
+roc4 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob4)
+roc5 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob5)
+roc6 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob6)
+
+plot.new()
+plot(roc1, print.auc = TRUE, col = "red", print.auc.x = .2)
+plot(roc2, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+plot(roc3, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc4, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc5, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc6, print.auc = TRUE, col = "black", print.auc.x = .2, print.auc.y = .6, add = TRUE)
+```
+
+![](ps8_files/figure-markdown_github/mh_svm_roc-1.png)
+
+The ROC curves are mostly very close together. The black line represents the `vote96 ~ mhealth_sum + educ + inc10` model using a radial kernel. Overall, this model performs best.
+
+``` r
+mh_svm6
+```
+
+    ## 
+    ## Call:
+    ## best.tune(method = svm, train.x = vote96 ~ mhealth_sum + educ + 
+    ##     inc10, data = as_tibble(mh_rf_train), ranges = list(cost = c(0.001, 
+    ##     0.01, 0.1, 1, 5, 10, 100)), kernel = "radial")
+    ## 
+    ## 
+    ## Parameters:
+    ##    SVM-Type:  eps-regression 
+    ##  SVM-Kernel:  radial 
+    ##        cost:  5 
+    ##       gamma:  0.3333333 
+    ##     epsilon:  0.1 
+    ## 
+    ## 
+    ## Number of Support Vectors:  536
+
+``` r
+mh_model_resid <- mh_rf_test %>%
+  as_tibble() %>%
+  add_residuals(mh_svm6) %>%
+  add_predictions(mh_svm6) %>%
+  mutate(pred = as.numeric(pred > .5))
+
+ggplot(data = mh_model_resid, mapping = aes(x = mhealth_sum, y = pred)) + 
+  geom_point() + 
+  geom_smooth() + 
+  scale_y_continuous(breaks = c(0,1)) + 
+  labs(title = "Predicted voting vs. mental health score",
+       subtitle = "SVM: vote96 ~ mhealth_sum + educ + inc10 (radial kernel)",
+       x = "Mental health score",
+       y = "Predicted voting (1 = Voted, 0 = Did not vote)")
+```
+
+![](ps8_files/figure-markdown_github/mh_svm_interpret1-1.png)
+
+Based on the model, depression appears to negatively affect voting turnout until the mental health score reaches around 8, at which point the relationship reverses. However, the 95% confidence interval also widens as the score increases, probably because of sparse data.
+
+``` r
+ggplot(data = mh_model_resid, mapping = aes(x = educ, y = pred)) + 
+  geom_point() + 
+  geom_smooth() + 
+  scale_y_continuous(breaks = c(0,1)) + 
+  labs(title = "Predicted voting vs. education level",
+       subtitle = "SVM: vote96 ~ mhealth_sum + educ + inc10 (radial kernel)",
+       x = "Number of years of formal education",
+       y = "Predicted voting (1 = Voted, 0 = Did not vote)")
+```
+
+![](ps8_files/figure-markdown_github/mh_svm_interpret2-1.png)
+
+``` r
+ggplot(data = mh_model_resid, mapping = aes(x = inc10, y = pred)) + 
+  geom_point() + 
+  geom_smooth() + 
+  scale_y_continuous(breaks = c(0,1)) + 
+  labs(title = "Predicted voting vs. income",
+       subtitle = "SVM: vote96 ~ mhealth_sum + educ + inc10 (radial kernel)",
+       x = "Family income, in $10,000s",
+       y = "Predicted voting (1 = Voted, 0 = Did not vote)")
+```
+
+![](ps8_files/figure-markdown_github/mh_svm_interpret3-1.png)
+
+There seems to be a positive relationship between both education and income with voting.
+
+``` r
+ggplot(data = mh_model_resid, mapping = aes(x = vote96, y = resid)) + 
+  geom_boxplot(aes(group = vote96)) + 
+  scale_x_continuous(breaks = c(0,1)) + 
+  labs(title = "Residuals by actual voting behavior",
+       subtitle = "SVM: vote96 ~ mhealth_sum + educ + inc10 (radial kernel)",
+       x = "Voting outcome (1 = Voted, 0 = Did not vote)")
+```
+
+![](ps8_files/figure-markdown_github/mh_svm_interpret4-1.png)
+
+There is more variance among the residuals for cases where respondents did not vote.
+
+The test MSE for this model is 0.2508319, higher than that for the random forest model. The test accuracy rate is 0.6934097, meaning it predicted voting accurately 69.34% of the time. The PRE is 0.0614035, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6804965, significantly lower than the AUC for the random forest model.
