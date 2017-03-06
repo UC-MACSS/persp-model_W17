@@ -811,7 +811,7 @@ plot(roc_rf, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .
   The only predictor: `black`.
 
 ```{r problem3_1_model, echo=FALSE}
-simpson_logit1 <- glm(guilt ~ black, data = as_tibble(simpson_split$train), family = binomial)
+simpson_logit1 <- glm(guilt ~ black + hispanic, data = as_tibble(simpson_split$train), family = binomial)
 # summary(simpson_logit1)
 fitted <- predict(simpson_logit1, as_tibble(simpson_split$test), type = "response")
 logit_err1 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
@@ -829,28 +829,73 @@ auc(roc_logit3_1)
   This model uses all the possible predictors. According to the AUC value, the multivariate model does not improve the previous single-predictor model.
 
 ```{r problem3_2_model, echo=FALSE}
-simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
-# summary(simpson_logit2)
-fitted2 <- predict(simpson_logit2, as_tibble(simpson_split$test), type = "response")
-logit_err2 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
+set.seed(1234)
 
-roc_logit3_2 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
-plot(roc_logit3_2)
+simpson_rf <- randomForest(guilt ~ black + hispanic, data = na.omit(as_tibble(simpson_split$train)), ntree = 500)
+simpson_rf
+```
+
+```{r problem 3_2_fit, echo=FALSE}
+fitted <- predict(simpson_rf, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
+
+roc_rf <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted)
+plot(roc_rf)
 ```
 
 ```{r problem3_2_evaluation, echo=FALSE}
-auc(roc_logit3_2)
+auc(roc_rf)
 ```
 
 
 #### 1.3 single_predictor desicion tree
+
 ```{r problem3_3_model, echo=FALSE}
-simpson_tree <- tree(guilt ~ ., data = as_tibble(simpson_split$train))
+simpson_tree <- tree(guilt ~ black + hispanic, data = as_tibble(simpson_split$train))
 summary(simpson_tree)
 ```
 
+```{r problem3_3_plot, echo=FALSE}
+# plot pruned tree
+mod3_3 <- simpson_tree
+summary(mod3_3)
 
-#### 1.3 logistic regression with bootstrap approach
+tree_data3_3 <- dendro_data(mod3_3)
+mhlth_tree_data3_3 <- dendro_data(mod3_3)
+ggplot(segment(mhlth_tree_data3_3)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data3_3), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data3_3), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health + age + educ + black + female + married + inc10")
+```
+
+```{r problem3_3_fit, echo=FALSE}
+set.seed(1234)
+fitted <- predict(simpson_tree, as_tibble(simpson_split$test), type = "class")
+
+roc_tree <- roc(as.numeric(as_tibble(simpson_split$test)$guilt), as.numeric(fitted))
+plot(roc_tree)
+```
+
+```{r problem3_3_roc, echo=FALSE}
+auc(roc_tree)
+```
+
+
+#### Comparison
+
+  According to the plot below and the AUC values, the fitness of values are actially very close. The logistic regression gets the same AUC value as the classification decision tree, and the random forest provides a slightly lower AUC value. So the tree-based model using random forest would be the best model.
+  Wholly constructed by dummy variables, the performace of the three method in this context are very close.
+
+```{r problem3_comparison1, echo=FALSE}
+plot(roc_logit3_1, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .4)
+plot(roc_rf, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_tree, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+```
 
 
 ### 2. Predict whether individuals believe OJ Simpson to be guity
