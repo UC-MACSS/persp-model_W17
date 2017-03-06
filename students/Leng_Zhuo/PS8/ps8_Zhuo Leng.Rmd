@@ -50,7 +50,7 @@ Split the data into a training set (70%) and a validation set (30%). Be sure to 
 ```{r biden_1, include = FALSE}
 set.seed(1234)
 
-(biden_df <- read_csv("biden.csv") %>%
+(biden <- read_csv("biden.csv") %>%
   mutate_each(funs(as.factor(.)), female, dem, rep) %>%
   na.omit)
 biden.split <- resample_partition(biden_df, c(test = .3, train = .7))
