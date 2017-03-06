@@ -568,7 +568,7 @@ ggplot(segment(mhlth_tree_data4)) +
             aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
   theme_dendro() +
   labs(title = "Voter Turnout",
-       subtitle = "mental health + age + educ + black + female + married + inc10")
+       subtitle = "mental health")
 ```
 
 ```{r problem2_4_fit, echo=FALSE}
