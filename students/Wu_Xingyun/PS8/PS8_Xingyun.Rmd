@@ -49,7 +49,7 @@ mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
 
 ```{r read-in_simpson_data, include=FALSE}
 simpsonData <- read.csv("simpson.csv") %>%
-  mutate_each(funs(as.factor(.)), dem, rep, ind, female, black, hispanic) %>%
+  mutate_each(funs(as.factor(.)), guilt, dem, rep, ind, female, black, hispanic) %>%
   na.omit
 set.seed(1234)
 simpson_split <- resample_partition(simpsonData, p = c("test" = .3, "train" = .7))
@@ -859,55 +859,122 @@ tidy(simpson_tree)
 
 
 ### 2. Predict whether individuals believe OJ Simpson to be guity
-  Since this question does not have specific predictors, I would use tree-based models for this part. As the first step of building tree-models, I need to mark the qualitative variables.
 
-```{r problem3_2_preparation, echo=FALSE, include=FALSE}
-simpson_train <- simpson_split$train %>%
-  as_tibble() %>%
-  mutate(#guilt = factor(guilt, levels = 0:1, labels = c("not-guity", "guity")),
-         dem = factor(dem, levels = 0:1, labels = c("non-Democrat", "Democrat")),
-         rep = factor(rep, levels = 0:1, labels = c("non-Republican", "Republican")),
-         black = factor(black, levels = 0:1, labels = c("non-black", "black")),
-         female = factor(female, levels = 0:1, labels = c("male", "female")),
-         hispanic = factor(hispanic, levels = 0:1, labels = c("non-Hispanic", "Hispanic")))
+  Since this question does not have specific predictors, I would use SVM models with all possible predictors for this part.
+
+#### 2.1. linear kernel
+
+```{r problem3_6, echo=FALSE}
+set.seed(1234)
+
+simpson_lin_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(simpson_lin_tune)
+
+simpson_lin <- simpson_lin_tune$best.model
+summary(simpson_lin)
 ```
 
-  Using a 10-fold CV with ramdem seed = 1234, I decide that the optimal tree size is 7. When the complexity reaches 5, the test MSE obtains its lowest point among the attempts. In addition, since simply increasing the complexity could cause over-fitting problem, I would not increase the tree size to numbers that would not lower the test MSE any more.
-```{r problem2_1_complexity, echo=FALSE}
-# generate 10-fold CV trees
-simpson_cv <- simpson_split$train %>%
-  na.omit() %>%
-  crossv_kfold(k = 10) %>%
-  mutate(tree = map(train, ~ tree(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = .,
-     control = tree.control(nobs = nrow(simpson_split$train$data),
-                            mindev = .001))))
+```{r problem3_6_fit, echo=FALSE}
+fitted3_6 <- predict(simpson_lin, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
 
-# calculate each possible prune result for each fold
-simpson_cv <- expand.grid(simpson_cv$.id,
-                          seq(from = 2, to = ceiling(length(mod$frame$yval) / 2))) %>%
-  as_tibble() %>%
-  mutate(Var2 = as.numeric(Var2)) %>%
-  rename(.id = Var1,
-         k = Var2) %>%
-  left_join(titanic_cv) %>%
-  mutate(prune = map2(tree, k, ~ prune.misclass(.x, best = .y)),
-         mse = map2_dbl(prune, test, err.rate.tree))
+roc_line3 <- roc(as_tibble(simpson_split$test)$guilt, fitted3_6$decision.values)
 
-titanic_cv %>%
-  group_by(k) %>%
-  summarize(test_mse = mean(mse),
-            sd = sd(mse, na.rm = TRUE)) %>%
-  ggplot(aes(k, test_mse)) +
-  geom_point() +
-  geom_line() +
-  labs(title = "Simpson guilt tree",
-       subtitle = "Age + Gender",
-       x = "Number of terminal nodes",
-       y = "Test error rate")
+plot(roc_line3)
 ```
 
-#### 2.1 Classification trees
+```{r problem3_6_auc, echo=FALSE}
+auc(roc_line3)
+```
 
-```{r problem3_4. echo=FALSE}
 
+#### 2.2 polynomial kernel
+
+```{r problem3_7_model echo=FALSE}
+set.seed(1234)
+
+simpson_poly_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100), degree = c(3, 4, 5)))
+#summary(simpson_poly_tune)
+
+simpson_poly <- simpson_poly_tune$best.model
+summary(simpson_poly)
+```
+
+```{r problem3_7_fit, echo=FALSE}
+fitted3_7 <- predict(simpson_poly, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly3 <- roc(as_tibble(simpson_split$test)$guilt, fitted3_7$decision.values)
+
+plot(roc_poly3)
+```
+
+```{r problem3_7_auc, echo=FALSE}
+auc(roc_poly3)
+```
+
+
+#### 2.3: radial kernel
+
+```{r problem3_8_model, echo = FALSE}
+set.seed(1234)
+
+simpson_lin_tune3 <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(simpson_lin_tune3)
+
+simpson_lin3 <- simpson_lin_tune3$best.model
+summary(simpson_lin3)
+```
+
+```{r problem3_8_fit, echo=FALSE}
+fitted3_8 <- predict(simpson_lin3, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad3 <- roc(as_tibble(simpson_split$test)$guilt, fitted3_8$decision.values)
+
+plot(roc_rad3)
+```
+
+```{r problem3_8_auc, echo=FALSE}
+auc(roc_rad3)
+```
+
+
+#### 2.4 random forest
+
+```{r problem3_9_model, echo=FALSE}
+set.seed(1234)
+
+simpson_rf3 <- randomForest(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)))
+simpson_rf3
+```
+
+```{r problem3_9_fit, echo=FALSE}
+fitted3_9 <- predict(simpson_rf3, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
+
+#ROC
+roc_rf3 <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted3_9)
+plot(roc_rf3)
+```
+
+```{r problem3_9_auc, echo=FALSE}
+auc(roc_rf3)
+```
+
+#### Comparison
+
+  According to the plot below wit AUC values, among the four models above, the best model would be the SVM model with linear kernel. The SVM mocel using random forest also provides a very close AUC value, 0.806.
+
+```{r problem3_comparison2, echo=FALSE}
+plot(roc_line3, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_poly3, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_rad3, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_rf3, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+```
 
