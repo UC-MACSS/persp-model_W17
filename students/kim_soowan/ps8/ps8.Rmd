@@ -717,6 +717,33 @@ There is more variance among the residuals for cases where respondents did not v
 
 The test MSE for this model is `r mse_svm6`, higher than that for the random forest model. The test accuracy rate is `r mh_model_acc6`, meaning it predicted voting accurately `r round(mh_model_acc6*100,2)`% of the time. The PRE is `r pre6`, indicating that it outperforms the useless classifier by a narrow margin. The AUC is `r auc(roc6)[[1]]`, significantly lower than the AUC for the random forest model.
 
+# Part 3: OJ Simpson [4 points]
+
+###Subpart 1
+**What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.**
+
+For this part of the problem I will use a logistic regression model to analyze the relationship between race and belief of OJ Simpson's guilt. As the outcome variable (`guilt`) is a binary categorical variable, it is not normally distributed and thus using a linear regression will not be as useful. Since I will only be using two predictor variables (`black` and `hispanic`) that are also binary, the model need not be complex; therefore, a tree model will probably not improve on a logit model.
+
+I will use 10-fold CV to evaluate model fit.
+
+```{r}
+oj <- read.csv("data/simpson.csv")
+
+guilt_race <- glm(guilt ~ Age, data = titanic, family = binomial)
+summary(survive_age)
+```
+
+
+```{r}
+
+```
+
+  2. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
+
+```{r}
+
+```
+
 ```{r session_info, include=FALSE}
 devtools::session_info()
 ```
