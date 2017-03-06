@@ -1,0 +1,304 @@
+---
+title: "Problem set #8: tree-based methods and support vector machines"
+author: "Tong Ju"
+date: "**March 5th 2017**"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', warning = FALSE)
+# getwd()
+# setwd("/Users/tongju/Desktop/MAC-Surface/CSS-HW/MACS_2017_Winter/persp-model/students/Ju_Tong/PS8")
+# install.packages("gridExtra")
+# install.packages("gbm")
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(rcfss)
+library(pROC)
+library(gbm)
+library(pander)
+
+## To install the ggendro package!!!
+# to get the tree graphs with the labels and values, use the forked
+# version of ggdendro
+# devtools::install_github("bensoltoff/ggdendro")
+library(ggdendro)
+
+# Set the parameters
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+
+#import the dataset
+biden = read_csv('data/biden.csv')
+mh = read_csv('data/mental_health.csv')
+simpson = read_csv('data/simpson.csv')
+
+
+```
+
+
+# Part 1: Sexy Joe Biden (redux times two) [3 points]
+
+###1.Split the data into a training set (70%) and a validation set (30%). **Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.**
+
+```{r 1-split-data}
+set.seed(1234)
+# Factorize some string variables in the dataset
+biden_fact<-biden %>%
+  mutate (female = factor(female, levels =0:1, labels = c("male", "female")),
+          dem = factor (dem, levels =0:1, labels = c("non-dem","dem")),
+          rep = factor (rep, levels =0:1, labels = c("non-rep", "redp")))
+
+#split the data set to training/test set (70%:30%) as required:
+biden_split <- resample_partition(biden_fact, c(test = 0.3, train = 0.7))
+
+```
+
+###2.Fit a decision tree to the training data, with `biden` as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?
+    * Leave the control options for `tree()` at their default values
+
+```{r 1-tree1}
+
+# define the MSE() function:
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+# Make the tree model of Biden data (full tree model)
+tree_biden <- tree(biden ~ ., data = biden_split$train)
+
+# Plot the tree:
+tree_data <- dendro_data(tree_biden)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Decision Tree for Warmth towards Biden ', 
+       subtitle = 'Default controls, all predictors as independent vairables')
+
+leaf_vals <- leaf_label(tree_data)$yval
+test_mse <- mse(tree_biden, biden_split$test)
+
+
+```    
+
+Based on the training data, the full tree model by using the `biden` as the responsive variable, and the other variables as independent variables is established, with the control parameters defaulted. 
+
+There are three nodes ((internal and terminal) in this decision tree,in which the braches of the tree are dependent are the political affilication of the respendents (Democratic, Republican, and neither Democratic nor Republican). The result of this tree model could be simply interpreted as below:
+
+If the respondent affiliated with Democratic party, then the model estimates the warmth toward Biden to be `r leaf_vals[3]`; 
+
+If the respondent not affiliated with Democratic party, then we proceed down the left branch to the next internal node:
+
+If he/she is Republican, then the model estimates the warmth toward Biden to be `r leaf_vals[2]`; Otherwise, if neither Republican nor Democratic, the estimated warmth is predicted to be `r leaf_vals[1]`.
+
+In addition, the MSE score of this full tree model is `r test_mse`  
+    
+###3.Now fit another tree to the training data with the following `control` options:
+Use cross-validation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?
+
+First, under the controlled condition, the full tree based on the training data is shown below, with 192 terminal nodes. And the MSE value is 481. 
+```{r 1-tree-full}
+
+tree_biden <- tree(biden ~ ., data = biden_split$train, 
+                   control = tree.control(nobs = nrow(biden_train),
+                            mindev = 0))
+
+tree_data<-dendro_data(tree_biden)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Decision Tree for Warmth towards Biden (Before Optimization)', 
+       subtitle = 'Under controlled condition, all predictors as independent vairables')
+
+full_mse <- mse(tree_biden, biden_split$test)
+
+
+```    
+
+Then, by using the cross-validation appraoch, I plot all the MSE value for the trees with various terminal nodes number. As a result, we find the minimal cross-validated test MSE is for 4 terminal nodes. 
+
+```{r 1-tree-kfold}
+# in this step, the MSE is based on the 10 fold-validation using the whole dataset
+# then figure out the optimized number for terminal nodes
+
+# generate 10-fold CV trees
+biden_cv <- crossv_kfold(biden_fact, k = 10) %>%
+  mutate(tree = map(train, ~ tree(biden ~ ., data = .,
+     control = tree.control(nobs = nrow(biden_fact),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+biden_cv <- expand.grid(biden_cv$.id, 2:15) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,k = Var2) %>%
+  left_join(biden_cv, by = ".id") %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse)) 
+
+
+biden_cv %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE",
+       title = "MSE vs. Terminal Node Number (Cross-validation Approach)")
+
+```    
+
+Therefore, under the controlled condition, I established the optimized tree for the training data with 4 terminal nodes, as follows. 
+
+```{r 1-tree-optimized}
+# the tree before the pruning
+tree_biden <- tree(biden ~ ., data = biden_split$train, 
+                   control = tree.control(nobs = nrow(biden_train),
+                            mindev = 0))
+# set the node number as 4
+mod <- prune.tree(tree_biden, best = 4)
+
+tree_data<-dendro_data(mod)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Optimized Decision Tree for Warmth towards Biden', 
+       subtitle = 'Under controlled condition, all predictors as independent vairables')
+
+opt_mse <- mse(mod, biden_split$test)
+```    
+
+In conclusion, the pruning indeed improve the MSE score: before the pruning, the full model has the MSE as 481, while it is reduced to 407 after the optimization (with 4 nodes). In addition, we can interpret this tree as below:
+
+If the respondent affiliated with Democratic party, then we proceed down to right branch to the next internal node: if the respondent is younger than 53.5, the estimated warmth score toward Biden is approximaely 78.64; otherwise, it is 71.86.
+
+If the respondent not affiliated with Democratic party, then we proceed down the left branch to the next internal node:if he/she is Republican, then the model estimates the warmth toward Biden to be 43.23; Otherwise, if neither Republican nor Democratic, the estimated warmth is predicted to be 57.60. 
+
+###4. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+
+```{r 1-bagging}
+biden_bag <- randomForest(biden ~ ., data = biden_split$train,
+                          mtry=5,
+                          ntree=500)
+
+bagging_mse <- mse(biden_bag , biden_split$test)
+
+data_frame(var = rownames(importance(biden_bag)),
+           MeanDecreaseGini = importance(biden_bag)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Warmth Score toward Biden",
+       subtitle = "Bagging Appraoch",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```    
+
+The model established by using the bagged approach (trees number = 500, and all predictors should be considered for each split of the tree) can explain only 9.16 variance in the responsive variable considering all the independent variables. In addition, the MSE score is 486, much higher than all the MSE score in the optimized single tree model.  
+
+Although interpreting a bagged model is much more difficult than interpreting a single decision tree, from the above plots of variable importance, we can still clearly see how the responsive variable is influenced by the independent variables in terms of the reduction in Gini index. For the bagged model, age, democratic affliation are the most important predictors. The variable education also has some impact on the warmth score towards Biden. However, the republican affiliation and gender are the unimportant predictors. 
+
+###5. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of $m$, the number of variables considered at each split, on the error rate obtained.
+
+
+```{r 1-bagging-sample-number}
+biden_rf <- randomForest(biden ~ ., data = biden_split$train, 
+                          ntree = 500)
+
+rf_mse <- mse(biden_rf , biden_split$test)
+
+seq.int(biden_bag$ntree) %>%
+  map_df(~ getTree(biden_bag, k = ., labelVar = TRUE)[1,]) %>%
+  count(`split var`) %>%
+  knitr::kable(caption = "Variable used to generate the first split in each tree (Bagging)",
+               col.names = c("Variable used to split", "Number of training observations"))
+
+seq.int(biden_rf$ntree) %>%
+  map_df(~ getTree(biden_rf, k = ., labelVar = TRUE)[1,]) %>%
+  count(`split var`) %>%
+  knitr::kable(caption = "Variable used to generate the first split in each tree (Random Forest)",
+               col.names = c("Variable used to split", "Number of training observations"))
+
+data_frame(var = rownames(importance(biden_rf)),
+           `Random forest` = importance(biden_rf)[,1]) %>%
+  left_join(data_frame(var = rownames(importance(biden_rf)),
+           Bagging = importance(biden_bag)[,1])) %>%
+  mutate(var = fct_reorder(var, Bagging, fun = median)) %>%
+  gather(model, gini, -var) %>%
+  ggplot(aes(var, gini, color = model)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Warmth Score toward Biden",
+       x = NULL,
+       y = "Average decrease in the Gini Index",
+       color = "Method")
+```    
+
+Compared with the bagged model, which considered all the predictors in the splitting (m = p), the random forest model with m = p/3 has much lower MSE, 409 (while bagging model's test MSE score is 486).In addition this random forest model can explain 25.8 % of the variance (also much higher than the bagged model's 9.16%). 
+
+In the above plot, we can conclude that, compared with the bagged model, age is no longer important in the random forest model, while the affilication with republilcan will be much more important. Except `rep`, we can also observe that the average decrease in the Gini index associated with each variable is generally smaller using the random forest method compared to bagging - this is because of the variable restriction imposed when considering splits. To sum up, the choice m = p/3 gave a significant improvement over bagging (m = p) in this example. 
+
+
+
+
+
+
+
+
+
+###6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
+
+# Part 2: Modeling voter turnout [3 points]
+
+
+1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+# Part 3: OJ Simpson [4 points]
+
+
+You can make full use of any of the statistical learning techniques to complete this part of the assignment:
+
+* Linear regression
+* Logistic regression
+* Generalized linear models
+* Non-linear linear models
+* Tree-based models
+* Support vector machines
+* Resampling methods
+
+Select methods that are appropriate for each question and **justify the use of these methods**.
+
