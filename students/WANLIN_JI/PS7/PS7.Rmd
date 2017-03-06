@@ -1,0 +1,495 @@
+---
+title: "PS7"
+author: "Wanlin Ji"
+date: "2/26/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Part 1: Sexy Joe Biden (redux)
+## 1.1 Estimate the training MSE of the model using the traditional approach.
+
+Report:
+The estimated intercept is 58.81126 with standard error of 3.12444; the estimated coefficient of age is 0.04826 with standard error of 0.02825; the estimated coefficient of gender is 4.10323 with standard error of 0.94823; the estimated coefficient of education is -0.34533 with standard error of 0.19478; the estimated coefficient of dem is 15.42426 with standard error of 1.06803; the estimated coefficient of rep is -15.84951 with standard error of 1.31136.
+
+The mean squared error for the training set is 395.
+
+## 1.2 Estimate the test MSE of the model using the validation set approach.
+
+Report for the model using only training observations:
+
+The estimated intercept is 57.3374 with standard error of 3.6977; the estimated coefficient of age is 0.0373 with standard error of 0.0336; the estimated coefficient of gender is 4.1721 with standard error of 1.1267; the estimated coefficient of education is -0.2602 with standard error of 0.2322; the estimated coefficient of dem is 16.3277 with standard error of 1.2766; the estimated coefficient of rep is -14.6070 with standard error of 1.5580.
+
+MSE using only the test set observations is 400. Comparing to the training MSE of 395, it become larger by 5 units. Given that MSE stands for the measure of how well they explain a given set of observations, we can say the model on the splited data explained worsely, comparing to our model on the full training dataset.
+
+## 3
+From the plot we can find that validation estimates of the test MSE are highly variable depending on which observations are sampled into the training and test sets. For these MSEs across 100 splits, values basically spread around from 380-420 with a mean of 402. This process validates the result we got above. 
+
+## 4 
+The test MSE of the model using the leave-one-out cross-validation (LOOCV) approach is 398, which is in consistent with our results in the former cross-validation. Not only that, this number is better than the previous 100 cross-validation based on its stablity. However, we still need to see if there could be function forms other than linear forms to better fit our data.
+
+## 5
+The 10-fold mean MSE is 398, which is in consistent with our result from using the leave-one-out cross-validation (LOOCV) approach. Also we can figure it out from the histogram that our estimation distribution has become more stable and than previous methods.
+
+## 6 
+We have the average MSE from 10-fold cross-validation approach is 398 with an variance of 43.3, this is quite close to what we have from the previous results. However, from the graph we can see due to the reason of split data, our results are spreaded acorss larger range than our previous 100 cross-validation approach.
+
+## 7
+The estimated parameters and standard errors are shown after the code below. From the summary, we can find out that our estimates remain consistent with our initial estimation in step 1, only slight changes. What needs our attention is that the standard errors for all variables show increase comparing to our initial estimation. This change can be from the reduction of the distribution assumptions.
+
+
+# Part 2: College (bivariate)
+## 1. Grad.Rate on Out-of-state tuition
+All universities have varying graduation rates, a good reflection of how many students in it are willing to insist to the end. It should be the major indicator a rational student should consider. We are curious if the tuition as our investment can predict the graduation rate as our revenue.
+
+## 1.1 Linear model
+The simple linear model shows an Multiple R-squared of 0.326, which is a pretty good fit for cross-sectional data. The p values of variables less than 0.001 show that there is a statistically significant positive relationship between the repsonse and predictor. 
+
+However, if we take a closer look at the graph, we find that data points are spindle shaped around our smooth line, and most points are not exactly following the linear direction. We need to further check our result into higer degree regression models.
+
+## 1.2 10-fold validation
+To my surprise, the MSE estimates shows that when the degree of polynomial is 1, the MSE is the smallest, which means we should stick with our model of no transformation, comparing to any higher degree of regression. The linear model proves to be appropriate at the end of our estimation.
+
+## 2. perc.alumni on Expend
+We are curious whether instruction expenditure spent on each student could predict the willingness of donation from students.
+
+## 2.1 Linear regression model
+The Multiple R-squared for our linear is 0.174, roughly a fit for our data. Based on the p value less than 0.001, we find that our prediction is basically a statistically significant positive relationship, although not a perfect fit.
+
+From the graph we find that the density of our data is not evenly distributed. We need to run a higer degree regression to seek for a better fit into this dataset.
+
+## 2.2 Higher degree cross-validation 
+Looking at the graph, we can find that our MSE are much lower in the degree of 2, 3, and 4 regression functions, of which the degree 2 is obvisouly the lowest one around 120.7. And to our expectation, second degree regression is also without much risk of overfitting data. So we choose the second degree poly regression and do it again.
+
+## 2.3 Second degree polynomial regression
+Although the prediction in right side of our graph is limited by the lack of observations in high expenditures, the second polynomial shows a better fit into our present data with Multiple R-squared of 0.219 in a statistically significant relationship. The much smaller MSE than our initial linear regression of 127.4 is also a better result. This second polynomial regression is an appropriate fit for our data.
+
+## 3 Personal on Books
+Books are very expensive in college. We are curious if there is a relationship between the personal spending and book costs.
+
+## 3.1 Linear regression model
+The simple linear model shows an Multiple R-squared of 0.0321, which is a poor fit. The p values of variables less than 0.001 show that there is a statistically significant positive relationship between the repsonse and predictor. 
+
+From the graph, we can see the points are distributed quite in a broad range. The data tells us that book costs still remains a quite big proportion for personal spending, although the fit is poor. We are curious if a higher degree polynomial regression would help explain the data better.
+
+## 3.2 Higher degree cross-validation 
+Looking at the graph, we can find that our MSE are much lower in the degree of 1, 2 and 3 degree regression functions, of which the degree 2 is obvisouly the lowest one around 120.7. And to our expectation, second degree regression is also without much risk of overfitting data. So we choose the second degree poly regression and do it again.
+
+## 3.3 Second degree polynomial regression
+Although the prediction in right side of our graph is limited by the lack of observations in high expenditures, the second polynomial shows a better fit into our present data with an increased Multiple R-squared of 0.0536 in a statistically significant relationship. The MSE for our second degree polynomial linear regression shows only slight decrease. This second polynomial regression can be regarded as an appropriate fit for our data.
+
+
+# Part 3: College (GAM)
+## 3.2
+The summary table after the code showed our estimation result for our regression. From the t-test, we found that all the estimated parameters showed significant relationship based on their p-value less than 0.001. Therefore, we are very confident there is a postive relationship between our predictor and responses. Besides, we can say from the Multiple R-squared of 0.726 that this is a good fit model for our dataset. 
+
+## 3.3
+The summary table shows the estimation for our GAM model. From the table, we found that all the relationships are significant due to p value for all variables are less than 0.001. And lo(Expend) and lo(Grad.Rate) show significant p value for nonparametric effects. Next, we will separte 6 predictors to take a closer look at their relationship with response.
+
+## 3.3.1  Private 
+From the graph, we can find that the identity of private school has significant negative influence on the response of out-of-state tuition. That fits to our intuition that private university usually costs more than non-private ones.
+
+## 3.3.2 perc.alumni
+From the graph, we can see that there is a positive relationship between the percent of alumni who donated money to the school and tuition. This can hardly be explained by a causal relationship. We can assume that people consuming education products will not pay much attention to how much money they sepnt backwards, and they treasures the quality of education more than the costs of tuition. Or the higher quality of education that comes with higher tuition ensures their incomes after graduation.
+
+
+## 3.3.3 Room.Board
+From the graph, we can find a positive relationship between Room and board costs and out-of-state tuitions, that is a steeper one than the perc.alumni could predict. We can assume the living costs not only affect the students but also the operation of the university, which is a large expense for the school. 
+
+## 3.3.4 PHD ratio
+From the graph, we find a basic tendency that our tuition goes up with an increasing PhD ratio. However, this relashionship reverses when the percentage is about 30, which indicates a higher PhD ratio would cause the tuition to go down. After around 53 percent, the relationshiop goes back to the positive. The open interval at the left and right side of the graph shows that our prediction are unstable based on possible not enough data.
+
+## 3.3.5 Expend
+From the graph, we can find that the relationship varies hugely across different ranges.The tendency rises sharply on the left side with more Expend resulting more out-of-state tuition, while this tendency gets reversed when Expend reached around 30000, then decreasing the tuition beyond that point.The interval on the left side indicates undertain prediction due to lcak of data. 
+
+## 3.3.6 Grad.Rate
+From the graph, we find a basic tendency that our tuition goes up with an increasing Grad.Rate. However, this relashionship reverses when the percentage is about 80, which indicates a higher Grad.Rate would then cause the tuition to go down. The open interval at the left and right side of the graph shows that our prediction are unstable based on possible not enough data.
+
+## 3.4 
+Use the test set to evaluate the model fit of the estimated OLS and GAM models, we find that the 3595260 of GAM MSE is smaller than the 3745287 from our OLS model, indicating the GAM is a better fit.
+
+
+## 3.5  
+Suppose we satisfy all the assumptions, the ANOVA tests showed that p value for Expend is significantly less than 0.001, where we deny null hypothesis and we acknowledge the significant difference. This also happens for Grad.rate with a 0.03 p value less than 0.05. For the PhD, however, it shows we can not deny the null hypothesis based on the p value of 0.05. 
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(broom)
+library(rcfss)
+library(titanic)
+set.seed(1234) # Set the seed
+
+options(digits = 3)
+
+theme_set(theme_minimal())
+
+# Part 1: Sexy Joe Biden (redux)
+
+biden <- read_csv("data/biden.csv") 
+#library(ISLR)
+#biden <- biden %>%
+#  tbl_df() # Formalize show the dataset into dbl, no need here
+#biden
+
+# 1.1 Linear regression and MSE
+b_lm <- lm(biden ~ age + educ + female + dem + rep, data = biden)
+summary(b_lm)
+
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse(b_lm, biden)
+
+# 1.2 Validation set approach
+set.seed(1234)
+biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+biden_train <- biden_split$train %>%
+  tbl_df()
+biden_test <- biden_split$test %>%
+  tbl_df()
+
+bt_lm <- lm(biden ~ age + educ + female + dem + rep, data = biden_train)
+summary(bt_lm)
+
+mse(bt_lm, biden_test)
+
+# 3 Repeat the validation set approach 100 times
+
+splitmse <- function(biden){
+  biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+  lm_bt_train <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+  mse_value <- mse(lm_bt_train, biden_split$test)
+  return(data_frame(mse_value))
+}
+
+set.seed(1234)
+hmse <- rerun(100, splitmse(biden)) %>%
+  bind_rows(.id = "id")
+
+mean(hmse$mse_value)
+
+ggplot(data = hmse, aes(x = id, y = mse_value)) +
+  geom_point() +
+  labs(title = "Value of MSE across 100 split",
+       x = "N-th split of the data(0<n<=100)",
+       y = "MSE")
+
+# 4 
+loocv_data <- crossv_kfold(biden, k = nrow(biden))
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+
+# 5
+nfold <- function(i) {
+  fold_data <- crossv_kfold(biden, k = 10)
+  biden_fold <- map(fold_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  biden_foldmse <- map2_dbl(biden_fold, fold_data$test, mse)
+  mean_mse <- mean(biden_foldmse)
+}
+
+set.seed(1234)
+foldfit_data <- data.frame(index = 1:100)
+foldfit_data$mse <- unlist(lapply(foldfit_data$index, nfold))
+foldfit_data$mse[1]
+
+ggplot(data = foldfit_data, aes(mse)) +
+  geom_histogram() +
+  labs(title = "Count of MSE over 10 fold",
+       x = "MSE",
+       y = "Count")
+
+# 6
+nfold <- function(biden, k) {
+  fold_data <- crossv_kfold(biden, k = k)
+  biden_fold <- map(fold_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  biden_foldmse <- map2_dbl(biden_fold, fold_data$test, mse)
+  return(data_frame(biden_foldmse))
+}
+
+set.seed(1234)
+mse_fold <- rerun(100, nfold(biden, 10)) %>%
+  bind_rows(.id = "id")
+
+ggplot(data = mse_fold, aes(x = id, y = biden_foldmse)) +
+  geom_point() +
+  labs(title = "Values of MSEs from 10-fold cross-validation approach",
+       x = "N-th validation",
+       y = "MSE value")
+mean(mse_fold$biden_foldmse)
+sd(mse_fold$biden_foldmse)
+
+# 7
+set.seed(1234)
+boot_models <- biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ age + female + educ + dem + rep, data = .)), coef = map(model, tidy))
+
+boot_summary <- boot_models %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+summary(boot_summary)
+
+# Part 2
+# 1.1
+college <- read_csv("data/College.csv") 
+ir_predict = lm(Grad.Rate ~ Outstate, data = college)
+summary(ir_predict)
+
+college %>%
+  add_predictions(ir_predict) %>%
+  ggplot(aes(Outstate, Grad.Rate)) +
+  geom_point() + 
+  geom_smooth(method = lm) +
+  labs(title = 'Linear model of Grad.Rate on Out-of-state tuition',
+       x = 'Out-of-state tuition', 
+       y = 'Grad.Rate')
+
+#1.2
+set.seed(1234)
+college %>%
+  crossv_kfold(k = 10) %>%
+  {.} -> college.10fold
+
+cv_error_fold10 <- vector("numeric", 5)
+terms = 1:5
+
+for(i in terms){
+  cv10_models <- map(college.10fold$train, ~ lm(Grad.Rate ~ poly(Outstate, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, college.10fold$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+data_frame(terms = 1:5,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE)) +
+  geom_line() +
+  labs(title = "MSE estimates for 10-fold cross validation",
+       x = "Degree of Polynomial",
+       y = "MSE")
+rm(college.10fold)
+
+# 2.1
+don_predict = lm(perc.alumni ~ Expend, data = college)
+summary(don_predict)
+
+college %>%
+  add_predictions(don_predict) %>%
+  ggplot(aes(Expend, perc.alumni)) +
+  geom_point() + 
+  geom_smooth(method = lm) +
+  labs(title = 'Linear model of perc.alumni on Expend',
+       x = 'Instructional expenditure per student', 
+       y = 'Percent of alumni who donate')
+
+# 2.2
+set.seed(1234)
+college %>%
+  crossv_kfold(k = 10) %>%
+  {.} -> college.10fold
+
+cv_error_fold10 <- vector("numeric", 5)
+terms = 1:5
+
+for(i in terms){
+  cv10_models <- map(college.10fold$train, ~ lm(perc.alumni ~ poly(Expend, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, college.10fold$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+data_frame(terms = 1:5,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE)) +
+  geom_line() +
+  labs(title = "MSE estimates for 10-fold cross validation",
+       x = "Degree of Polynomial",
+       y = "MSE")
+rm(college.10fold)
+
+# 2.3
+sec_reg <- lm(perc.alumni ~ poly(Expend, 2), data = college) 
+summary(sec_reg)
+
+college %>%
+  ggplot(aes(Expend, perc.alumni)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2)) + 
+  labs(title = 'Second degree polynomial Regression model of perc.alumni on Expend',
+       x = 'Instructional expenditure per student', 
+       y = 'Percent of alumni who donate')
+
+# 3.1 
+exp_predict = lm(Personal ~ Books, data = college)
+summary(exp_predict)
+
+college %>%
+  add_predictions(don_predict) %>%
+  ggplot(aes(Books, Personal)) +
+  geom_point() + 
+  geom_smooth(method = lm) +
+  labs(title = 'Linear model of Personal on Books',
+       x = 'Estimated book costs', 
+       y = 'Estimated personal spending')
+
+# 3.2
+set.seed(1234)
+college %>%
+  crossv_kfold(k = 10) %>%
+  {.} -> college.10fold
+
+cv_error_fold10 <- vector("numeric", 5)
+terms = 1:5
+
+for(i in terms){
+  cv10_models <- map(college.10fold$train, ~ lm(Personal ~ poly(Books, i), data = .))
+  cv10_mse <- map2_dbl(cv10_models, college.10fold$test, mse)
+  cv_error_fold10[[i]] <- mean(cv10_mse)
+}
+
+data_frame(terms = 1:5,
+           fold10 = cv_error_fold10) %>%
+  gather(method, MSE, fold10) %>%
+  ggplot(aes(terms, MSE)) +
+  geom_line() +
+  labs(title = "MSE estimates for 10-fold cross validation",
+       x = "Degree of Polynomial",
+       y = "MSE")
+rm(college.10fold)
+
+# 3.3 
+sec_re <- lm(Personal ~ poly(Books, 2), data = college) 
+summary(sec_re)
+
+college %>%
+  ggplot(aes(Books, Personal)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2)) + 
+  labs(title = 'Second degree polynomial Regression model of perc.alumni on Expend',
+       x = 'Instructional expenditure per student', 
+       y = 'Percent of alumni who donate')
+
+# Part3
+# 3.1
+set.seed(1234)
+college_split <- resample_partition(college, c(test = .3, train = .7))
+
+# 3.2
+college_reg <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+                  data = college_split$train)
+summary(college_reg)
+
+
+# 3.3
+library(gam)
+college_gam <- gam(Outstate ~ Private + perc.alumni + Room.Board + lo(PhD) + lo(Expend) + lo(Grad.Rate) , data = college_split$train)
+summary(college_gam)
+
+# 3.3.1 Private 
+college_gam <- preplot(college_gam, se = TRUE, rug = FALSE)
+
+data_frame(x = college_gam$Private$x,
+           y = college_gam$Private$y,
+           se.fit = college_gam$Private$se.y) %>%
+  unique() %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x, levels = c('No', 'Yes'), labels = c("Public", "Private"))) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of out-of-state tuition",
+       x = '',
+       y = '')
+
+# 3.3.2 perc.alumni
+data_frame(x = college_gam$perc.alumni$x,
+           y = college_gam$perc.alumni$y,
+           se.fit = college_gam$perc.alumni$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+        y_high = y + 1.96 * se.fit) %>%
+ggplot(aes(x, y)) +
+geom_line() +
+geom_line(aes(y = y_low), linetype = 2) +
+geom_line(aes(y = y_high), linetype = 2) +
+labs(title = "GAM of out-of-state tuition",
+     x = "perc.alumni",
+     y = '')
+
+# 3.3.3 Room.Board
+data_frame(x = college_gam$Room.Board$x,
+           y = college_gam$Room.Board$y,
+           se.fit = college_gam$Room.Board$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Room.Board",
+       y = '')
+
+# 3.3.4 PHD
+data_frame(x = college_gam$`lo(PhD)`$x,
+           y = college_gam$`lo(PhD)`$y,
+           se.fit = college_gam$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "PhD",
+       y = '')
+
+# 3.3.5 Expend
+data_frame(x = college_gam$`lo(Expend)`$x,
+           y = college_gam$`lo(Expend)`$y,
+           se.fit = college_gam$`lo(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Expend",
+       y = '')
+
+# 3.3.6 Grad.Rate
+data_frame(x = college_gam$`lo(Grad.Rate)`$x,
+           y = college_gam$`lo(Grad.Rate)`$y,
+           se.fit = college_gam$`lo(Grad.Rate)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       x = "Grad.Rate",
+       y = '')
+
+# 3.4
+mse(college_reg, college_split$test)
+mse(college_gam, college_split$test)
+
+
+```
+
+
+
+
+
+
