@@ -407,6 +407,10 @@ def q3part2(train, test):
     print(sklearn.metrics.classification_report(test['logit'], test[yVar]))
     print("The full report of linearSVM using the hold out data is:")
     print(sklearn.metrics.classification_report(test['linearSVM'], test[yVar]))
+
+    print("The coefficients of linearSVM are:")
+    for i, vName in enumerate(xVars):
+        print("{}:  {:.4f}".format(vName.ljust(9, ' '), models['linearSVM'].coef_[0, i]))
     ax.set_title('Receiver Operating Characteristics')
     plt.plot([0,1], [0,1], color = 'k')
     ax.set_xlabel('False Positive Rate')
