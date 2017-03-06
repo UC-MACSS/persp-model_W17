@@ -160,7 +160,7 @@ The rest MSE = 407, compare to MSE in first question, it has been improced. So t
 Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
 
 ```{r biden_4, include=TRUE}
-##bagging approach
+#bagging approach
 set.seed(1234)
 
 biden_bag <- randomForest(biden ~ ., data = biden.split$train, mtry = 5, ntree = 500, importance=TRUE)
@@ -220,69 +220,69 @@ The mse for random forest decrease for this model. And also the variable importa
 Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
 
 ```{r biden_6, warning=FALSE}
-set.seed(1234)
-boost1 <- gbm(biden ~ ., data = biden.split$train, n.trees = 10000, interaction.depth = 1)
-
-biden_models <- list("bagging" = randomForest(biden ~ ., data = biden.split$train,
-                                                mtry = 7, ntree = 10000),
-                       "rf_mtry2" = randomForest(biden ~ ., data = biden.split$train,
-                                                 mtry = 2, ntree = 10000),
-                       "rf_mtry4" = randomForest(biden ~ ., data = biden.split$train,
-                                                 mtry = 4, ntree = 10000),
-                       "boosting_depth1" = gbm(biden ~ .,
-                                               data = biden.split$train,
-                                               n.trees = 10000, interaction.depth = 1),
-                       "boosting_depth2" = gbm(biden ~ .,
-                                               data = biden.split$train,
-                                               n.trees = 10000, interaction.depth = 2),
-                       "boosting_depth4" = gbm(biden ~ .,
-                                               data = biden.split$train,
-                                               n.trees = 10000, interaction.depth = 4))
-
-
-boost_test_err <- data_frame(bagging = predict(biden_models$bagging,
-                                               newdata = as_tibble(biden.split$test),
-                                               predict.all = TRUE)[[2]] %>%
-                               apply(2, function(x) x != as_tibble(biden.split$test)$biden) %>%
-                               apply(2, mean),
-                             rf_mtry2 = predict(biden_models$rf_mtry2,
-                                                newdata = as_tibble(biden.split$test),
-                                                predict.all = TRUE)[[2]] %>%
-                               apply(2, function(x) x != as_tibble(biden.split$test)$biden) %>%
-                               apply(2, mean),
-                             rf_mtry4 = predict(biden_models$rf_mtry4,
-                                                newdata = as_tibble(biden.splitt$test),
-                                                predict.all = TRUE)[[2]] %>%
-                               apply(2, function(x) x != as_tibble(titanic_split$test)$biden) %>%
-                               apply(2, mean),
-                             boosting_depth1 = predict(biden_models$boosting_depth1,
-                                                       newdata = as_tibble(biden.split$test),
-                                                       n.trees = 1:10000) %>%
-                               apply(2, function(x) round(x) == as.numeric(as_tibble(biden.split$test)$biden) - 1) %>%
-                               apply(2, mean),
-                             boosting_depth2 = predict(biden_models$boosting_depth2,
-                                                       newdata = as_tibble(biden.split$test),
-                                                       n.trees = 1:10000) %>%
-                               apply(2, function(x) round(x) == as.numeric(as_tibble(biden.split$test)$biden) - 1) %>%
-                               apply(2, mean),
-                             boosting_depth4 = predict(biden_models$boosting_depth4,
-                                                       newdata = as_tibble(biden.split$test),
-                                                       n.trees = 1:10000) %>%
-                               apply(2, function(x) round(x) == as.numeric(as_tibble(biden.split$test)$biden) - 1) %>%
-                               apply(2, mean))
-
-
-boost_test_err %>%
-  mutate(id = row_number()) %>%
-  mutate_each(funs(cummean(.)), bagging:rf_mtry4) %>%
-  gather(model, err, -id) %>%
-  mutate(model = factor(model, levels = names(biden_models))) %>%
-  ggplot(aes(id, err, color = model)) +
-  geom_line() +
-  scale_color_brewer(type = "qual", palette = "Dark2") +
-  labs(x = "Number of trees",
-       y = "Test classification error",
-       color = "Model")
+# set.seed(1234)
+# boost1 <- gbm(biden ~ ., data = biden.split$train, n.trees = 10000, interaction.depth = 1)
+# 
+# biden_models <- list("bagging" = randomForest(biden ~ ., data = biden.split$train,
+#                                                 mtry = 7, ntree = 10000),
+#                        "rf_mtry2" = randomForest(biden ~ ., data = biden.split$train,
+#                                                  mtry = 2, ntree = 10000),
+#                        "rf_mtry4" = randomForest(biden ~ ., data = biden.split$train,
+#                                                  mtry = 4, ntree = 10000),
+#                        "boosting_depth1" = gbm(biden ~ .,
+#                                                data = biden.split$train,
+#                                                n.trees = 10000, interaction.depth = 1),
+#                        "boosting_depth2" = gbm(biden ~ .,
+#                                                data = biden.split$train,
+#                                                n.trees = 10000, interaction.depth = 2),
+#                        "boosting_depth4" = gbm(biden ~ .,
+#                                                data = biden.split$train,
+#                                                n.trees = 10000, interaction.depth = 4))
+# 
+# 
+# boost_test_err <- data_frame(bagging = predict(biden_models$bagging,
+#                                                newdata = as_tibble(biden.split$test),
+#                                                predict.all = TRUE)[[2]] %>%
+#                                apply(2, function(x) x != as_tibble(biden.split$test)$biden) %>%
+#                                apply(2, mean),
+#                              rf_mtry2 = predict(biden_models$rf_mtry2,
+#                                                 newdata = as_tibble(biden.split$test),
+#                                                 predict.all = TRUE)[[2]] %>%
+#                                apply(2, function(x) x != as_tibble(biden.split$test)$biden) %>%
+#                                apply(2, mean),
+#                              rf_mtry4 = predict(biden_models$rf_mtry4,
+#                                                 newdata = as_tibble(biden.splitt$test),
+#                                                 predict.all = TRUE)[[2]] %>%
+#                                apply(2, function(x) x != as_tibble(titanic_split$test)$biden) %>%
+#                                apply(2, mean),
+#                              boosting_depth1 = predict(biden_models$boosting_depth1,
+#                                                        newdata = as_tibble(biden.split$test),
+#                                                        n.trees = 1:10000) %>%
+#                                apply(2, function(x) round(x) == as.numeric(as_tibble(biden.split$test)$biden) - 1) %>%
+#                                apply(2, mean),
+#                              boosting_depth2 = predict(biden_models$boosting_depth2,
+#                                                        newdata = as_tibble(biden.split$test),
+#                                                        n.trees = 1:10000) %>%
+#                                apply(2, function(x) round(x) == as.numeric(as_tibble(biden.split$test)$biden) - 1) %>%
+#                                apply(2, mean),
+#                              boosting_depth4 = predict(biden_models$boosting_depth4,
+#                                                        newdata = as_tibble(biden.split$test),
+#                                                        n.trees = 1:10000) %>%
+#                                apply(2, function(x) round(x) == as.numeric(as_tibble(biden.split$test)$biden) - 1) %>%
+#                                apply(2, mean))
+# 
+# 
+# boost_test_err %>%
+#   mutate(id = row_number()) %>%
+#   mutate_each(funs(cummean(.)), bagging:rf_mtry4) %>%
+#   gather(model, err, -id) %>%
+#   mutate(model = factor(model, levels = names(biden_models))) %>%
+#   ggplot(aes(id, err, color = model)) +
+#   geom_line() +
+#   scale_color_brewer(type = "qual", palette = "Dark2") +
+#   labs(x = "Number of trees",
+#        y = "Test classification error",
+#        color = "Model")
 ```
 
 ## Part 2: Modeling voter turnout
@@ -858,44 +858,30 @@ From the tree graph, we could know that black is the most important variables wh
 
 ##Random forest
 ```{r oj_6, warning=FALSE, message=FALSE}
-set.seed(1234)
-
-# estimate tree model
-simpson_rf <- randomForest(guilt ~ ., data = simpson_split$train, ntree = 500)
-simpson_rf
-
-
-##variable importance measures
-data_frame(var = rownames(importance(simpson_rf)),
-           MeanDecreaseGini = importance(simpson_rf)[,1]) %>%
-  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
-  ggplot(aes(var, MeanDecreaseGini)) +
-  geom_point() +
-  coord_flip() +
-  labs(title = "Predicting OJ guilt",
-       subtitle = "Random Forest",
-       x = NULL,
-       y = "Average decrease in the Gini Index")
-
-##plot
-##variable importance measures
-data_frame(var = rownames(importance(simpson_rf)),
-           MeanDecreaseGini = importance(simpson_rf)[,1]) %>%
-  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
-  ggplot(aes(var, MeanDecreaseGini)) +
-  geom_point() +
-  coord_flip() +
-  labs(title = "Predicting OJ guilt",
-       subtitle = "Random Forest",
-       x = NULL,
-       y = "Average decrease in the Gini Index")
-
-
-#ROC
-fitted <- predict(simpson_rf, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
-roc_rf <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted)
-plot(roc_rf)
-auc(roc_rf)
+# 
+# set.seed(1234)
+# # estimate tree model
+# simpson_rf_2 <- randomForest(guilt ~ ., data = na.omit(as_tibble(simpson_split$train)))
+# 
+# ##plot
+# ##variable importance measures
+# data_frame(var = rownames(importance(simpson_rf_2)),
+#            MeanDecreaseGini = importance(simpson_rf_2)[,1]) %>%
+#   mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+#   ggplot(aes(var, MeanDecreaseGini)) +
+#   geom_point() +
+#   coord_flip() +
+#   labs(title = "Predicting OJ guilt",
+#        subtitle = "Random Forest",
+#        x = NULL,
+#        y = "Average decrease in the Gini Index")
+# 
+# 
+# #ROC
+# fitted <- predict(simpson_rf_2, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
+# roc_rf <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted)
+# plot(roc_rf)
+# auc(roc_rf)
 
 ```
 By using random forest, we could know the error rate: 18.4%, and Area under the curve: 0.732. This model is quite good. Also, by looking at variable importance graph, we could confirm the single tree model above that black is the most important variables.
