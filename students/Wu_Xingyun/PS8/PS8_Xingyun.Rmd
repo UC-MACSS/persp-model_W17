@@ -471,9 +471,11 @@ auc(roc_tree1)
 
 #### 1.2: Bagging approach
 
+  `mtry` = 5.
+
 ```{r problem2_2_model, echo=FALSE}
 mhlth_bag <- randomForest(as.factor(vote96) ~ ., data = mh_split$train,
-                             mtry = 7, ntree = 500)
+                             mtry = 5, ntree = 500)
 ```
 
 ```{r problem2_2_fit, echo=FALSE}
@@ -509,55 +511,162 @@ auc(roc_tree3)
 ```
 
 
-#### 1.4 Boosting: depth = 1
+#### 1.4 single-predictor classification tree with optimal level of complexity
+
+  The single predictor is `mhealth_sum`. According to the 10-fold cross-validation, the optimal level of complexity is 4.
+
+```{r problem2_4_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+mhlth_cv2 <- crossv_kfold(mhlthData, k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ mhealth_sum, data = .,
+     control = tree.control(nobs = nrow(mhlthData),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+mhlth_cv2 <- expand.grid(mhlth_cv2$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhlth_cv2) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+mhlth_cv2 %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
 
 ```{r problem2_4_model, echo=FALSE}
-boosting_depth1 = gbm(vote96 ~ ., 
-                      data = mh_split$train, 
-                      n.trees = 10000, 
-                      interaction.depth = 1)
+
+# estimate model
+mhlth_tree2 <- tree(vote96 ~ mhealth_sum, data = mhlth,
+                     control = tree.control(nobs = nrow(mhlth),
+                            mindev = .001))
+
+# plot pruned tree
+mod2_4 <- prune.tree(mhlth_tree2, best=4)
+summary(mod2_4)
+
+tree_data2_4 <- dendro_data(mod2_4)
+mhlth_tree_data4 <- dendro_data(mod2_4)
+ggplot(segment(mhlth_tree_data4)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data2_4), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data2_4), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health + age + educ + black + female + married + inc10")
 ```
 
 ```{r problem2_4_fit, echo=FALSE}
 set.seed(1234)
-fitted4 <- predict(boosting_depth1, newdata = mh_split$test, n.trees=10000)
+fitted4 <- predict(mhlth_tree2, as_tibble(mh_split$test), type = "class")
 
 roc_tree4 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted4))
 plot(roc_tree4)
 ```
 
-```{r problem2_4_auc, echo=FALSE}
+```{r problem2_5_auc, echo=FALSE}
 auc(roc_tree4)
 ```
 
 
-#### 1.5 Boosting: depth = 3
+#### 1.5 classification regression tree with optimal level of complexity: 3 variables
 
-```{r problem2_5_model, echo=FALSE}
-boosting_depth3 = gbm(vote96 ~ ., 
-                      data = mh_split$train, 
-                      n.trees = 10000, 
-                      interaction.depth = 3)
+  The predictors are: `mhealth_sum`, `age`, and `educ`. According to the 10-fold cross-validation, the optimal level of complexity would be 10. Since simply increase the level of complexity may cause over-fitting problem, I would not increase the level of complexity greater than 10.
+
+```{r problem2_5_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+mhlth_cv3 <- crossv_kfold(mhlthData, k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ mhealth_sum + age + educ, data = .,
+     control = tree.control(nobs = nrow(mhlthData),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+mhlth_cv3 <- expand.grid(mhlth_cv3$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhlth_cv3) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+mhlth_cv3 %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
 ```
 
-```{r problem_2_5_fit, echo=FALSE}
-fitted5 <- predict(boosting_depth3, newdata = mh_split$test, n.trees = 10000, decision.values = TRUE) %>%
-  attributes
+```{r problem2_5_model, echo=FALSE}
 
-roc_depth3 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted4))
-plot(roc_depth3)
+# estimate model
+mhlth_tree3 <- tree(vote96 ~ mhealth_sum + age + educ, data = mhlth,
+                     control = tree.control(nobs = nrow(mhlth),
+                            mindev = .001))
+
+# plot pruned tree
+mod2_5 <- prune.tree(mhlth_tree3, best=10)
+summary(mod2_5)
+
+tree_data2_5 <- dendro_data(mod2_5)
+mhlth_tree_data5 <- dendro_data(mod2_5)
+ggplot(segment(mhlth_tree_data5)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data2_5), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data2_5), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health + age + educ + black + female + married + inc10")
 ```
 
 ```{r problem2_5_fit, echo=FALSE}
 set.seed(1234)
-fitted5 <- predict(boosting_depth1, newdata = mh_split$test, n.trees=10000)
+fitted5 <- predict(mhlth_tree3, as_tibble(mh_split$test), type = "class")
 
 roc_tree5 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted5))
 plot(roc_tree5)
 ```
 
+```{r problem2_5_auc, echo=FALSE}
+auc(roc_tree5)
+```
+
+
 #### 1.6 model comparison
 
+  According to the AUC values and the plot below, the best tree-based model would be the one using bagging approach, with AUC value as 0.630. Due to some unfound problem, the AUC of the first model is not printed, but we could infer its performance with its value 0.600, which is not the best model.
+
+```{r problem2_comparison1, echo=FALSE}
+plot(roc_tree1, print.auc = TRUE, col = "gray", print.auc.x = .2)
+plot(roc_tree2, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_tree3, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_tree4, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_tree5, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
 
 
 ### 2. Five SVM models
