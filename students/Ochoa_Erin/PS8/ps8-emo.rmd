@@ -59,6 +59,21 @@ predict.gbm = function (object, newdata, n.trees, type = "link", single.tree = F
     gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
   }
 }
+
+logit2prob = function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds = function(x){
+  x / (1 - x)
+}
+
+threshold_compare = function(thresh, dataframe, model){
+  pred = dataframe %>%
+         add_predictions(model) %>%
+         mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > thresh))
+}
 ```
 
 # Part 1: Joe Biden (redux times two)
@@ -317,53 +332,177 @@ days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless,
 * `married` - 1 if the respondent is currently married, 0 otherwise
 * `inc10` - Family income, in \$10,000s
 
+```
+(mh <- read_csv("data/mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit)
+  ```
+
+
+
+
+
+
 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 
-# Part 3: OJ Simpson [4 points]
+# Part 3: OJ Simpson
 
-In October 1995 in what was termed "the trial of the century", O.J. Simpson was acquitted by a jury of murdering his wife Nicole Brown Simpson and her friend Ronald Goldman. The topic of Simpson's guilt or innocence divided Americans along racial lines, as Simpson is black and his wife was white. Especially in the aftermath of the 1992 Los Angeles riots sparked by the videotaped beating of Rodney King and subsequent acquittal of officers charged with police brutality, the Simpson trial illustrated many of the racial divides in the United States.
 
-The CBS News/New York Times monthly poll conducted in September 1995 asked respondents several questions about the closing arguments and verdict in the case. All the relevant variables are contained in `simpson.csv`.
-
-* `guilt` - 1 if the respondent thinks OJ Simpson was "probably guilty", 0 if the respondent thinks OJ Simpson was "probably not guilty"
-* `dem` - Democrat
-* `rep` - Republican
-* `ind` - Independent
-* `age` - Age of respondent
-* `educ` - Highest education level of the respondent
-* `female` - Respondent is female
-* `black` - Respondent is black
-* `hispanic` - Respondent is hispanic
-* `income` - Self-reported income
 
 1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
+
 1. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
-
-You can make full use of any of the statistical learning techniques to complete this part of the assignment:
-
-* Linear regression
-* Logistic regression
-* Generalized linear models
-* Non-linear linear models
-* Tree-based models
-* Support vector machines
-* Resampling methods
 
 Select methods that are appropriate for each question and **justify the use of these methods**.
 
-# Submission instructions
+We begin by reading in the data and dropping those observations that are missing data in the response variable, guilt (for which we also make into a factor and assign labels):
 
-Assignment submission will work the same as earlier assignments. Submit your work as a pull request before the start of class on Monday. Store it in the same locations as you've been using. However the format of your submission should follow the procedures outlined below.
+```{r read_data_biden}
 
-## If you use R
+oj = read.csv('data/simpson.csv')
+oj = oj[(!is.na(oj$guilt)), ]
+oj$Opinion = factor(oj$guilt, levels = c(0,1), labels = c("Probably not guilty", "Probably guilty"))
+```
 
-Submit your assignment as a single [R Markdown document](http://rmarkdown.rstudio.com/). R Markdown is similar to Juptyer Notebooks and compiles all your code, output, and written analysis in a single reproducible file.
 
-## If you use Python
 
-Either:
 
-1. Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a $\LaTeX$ generated PDF document with your results and substantive analysis.
-1. Submit your assignment as a single Jupyter Notebook with your code, output, and written analysis compiled there.
 
+
+
+
+```{r oj_histogram_black, echo=FALSE}
+ggplot(oj, aes(x=black, fill=Opinion)) + geom_bar(position = "dodge") + 
+       ylab("Frequency count of respondents") +
+       xlab("Race") +
+       ggtitle("Opinion of Simpson Guilt Based on Race") +
+       theme(plot.title = element_text(hjust = 0.5),
+       panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(),
+       panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_x_continuous(breaks = c(0,1), labels = c("Not Black", "Black"))
+```
+
+
+
+
+
+```{r oj_basic_logistic_regression}
+
+logit_oj_black = glm(guilt ~ black, family = binomial, data=oj)
+summary(logit_oj_black)
+
+mse_logit_oj_black = mse(logit_oj_black, oj)
+```
+
+
+
+
+```{r bv_gen_dfs_and_vars}
+
+int = tidy(logit_oj_black)[1,2]
+coeff = tidy(logit_oj_black)[2,2]
+
+oj_black_pred = oj %>%
+                add_predictions(logit_oj_black) %>%
+                mutate(prob = logit2prob(pred)) %>%
+                mutate(odds = prob2odds(prob))
+
+oj_black_accuracy = oj %>%
+                    add_predictions(logit_oj_black) %>%
+                    mutate(pred = logit2prob(pred),
+                    pred = as.numeric(pred > .5))
+```
+
+
+
+```{r, ar_auc}
+
+ar = mean(oj_black_accuracy$guilt == oj_black_accuracy$pred, na.rm = TRUE)
+
+uc = median(oj$guilt)
+
+cm.5_oj_black = confusionMatrix(oj_black_accuracy$pred, oj_black_accuracy$guilt,
+                                dnn = c("Prediction", "Actual"), positive = '1')
+
+cm.5_table = cm.5_oj_black$table
+
+actlpos = cm.5_table[1,2] + cm.5_table[2,2]
+predposcrrct = cm.5_table[2,2]
+
+actlneg = cm.5_table[1,1] + cm.5_table[2,1]
+prednegcrrct = cm.5_table[1,1]
+
+tpr.notes =  predposcrrct / actlpos
+tnr.notes =  prednegcrrct / actlneg
+
+tpr.cm.5 = sum(cm.5_oj_black$byClass[1])
+tnr.cm.5 = sum(cm.5_oj_black$byClass[2])
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Next, we split the dataset into training and validation sets in a ratio of 7:3:
+
+```{r first_tree}
+
+set.seed(1234)
+
+oj_split7030 = resample_partition(oj, c(test = 0.3, train = 0.7))
+oj_train70 = oj_split7030$train %>%
+             tbl_df()
+oj_test30 = oj_split7030$test %>%
+            tbl_df()
+```
+
+
+
+```{r oj_random_forest}
+
+set.seed(1234)
+
+oj_data_train = oj_train70 %>%
+                select(-guilt) %>%
+                mutate_each(funs(as.factor(.)), dem, rep) %>%
+                na.omit
+
+oj_data_test = oj_test30 %>%
+               select(-guilt) %>%
+               mutate_each(funs(as.factor(.)), dem, rep) %>%
+               na.omit
+
+m_oj = floor(sqrt(9))
+
+(rf_oj = randomForest(Opinion ~ ., data = oj_data_train, mtry = m_oj, ntree = 500))
+```
+
+
+
+
+```{r plot_rf_importance_oj, echo=FALSE}
+rf_oj_importance = as.data.frame(importance(rf_oj))
+
+ggplot(rf_oj_importance, mapping=aes(x=rownames(rf_oj_importance), y=MeanDecreaseGini)) +
+       geom_bar(stat="identity", aes(fill=MeanDecreaseGini)) + 
+       labs(title = "Mean Decrease in Gini Index Across 500 Random Forest Regression Trees",
+       subtitle = "Predicted Opinion of Simpson Guilt",
+       x = "Variable",
+       y = "Mean Decrease in Gini Index") + 
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
+```
