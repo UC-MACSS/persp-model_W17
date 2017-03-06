@@ -810,7 +810,11 @@ set.seed(1234)
 simpson_split <- resample_partition(simpson, p = c("test" = .3, "train" = .7))
 ```
 
+
 #### 1.1 single-predictor logistic regression
+
+  The only predictor: `black`.
+
 ```{r problem3_1_model, echo=FALSE}
 simpson_logit1 <- glm(guilt ~ black, data = as_tibble(simpson_split$train), family = binomial)
 # summary(simpson_logit1)
@@ -826,6 +830,18 @@ auc(roc_logit3_1)
 ```
 
 #### 1.2 multiple-variable logistic regression
+
+```{r problem3_2_model, echo=FALSE}
+simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
+# summary(simpson_logit2)
+fitted <- predict(simpson_logit2, as_tibble(simpson_split$test), type = "response")
+logit_err2 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
+
+roc_logit3_2 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
+plot(roc_logit3_2)
+```
+
+
 ```{r problem3_2_model, echo=FALSE}
 simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
 # summary(simpson_logit2)
@@ -867,7 +883,7 @@ simpson_train <- simpson_split$train %>%
   Using a 10-fold CV with ramdem seed = 1234, I decide that the optimal tree size is 7. When the complexity reaches 5, the test MSE obtains its lowest point among the attempts. In addition, since simply increasing the complexity could cause over-fitting problem, I would not increase the tree size to numbers that would not lower the test MSE any more.
 ```{r problem2_1_complexity, echo=FALSE}
 # generate 10-fold CV trees
-simpson_cv <- simpson_split %>%
+simpson_cv <- simpson_split$train %>%
   na.omit() %>%
   crossv_kfold(k = 10) %>%
   mutate(tree = map(train, ~ tree(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = .,
