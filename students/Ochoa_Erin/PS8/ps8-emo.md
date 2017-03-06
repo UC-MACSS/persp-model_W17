@@ -5,10 +5,7 @@ Erin M. Ochoa
 
 -   [Part 1: Joe Biden (redux times two)](#part-1-joe-biden-redux-times-two)
 -   [Part 2: Modeling voter turnout](#part-2-modeling-voter-turnout)
--   [Part 3: OJ Simpson \[4 points\]](#part-3-oj-simpson-4-points)
--   [Submission instructions](#submission-instructions)
-    -   [If you use R](#if-you-use-r)
-    -   [If you use Python](#if-you-use-python)
+-   [Part 3: OJ Simpson](#part-3-oj-simpson)
 
 ``` r
 mse = function(model, data) {
@@ -34,6 +31,21 @@ predict.gbm = function (object, newdata, n.trees, type = "link", single.tree = F
     cat(paste("Using", n.trees, "trees...\n"))
     gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
   }
+}
+
+logit2prob = function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds = function(x){
+  x / (1 - x)
+}
+
+threshold_compare = function(thresh, dataframe, model){
+  pred = dataframe %>%
+         add_predictions(model) %>%
+         mutate(pred = logit2prob(pred),
+         pred = as.numeric(pred > thresh))
 }
 ```
 
@@ -339,75 +351,456 @@ The test MSE for single-split trees has increased from 405.424 to 414.067; for t
 Part 2: Modeling voter turnout
 ==============================
 
-An important question in American politics is why do some people participate in the political process, while others do not? Participation has a direct impact on outcomes -- if you fail to participate in politics, the government and political officials are less likely to respond to your concerns. Typical explanations focus on a resource model of participation -- individuals with greater resources, such as time, money, and civic skills, are more likely to participate in politics. One area of importance is understanding voter turnout, or why people participate in elections. Using the resource model of participation as a guide, we can develop several expectations. First, women, who more frequently are the primary caregiver for children and earn a lower income, are less likely to participate in elections than men. Second, older Americans, who typically have more time and higher incomes available to participate in politics, should be more likely to participate in elections than younger Americans. Finally, individuals with more years of education, who are generally more interested in politics and understand the value and benefits of participating in politics, are more likely to participate in elections than individuals with fewer years of education.
+We begin by reading in the data and dropping cases with missing values
 
-While these explanations have been repeatedly tested by political scientists, an emerging theory assesses an individual's mental health and its effect on political participation.[1] Depression increases individuals' feelings of hopelessness and political efficacy, so depressed individuals will have less desire to participate in politics. More importantly to our resource model of participation, individuals with depression suffer physical ailments such as a lack of energy, headaches, and muscle soreness which drain an individual's energy and requires time and money to receive treatment. For these reasons, we should expect that individuals with depression are less likely to participate in election than those without symptoms of depression.
+``` r
+mh = read_csv("data/mental_health.csv") %>%
+     mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+     na.omit
+```
 
-The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
+We split the data into training and validation sets:
 
--   `vote96` - 1 if the respondent voted in the 1996 presidential election, 0 otherwise
--   `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)[2]
--   `age` - age of the respondent
--   `educ` - Number of years of formal education completed by the respondent
--   `black` - 1 if the respondent is black, 0 otherwise
--   `female` - 1 if the respondent is female, 0 if male
--   `married` - 1 if the respondent is currently married, 0 otherwise
--   `inc10` - Family income, in $10,000s
+``` r
+set.seed(1234)
 
-1.  Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
-2.  Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+mh_split7030 = resample_partition(mh, c(test = 0.3, train = 0.7))
+mh_train70 = mh_split7030$train %>%
+             tbl_df()
+mh_test30 = mh_split7030$test %>%
+            tbl_df()
+```
 
-Part 3: OJ Simpson \[4 points\]
-===============================
+We estimate five tree models to classify voters and non-voters using the training data and test them with the validation data:
 
-In October 1995 in what was termed "the trial of the century", O.J. Simpson was acquitted by a jury of murdering his wife Nicole Brown Simpson and her friend Ronald Goldman. The topic of Simpson's guilt or innocence divided Americans along racial lines, as Simpson is black and his wife was white. Especially in the aftermath of the 1992 Los Angeles riots sparked by the videotaped beating of Rodney King and subsequent acquittal of officers charged with police brutality, the Simpson trial illustrated many of the racial divides in the United States.
+``` r
+mh_tree1 = tree(vote96 ~ educ, data = mh_train70)
 
-The CBS News/New York Times monthly poll conducted in September 1995 asked respondents several questions about the closing arguments and verdict in the case. All the relevant variables are contained in `simpson.csv`.
+fitted1 = predict(mh_tree1, mh_test30, type = "class")
+tree_err1 = mean(mh_test30$vote96 != fitted1)
 
--   `guilt` - 1 if the respondent thinks OJ Simpson was "probably guilty", 0 if the respondent thinks OJ Simpson was "probably not guilty"
--   `dem` - Democrat
--   `rep` - Republican
--   `ind` - Independent
--   `age` - Age of respondent
--   `educ` - Highest education level of the respondent
--   `female` - Respondent is female
--   `black` - Respondent is black
--   `hispanic` - Respondent is hispanic
--   `income` - Self-reported income
+roc_tree1 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted1))
 
-1.  What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
-2.  How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
+auc_roc1 = sum(auc(roc_tree1))
+```
 
-You can make full use of any of the statistical learning techniques to complete this part of the assignment:
+``` r
+mh_tree2 = tree(vote96 ~ educ + mhealth_sum, data = mh_train70)
 
--   Linear regression
--   Logistic regression
--   Generalized linear models
--   Non-linear linear models
--   Tree-based models
--   Support vector machines
--   Resampling methods
+fitted2 = predict(mh_tree2, mh_test30, type = "class")
+tree_err2 = mean(mh_test30$vote96 != fitted2)
 
-Select methods that are appropriate for each question and **justify the use of these methods**.
+roc_tree2 <- roc(as.numeric(mh_test30$vote96), as.numeric(fitted2))
 
-Submission instructions
-=======================
+auc_roc2 = sum(auc(roc_tree2))
+```
 
-Assignment submission will work the same as earlier assignments. Submit your work as a pull request before the start of class on Monday. Store it in the same locations as you've been using. However the format of your submission should follow the procedures outlined below.
+``` r
+mh_tree3 = tree(vote96 ~ educ + mhealth_sum + age, data = mh_train70)
 
-If you use R
-------------
+fitted3 = predict(mh_tree3, mh_test30, type = "class")
+tree_err3 = mean(mh_test30$vote96 != fitted3)
 
-Submit your assignment as a single [R Markdown document](http://rmarkdown.rstudio.com/). R Markdown is similar to Juptyer Notebooks and compiles all your code, output, and written analysis in a single reproducible file.
+roc_tree3 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted3))
 
-If you use Python
------------------
+auc_roc3 = sum(auc(roc_tree3))
+```
 
-Either:
+``` r
+mh_tree4 = tree(vote96 ~ educ + mhealth_sum + age + inc10, data = mh_train70)
 
-1.  Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a $\\LaTeX$ generated PDF document with your results and substantive analysis.
-2.  Submit your assignment as a single Jupyter Notebook with your code, output, and written analysis compiled there.
+fitted4 = predict(mh_tree4, mh_test30, type = "class")
+tree_err4 = mean(mh_test30$vote96 != fitted4)
 
-[1] [Ojeda, C. (2015). Depression and political participation. *Social Science Quarterly*, 96(5), 1226-1243.](http://onlinelibrary.wiley.com.proxy.uchicago.edu/doi/10.1111/ssqu.12173/abstract)
+roc_tree4 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted4))
 
-[2] The variable is an index which combines responses to four different questions: "In the past 30 days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.
+auc_roc4 = sum(auc(roc_tree4))
+```
+
+``` r
+mh_tree5 = tree(vote96 ~ ., data = mh_train70)
+
+fitted5 = predict(mh_tree5, mh_test30, type = "class")
+tree_err5 = mean(mh_test30$vote96 != fitted5)
+
+roc_tree5 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted5))
+
+auc_roc5 = sum(auc(roc_tree5))
+```
+
+We plot all the ROC curves on one graph to visually assess the performance of all five models:
+
+![](ps8-emo_files/figure-markdown_github/plot_mh_ROCs-1.png)
+
+The second model, which is based on depression index score and education, performs the best and has an AUC of 0.583.
+
+![](ps8-emo_files/figure-markdown_github/plot_mh__best_tree-1.png)
+
+We estimate five SVM models to classify voters and non-voters using the training data and test them with the validation data:
+
+``` r
+mh_svm1 = tune(svm, vote96 ~ educ + age + mhealth_sum, data = mh_train70,
+          kernel = "linear",
+          range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin1 = mh_svm1$best.model
+summary(mh_lin1)
+```
+
+    ## 
+    ## Call:
+    ## best.tune(method = svm, train.x = vote96 ~ educ + age + mhealth_sum, 
+    ##     data = mh_train70, ranges = list(cost = c(0.001, 0.01, 0.1, 
+    ##         1, 5, 10, 100)), kernel = "linear")
+    ## 
+    ## 
+    ## Parameters:
+    ##    SVM-Type:  C-classification 
+    ##  SVM-Kernel:  linear 
+    ##        cost:  1 
+    ##       gamma:  0.333 
+    ## 
+    ## Number of Support Vectors:  511
+    ## 
+    ##  ( 255 256 )
+    ## 
+    ## 
+    ## Number of Classes:  2 
+    ## 
+    ## Levels: 
+    ##  0 1
+
+``` r
+fitted1 = predict(mh_lin1, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+
+roc_svm1 = roc(mh_test30$vote96, fitted1$decision.values)
+
+auc_svm1 = sum(auc(roc_svm1))
+```
+
+``` r
+mh_svm2 = tune(svm, vote96 ~ ., data = mh_train70,
+          kernel = "linear",
+          range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin2 = mh_svm2$best.model
+summary(mh_lin2)
+```
+
+    ## 
+    ## Call:
+    ## best.tune(method = svm, train.x = vote96 ~ ., data = mh_train70, 
+    ##     ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)), 
+    ##     kernel = "linear")
+    ## 
+    ## 
+    ## Parameters:
+    ##    SVM-Type:  C-classification 
+    ##  SVM-Kernel:  linear 
+    ##        cost:  10 
+    ##       gamma:  0.125 
+    ## 
+    ## Number of Support Vectors:  507
+    ## 
+    ##  ( 255 252 )
+    ## 
+    ## 
+    ## Number of Classes:  2 
+    ## 
+    ## Levels: 
+    ##  0 1
+
+``` r
+fitted2 = predict(mh_lin2, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+
+roc_svm2 = roc(mh_test30$vote96, fitted2$decision.values)
+
+auc_svm2 = sum(auc(roc_svm2))
+```
+
+``` r
+mh_svm3 = tune(svm, vote96 ~ age + educ + mhealth_sum, data = mh_train70,
+               kernel = "polynomial",
+               range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_poly1 = mh_svm3$best.model
+summary(mh_poly1)
+```
+
+    ## 
+    ## Call:
+    ## best.tune(method = svm, train.x = vote96 ~ age + educ + mhealth_sum, 
+    ##     data = mh_train70, ranges = list(cost = c(0.001, 0.01, 0.1, 
+    ##         1, 5, 10, 100)), kernel = "polynomial")
+    ## 
+    ## 
+    ## Parameters:
+    ##    SVM-Type:  C-classification 
+    ##  SVM-Kernel:  polynomial 
+    ##        cost:  10 
+    ##      degree:  3 
+    ##       gamma:  0.333 
+    ##      coef.0:  0 
+    ## 
+    ## Number of Support Vectors:  494
+    ## 
+    ##  ( 248 246 )
+    ## 
+    ## 
+    ## Number of Classes:  2 
+    ## 
+    ## Levels: 
+    ##  0 1
+
+``` r
+fitted3 = predict(mh_poly1, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+roc_svm3 = roc(mh_test30$vote96, fitted3$decision.values)
+
+auc_svm3 = sum(auc(roc_svm3))
+```
+
+``` r
+mh_svm4 = tune(svm, vote96 ~ ., data = mh_train70,
+               kernel = "polynomial",
+               range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_poly2 = mh_svm4$best.model
+summary(mh_poly2)
+```
+
+    ## 
+    ## Call:
+    ## best.tune(method = svm, train.x = vote96 ~ ., data = mh_train70, 
+    ##     ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)), 
+    ##     kernel = "polynomial")
+    ## 
+    ## 
+    ## Parameters:
+    ##    SVM-Type:  C-classification 
+    ##  SVM-Kernel:  polynomial 
+    ##        cost:  5 
+    ##      degree:  3 
+    ##       gamma:  0.125 
+    ##      coef.0:  0 
+    ## 
+    ## Number of Support Vectors:  495
+    ## 
+    ##  ( 258 237 )
+    ## 
+    ## 
+    ## Number of Classes:  2 
+    ## 
+    ## Levels: 
+    ##  0 1
+
+``` r
+fitted4 = predict(mh_poly2, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+roc_svm4 = roc(mh_test30$vote96, fitted4$decision.values)
+
+auc_svm4 = sum(auc(roc_svm4))
+```
+
+``` r
+mh_svm5 = tune(svm, vote96 ~ ., data = mh_train70,
+               kernel = "radial",
+               range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_rad = mh_svm5$best.model
+summary(mh_rad)
+```
+
+    ## 
+    ## Call:
+    ## best.tune(method = svm, train.x = vote96 ~ ., data = mh_train70, 
+    ##     ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)), 
+    ##     kernel = "radial")
+    ## 
+    ## 
+    ## Parameters:
+    ##    SVM-Type:  C-classification 
+    ##  SVM-Kernel:  radial 
+    ##        cost:  5 
+    ##       gamma:  0.125 
+    ## 
+    ## Number of Support Vectors:  494
+    ## 
+    ##  ( 258 236 )
+    ## 
+    ## 
+    ## Number of Classes:  2 
+    ## 
+    ## Levels: 
+    ##  0 1
+
+``` r
+fitted5 = predict(mh_rad, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+roc_svm5 = roc(mh_test30$vote96, fitted5$decision.values)
+
+auc_svm5 = sum(auc(roc_svm5))
+```
+
+We plot all the ROC curves on one graph to visually assess the effectiveness of the models:
+
+``` r
+plot(roc_svm1, print.auc = TRUE, col = "deeppink", print.auc.x = .2)
+plot(roc_svm2, print.auc = TRUE, col = "purple1", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_svm3, print.auc = TRUE, col = "springgreen1", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_svm4, print.auc = TRUE, col = "orangered", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_svm5, print.auc = TRUE, col = "darkturquoise", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+![](ps8-emo_files/figure-markdown_github/plot_rocs_svm-1.png)
+
+We find that the second model, which is based on a linear kernel using all the predictors in the dataset, has the largest AUC value (0.746) and therefore performs the best:
+
+``` r
+plot(mh_svm2)
+```
+
+![](ps8-emo_files/figure-markdown_github/unnamed-chunk-1-1.png)
+
+Part 3: OJ Simpson
+==================
+
+We begin by reading in the data and dropping those observations that are missing data in the response variable, guilt (for which we also make into a factor and assign labels):
+
+``` r
+oj = read.csv('data/simpson.csv')
+oj = oj[(!is.na(oj$guilt)), ]
+oj$Opinion = factor(oj$guilt, levels = c(0,1), labels = c("Probably not guilty", "Probably guilty"))
+```
+
+Next, we plot a bar chart of opinions by whether the respondent is Black:
+
+![](ps8-emo_files/figure-markdown_github/oj_histogram_black-1.png)
+
+We can clearly see that for Black respondents, the most common opinion by far was that Simpson was probably not guilty; the opposite was true for non-Black respondents.
+
+Using race alone, we develop a logistic regression model to explain the impact of respondent race on opinion of Simpson guilt:
+
+``` r
+logit_oj_black = glm(guilt ~ black, family = binomial, data=oj)
+summary(logit_oj_black)
+```
+
+    ## 
+    ## Call:
+    ## glm(formula = guilt ~ black, family = binomial, data = oj)
+    ## 
+    ## Deviance Residuals: 
+    ##    Min      1Q  Median      3Q     Max  
+    ## -1.823  -0.593   0.649   0.649   1.911  
+    ## 
+    ## Coefficients:
+    ##             Estimate Std. Error z value Pr(>|z|)    
+    ## (Intercept)   1.4518     0.0752    19.3   <2e-16 ***
+    ## black        -3.1022     0.1827   -17.0   <2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for binomial family taken to be 1)
+    ## 
+    ##     Null deviance: 1758.1  on 1415  degrees of freedom
+    ## Residual deviance: 1352.2  on 1414  degrees of freedom
+    ## AIC: 1356
+    ## 
+    ## Number of Fisher Scoring iterations: 4
+
+``` r
+mse_logit_oj_black = mse(logit_oj_black, oj)
+```
+
+The coefficient for Black (-3.102) is statistically significant at the p&lt;.001 level, which means that being Black reduces the log-likelihood of holding the opinion that Simpson is probably guilty by 3.102. This indicates that Black respondents are much more likely to opine that Simpson is probably not guilty compared to non-Black respondents.
+
+We generate dataframes for predictions and accuracy:
+
+``` r
+int = tidy(logit_oj_black)[1,2]
+coeff = tidy(logit_oj_black)[2,2]
+
+oj_black_pred = oj %>%
+                add_predictions(logit_oj_black) %>%
+                mutate(prob = logit2prob(pred)) %>%
+                mutate(odds = prob2odds(prob))
+
+oj_black_accuracy = oj %>%
+                    add_predictions(logit_oj_black) %>%
+                    mutate(pred = logit2prob(pred),
+                    pred = as.numeric(pred > .5))
+```
+
+We calculate the accuracy rate of the logistic regression model:
+
+``` r
+ar = mean(oj_black_accuracy$guilt == oj_black_accuracy$pred, na.rm = TRUE)
+
+uc = median(oj$guilt)
+
+cm.5_oj_black = confusionMatrix(oj_black_accuracy$pred, oj_black_accuracy$guilt,
+                                dnn = c("Prediction", "Actual"), positive = '1')
+
+cm.5_table = cm.5_oj_black$table
+
+tpr.cm.5 = sum(cm.5_oj_black$byClass[1])
+tnr.cm.5 = sum(cm.5_oj_black$byClass[2])
+
+roc_oj = roc(as.numeric(oj$guilt), as.numeric(oj_black_pred$pred))
+
+auc_roc_oj = sum(auc(roc_oj))
+```
+
+The logistic regression model has an accuracy rate of 0.816, which indicates that the model is robust. The useless classifier (1) predicts an opinion of "probably not guilty" (but that is based on the entire sample, which was mostly composed of non-Black respondents), so our model improves considerably upon the useless-classifier model. The logistic regression model has a true positive rate of 95.585%, which is notably high; the true negative rate (50.679%), however, is disappointingly low. This indicates that the model has high sensitivity but only moderate specificity: it is good at capturing opinions of guilt, but mediocre at capturing opinions of innoncence.
+
+We plot the ROC curve:
+
+![](ps8-emo_files/figure-markdown_github/plot_roc_oj_black-1.png)
+
+With an AUC of 0.731, we find that the model performs well, especially considering that it uses only one predictor variable.
+
+Next, we develop a model to predict a given respondent's opinion of Simpson's guilt given the predictors in the dataset. We estimate a random forest model with 500 trees:
+
+``` r
+oj_data = oj %>%
+          select(-guilt) %>%
+          mutate_each(funs(as.factor(.)), black, hispanic, female, dem, rep, ind, educ) %>%
+          na.omit
+
+m_oj = floor(sqrt(9))
+
+(rf_oj = randomForest(Opinion ~ ., data = oj_data, mtry = m_oj, ntree = 500))
+```
+
+    ## 
+    ## Call:
+    ##  randomForest(formula = Opinion ~ ., data = oj_data, mtry = m_oj,      ntree = 500) 
+    ##                Type of random forest: classification
+    ##                      Number of trees: 500
+    ## No. of variables tried at each split: 3
+    ## 
+    ##         OOB estimate of  error rate: 18.9%
+    ## Confusion matrix:
+    ##                     Probably not guilty Probably guilty class.error
+    ## Probably not guilty                 228             214      0.4842
+    ## Probably guilty                      54             920      0.0554
+
+We plot variable importance for the predictors:
+
+![](ps8-emo_files/figure-markdown_github/plot_rf_importance_oj-1.png)
+
+The plot indicates that Black and age produce the largest mean decrease in the Gini index across the 500 random forest trees (each limited to 3 predictors per split); income is a distant third. Independent is the least important variable (unsurprisingly, because there are no respondents in this category).
+
+The model's error rate is 19.1%, which is acceptable for this purpose. This breaks down to a classification error rate of 5.9% (which is quite low) for detecting opinions of guilt and 48.2% (which is quite high) for detecting opinions of innocence.
+
+Given a person's race, ethnicity, gender, income, education, and political affiliation, we can predict their opinion of Simpson's guilt with an accuracy rate of 80.9%. We find that given the relative importance of the outcome variable, this is a robust model that performs well and is not unduly complex.
+
+However, when we compare this to the 81.6% error rate given the simple logistic model, which only includes race, we find that the inclusion of additional predictors does not result in an improvement in predictive power.

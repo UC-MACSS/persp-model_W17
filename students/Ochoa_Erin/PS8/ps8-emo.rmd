@@ -2,7 +2,6 @@
 title: "MACS 30100 PS8"
 author: "Erin M. Ochoa"
 
-
 date: "2017 March 6"
 output:
   github_document:
@@ -26,6 +25,8 @@ library(grid)
 library(pROC)
 library(gbm)
 library(ggdendro) #boltoff's fork
+library(caret)
+library(e1071)
 
 
 options(digits = 3)
@@ -222,7 +223,6 @@ m = floor(sqrt(5))
 
 (rf_biden = randomForest(biden ~ ., data = biden_bag_data_train, mtry = m, ntree = 500))
 mse_rf_biden = mse(rf_biden, biden_bag_data_test)
-
 ```
 
 The random forest model returns a test MSE of `r mse_rf_biden`, which is much lower than the one returned by bagging (`r mse_bag_biden`).  Furthermore, the random forest model explains a greater proportion of variance (25.9%) than the bagged model does (9.49%).  Still, with the variane explained at only a quarter, this suggests that there are likely unobserved and unknown variables that have a notable effect on feelings of warmth for Joe Biden.
@@ -313,30 +313,17 @@ mse_boost4_biden_lambda = mse(boost4_biden_lambda,biden_bag_data_test)
 
 The test MSE for single-split trees has increased from `r mse_boost1_biden` to `r mse_boost1_biden_lambda`; for trees with a depth of two, it has increased from `r mse_boost2_biden` to `r mse_boost2_biden_lambda` and for trees of depth 4, it has increased from `r mse_boost4_biden` to `r mse_boost4_biden_lambda`.  This suggests that increasing the step size leads to the model learning faster but not as well.  Ideally, the next step would be to try different values of $\lambda$ and determine which yields the lowest MSE for each depth.
 
-
 # Part 2: Modeling voter turnout
 
-An important question in American politics is why do some people participate in the political process, while others do not? Participation has a direct impact on outcomes -- if you fail to participate in politics, the government and political officials are less likely to respond to your concerns. Typical explanations focus on a resource model of participation -- individuals with greater resources, such as time, money, and civic skills, are more likely to participate in politics. One area of importance is understanding voter turnout, or why people participate in elections. Using the resource model of participation as a guide, we can develop several expectations. First, women, who more frequently are the primary caregiver for children and earn a lower income, are less likely to participate in elections than men. Second, older Americans, who typically have more time and higher incomes available to participate in politics, should be more likely to participate in elections than younger Americans. Finally, individuals with more years of education, who are generally more interested in politics and understand the value and benefits of participating in politics, are more likely to participate in elections than individuals with fewer years of education.
-
-While these explanations have been repeatedly tested by political scientists, an emerging theory assesses an individual's mental health and its effect on political participation.^[[Ojeda, C. (2015). Depression and political participation. *Social Science Quarterly*, 96(5), 1226-1243.](http://onlinelibrary.wiley.com.proxy.uchicago.edu/doi/10.1111/ssqu.12173/abstract)] Depression increases individuals' feelings of hopelessness and political efficacy, so depressed individuals will have less desire to participate in politics. More importantly to our resource model of participation, individuals with depression suffer physical ailments such as a lack of energy, headaches, and muscle soreness which drain an individual's energy and requires time and money to receive treatment. For these reasons, we should expect that individuals with depression are less likely to participate in election than those without symptoms of depression.
-
-The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
-
-* `vote96` - 1 if the respondent voted in the 1996 presidential election, 0 otherwise
-* `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)^[The variable is an index which combines responses to four different questions: "In the past 30
-days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.]
-* `age` - age of the respondent
-* `educ` - Number of years of formal education completed by the respondent
-* `black` - 1 if the respondent is black, 0 otherwise
-* `female` - 1 if the respondent is female, 0 if male
-* `married` - 1 if the respondent is currently married, 0 otherwise
-* `inc10` - Family income, in \$10,000s
+We begin by reading in the data and dropping cases with missing values
 
 ```{r mh_read, message=FALSE, warning=FALSE}
 mh = read_csv("data/mental_health.csv") %>%
      mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
      na.omit
 ```
+
+We split the data into training and validation sets:
 
 ```{r mh_split}
 
@@ -349,6 +336,7 @@ mh_test30 = mh_split7030$test %>%
             tbl_df()
 ```
 
+We estimate five tree models to classify voters and non-voters using the training data and test them with the validation data:
 
 ```{r mh_model1}
 mh_tree1 = tree(vote96 ~ educ, data = mh_train70)
@@ -356,11 +344,10 @@ mh_tree1 = tree(vote96 ~ educ, data = mh_train70)
 fitted1 = predict(mh_tree1, mh_test30, type = "class")
 tree_err1 = mean(mh_test30$vote96 != fitted1)
 
-roc_tree1 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted))
+roc_tree1 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted1))
 
 auc_roc1 = sum(auc(roc_tree1))
 ```
-
 
 ```{r mh_model2}
 mh_tree2 = tree(vote96 ~ educ + mhealth_sum, data = mh_train70)
@@ -390,7 +377,7 @@ mh_tree4 = tree(vote96 ~ educ + mhealth_sum + age + inc10, data = mh_train70)
 fitted4 = predict(mh_tree4, mh_test30, type = "class")
 tree_err4 = mean(mh_test30$vote96 != fitted4)
 
-roc_tree4 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted))
+roc_tree4 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted4))
 
 auc_roc4 = sum(auc(roc_tree4))
 ```
@@ -406,6 +393,7 @@ roc_tree5 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted5))
 auc_roc5 = sum(auc(roc_tree5))
 ```
 
+We plot all the ROC curves on one graph to visually assess the performance of all five models:
 
 ```{r plot_mh_ROCs, echo=FALSE}
 plot(roc_tree1, print.auc = TRUE, col = "deeppink", lwd=2.5, print.auc.x = .2)
@@ -415,14 +403,15 @@ plot(roc_tree4, print.auc = TRUE, col = "orangered", lwd=2.5, print.auc.x = .2, 
 plot(roc_tree5, print.auc = TRUE, col = "darkturquoise", lwd=2.5, print.auc.x = .2, print.auc.y = .1, add = TRUE)
 ```
 
+The second model, which is based on depression index score and education, performs the best and has an AUC of `r auc_roc2`.
 
 ```{r plot_mh__best_tree, echo=FALSE}
 
 plot(mh_tree2, col="springgreen1", lwd=2.5)
-text(mh_tree, col = 'purple1')
+text(mh_tree2, col = 'purple1')
 ```
 
-
+We estimate five SVM models to classify voters and non-voters using the training data and test them with the validation data:
 
 ```{r mh_svm1, message=FALSE, warning=FALSE}
 mh_svm1 = tune(svm, vote96 ~ educ + age + mhealth_sum, data = mh_train70,
@@ -472,7 +461,6 @@ fitted3 = predict(mh_poly1, mh_test30, decision.values = TRUE) %>%
 roc_svm3 = roc(mh_test30$vote96, fitted3$decision.values)
 
 auc_svm3 = sum(auc(roc_svm3))
-
 ```
 
 ```{r mh_svm4, message=FALSE, warning=FALSE}
@@ -487,6 +475,8 @@ fitted4 = predict(mh_poly2, mh_test30, decision.values = TRUE) %>%
           attributes
 
 roc_svm4 = roc(mh_test30$vote96, fitted4$decision.values)
+
+auc_svm4 = sum(auc(roc_svm4))
 ```
 
 ```{r mh_svm5, message=FALSE, warning=FALSE}
@@ -501,30 +491,32 @@ fitted5 = predict(mh_rad, mh_test30, decision.values = TRUE) %>%
           attributes
 
 roc_svm5 = roc(mh_test30$vote96, fitted5$decision.values)
+
+auc_svm5 = sum(auc(roc_svm5))
 ```
 
-```{r}
+We plot all the ROC curves on one graph to visually assess the effectiveness of the models:
+
+```{r plot_rocs_svm}
 plot(roc_svm1, print.auc = TRUE, col = "deeppink", print.auc.x = .2)
 plot(roc_svm2, print.auc = TRUE, col = "purple1", print.auc.x = .2, print.auc.y = .4, add = TRUE)
 plot(roc_svm3, print.auc = TRUE, col = "springgreen1", print.auc.x = .2, print.auc.y = .3, add = TRUE)
 plot(roc_svm4, print.auc = TRUE, col = "orangered", print.auc.x = .2, print.auc.y = .2, add = TRUE)
 plot(roc_svm5, print.auc = TRUE, col = "darkturquoise", print.auc.x = .2, print.auc.y = .1, add = TRUE)
-
 ```
+
+We find that the second model, which is based on a linear kernel using all the predictors in the dataset, has the largest AUC value (`r auc_svm2`) and therefore performs the best:
 
 ```{r}
 plot(mh_svm2)
 
 ```
 
-1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
-1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
-
 # Part 3: OJ Simpson
 
 We begin by reading in the data and dropping those observations that are missing data in the response variable, guilt (for which we also make into a factor and assign labels):
 
-```{r read_data_biden}
+```{r read_data_oj}
 
 oj = read.csv('data/simpson.csv')
 oj = oj[(!is.na(oj$guilt)), ]
@@ -616,7 +608,7 @@ Next, we develop a model to predict a given respondent's opinion of Simpson's gu
 
 oj_data = oj %>%
           select(-guilt) %>%
-          mutate_each(funs(as.factor(.)), black, hispanic, female, dem, rep, ind) %>%
+          mutate_each(funs(as.factor(.)), black, hispanic, female, dem, rep, ind, educ) %>%
           na.omit
 
 m_oj = floor(sqrt(9))
@@ -641,6 +633,8 @@ ggplot(rf_oj_importance, mapping=aes(x=rownames(rf_oj_importance), y=MeanDecreas
 
 The plot indicates that Black and age produce the largest mean decrease in the Gini index across the 500 random forest trees (each limited to `r m_oj` predictors per split); income is a distant third.  Independent is the least important variable (unsurprisingly, because there are no respondents in this category).
 
-The model's error rate is 18.9%, which is acceptable for this purpose.  This breaks down to a classification error rate of 5.7% (which is quite low) for detecting opinions of guilt and 48.0% (which is quite high) for detecting opinions of innocence.
+The model's error rate is 19.1%, which is acceptable for this purpose.  This breaks down to a classification error rate of 5.9% (which is quite low) for detecting opinions of guilt and 48.2% (which is quite high) for detecting opinions of innocence.
 
-Given a person's race, ethnicity, gender, income, education, and political affiliation, we can predict their opinion of Simpson's guilt with an accuracy rate of 81.1%.  We find that given the relative importance of the outcome variable, this is a robust model that performs well and is not unduly complex.
+Given a person's race, ethnicity, gender, income, education, and political affiliation, we can predict their opinion of Simpson's guilt with an accuracy rate of 80.9%.  We find that given the relative importance of the outcome variable, this is a robust model that performs well and is not unduly complex.
+
+However, when we compare this to the 81.6% error rate given the simple logistic model, which only includes race, we find that the inclusion of additional predictors does not result in an improvement in predictive power.
