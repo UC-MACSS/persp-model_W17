@@ -1,5 +1,5 @@
 ---
-title: "Problem set #7: Re-Sampling and Non-Linearity"
+title: "Problem set #8: Trees and SVMs"
 author: "Sushmita V Gopalan"
 output:
   github_document:
@@ -30,6 +30,7 @@ library(caret)
 # version of ggdendro
 # devtools::install_github("bensoltoff/ggdendro")
 library(ggdendro)
+options(digits = 3)
 
 theme_set(theme_minimal())
 
@@ -56,6 +57,8 @@ biden_tree <- tree(biden ~ ., data = biden.split$train)
 
 # plot tree
 tree_data <- dendro_data(biden_tree)
+
+
 ptree <- ggplot(segment(tree_data)) +
   geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
                alpha = 0.5) +
@@ -77,16 +80,17 @@ mse_biden_1 = mse(biden_tree,biden.split$test)
 leaf_vals <- leaf_label(tree_data)$yval
 ptree
 
+
 ```
 
 Having only default tree controls in the model makes it straightforward to interpret. Only 'dem' and 'rep' were used to predict Biden Score. 
 
-If the value of 'dem' > 0.5, in our case, dem = 1, i.e. a person is a democrat, the model predicts a Biden score of r leaf_vals[3] 
+If the value of 'dem' > 0.5, in our case, dem = 1, i.e. a person is a democrat, the model predicts a Biden score of `r leaf_vals[3]` 
 
-If the value of dem is < 0.5, i.e. the person is either a Republican or neither, we go down the left side of the decision tree. Here we see that if rep > 0.5, we go down the right side of that sub-tree to find that the model predicts a Biden value of r leaf_vals[2]
-We go down the left of side of the sub-tree to find that, for individuals who are neither Republican nor Democrat, our model predicts a Biden score of r leaf_vals[1]
+If the value of dem is < 0.5, i.e. the person is either a Republican or neither, we go down the left side of the decision tree. Here we see that if rep > 0.5, we go down the right side of that sub-tree to find that the model predicts a Biden value of `r leaf_vals[2]`
+We go down the left of side of the sub-tree to find that, for individuals who are neither Republican nor Democrat, our model predicts a Biden score of `r leaf_vals[1]`
 
-The value of the MSE is r mse_biden_1
+The value of the MSE is `r mse_biden_1`
 
 **********************************************************
 [3] Now fit another tree to the training data with the following control options:
@@ -119,14 +123,16 @@ tibble(num_nodes = num_nodes, test_mse = test_mses) %>%
        subtitle = '(Test MSE calculated on Test data defined in Step 1)',
        x = 'Terminal Nodes in Tree',
        y = 'Test MSE')
-```
- 
-Using cross validation, we find from this graph that the MSE is lowest for a tree with 11 nodes. Pruning to 11 nodes reduces the MSE from r mse_biden_2 to r mse_pruned. Here's what a plot of the tree with 11 nodes looks like -
- 
-```{r}
+
+
 biden_pruned <- prune.tree(biden_tree_2, best=11)
 mse_pruned = mse(biden_pruned,biden.split$test)
 
+```
+ 
+Using cross validation, we find from this graph that the MSE is lowest for a tree with 11 nodes. Pruning to 11 nodes reduces the MSE from `r mse_biden_2` to `r mse_pruned`. Here's what a plot of the tree with 11 nodes looks like -
+ 
+```{r}
 plot(biden_pruned, col='purple', lwd=2.5)
 title("Best 11 Regression Tree for Biden Scores\n")
 text(biden_pruned, col='red')
@@ -159,11 +165,6 @@ biden_train70 = biden_split7030$train %>%
                 tbl_df()
 biden_test30 = biden_split7030$test %>%
                tbl_df()
-```
-
-# bagging
-```{r}
-set.seed(1234)
 
 biden_bag_data_train = biden_train70 %>%
                        select(-Party) %>%
@@ -179,11 +180,12 @@ biden_bag_data_test = biden_test30 %>%
 (bag_biden <- randomForest(biden ~ ., data = biden_bag_data_train, mtry = 5, ntree = 500, importance=TRUE))
 # find MSE
 mse_bag_biden = mse(bag_biden, biden_bag_data_test)
-
 ``` 
 
-The MSE for the model with bagging is r mse_bag_biden , which is much higher than we had for the pruned tree with r mse_pruned 
+
+The MSE for the model with bagging is `r mse_bag_biden` , which is much higher than we had for the pruned tree with `r mse_pruned` 
 The % variation explained is also very low, at 8.91%.
+
 
 ```{r}
 set.seed(1234)
@@ -231,7 +233,7 @@ ggplot(rf_biden_importance, mapping=aes(x=rownames(rf_biden_importance), y=IncNo
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
 ```
 
-The MSE for this model is r mse_rf which we see is much less than r mse_bag_biden.
+The MSE for this model is `r mse_rf` which we see is much less than `r mse_bag_biden`.
 
 ```{r}
 # alternate plot and table for the same thing as above 
@@ -262,6 +264,7 @@ biden_models <- list("boosting_depth1" = gbm(as.numeric(biden) - 1 ~ .,
 ```
 
 ```{r}
+set.seed(1234)
 data_frame(depth = c(1, 2, 4),
            model = biden_models[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
            optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) %>%
@@ -276,22 +279,38 @@ set.seed(1234)
 
 biden_boost_1 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 3293, interaction.depth = 1)
+                                               n.trees = 3302, interaction.depth = 1)
 
 biden_boost_2 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2620, interaction.depth = 2)
+                                               n.trees = 2700, interaction.depth = 2)
 
 biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2103, interaction.depth = 4)
+                                               n.trees = 2094, interaction.depth = 4)
 ```
 Using these optimal values, we run the boost model again to see what depth at its ideal number of trees gives us lowest MSE.
 ```{r}
 # get MSE
+
+## work around bug in gbm 2.1.1
 # obtained from http://www.samuelbosch.com/2015/09/workaround-ntrees-is-missing-in-r.html
 
-
+predict.gbm <- function (object, newdata, n.trees, type = "link", single.tree = FALSE, ...) {
+  if (missing(n.trees)) {
+    if (object$train.fraction < 1) {
+      n.trees <- gbm.perf(object, method = "test", plot.it = FALSE)
+    }
+    else if (!is.null(object$cv.error)) {
+      n.trees <- gbm.perf(object, method = "cv", plot.it = FALSE)
+    }
+    else {
+      n.trees <- length(object$train.error)
+    }
+    cat(paste("Using", n.trees, "trees...\n"))
+    gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
+  }
+}
 mse_1 = mse(biden_boost_1,biden_bag_data_test)
 mse_1
 mse_2 = mse(biden_boost_2,biden_bag_data_test)
@@ -300,7 +319,7 @@ mse_4 = mse(biden_boost_4,biden_bag_data_test)
 mse_4
 ``` 
 
-We see that using a depth of 2 with 2620 trees gives us an MSE value that is lowest, although only marginal less than (depth = 1, trees = 3293) and (depth = 4, trees = 2103).
+We see that using a depth of 2 with 2620 trees gives us an MSE value that is lowest, although only marginal less than (depth = 1, trees = 3302) and (depth = 4, trees = 2094).
 
 We also see that these MSE values are much better than those obtained by our bagging and random forest models. 
 
@@ -312,21 +331,19 @@ set.seed(1234)
 
 biden_boost_1 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 3293, interaction.depth = 1,shrinkage=0.02)
+                                               n.trees = 3302, interaction.depth = 1,shrinkage=0.02)
 
 biden_boost_2 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2620, interaction.depth = 2,shrinkage=0.02)
+                                               n.trees = 2700, interaction.depth = 2,shrinkage=0.02)
 
 biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2103, interaction.depth = 4,shrinkage=0.02)
+                                               n.trees = 2094, interaction.depth = 4,shrinkage=0.02)
 ```
 Using these optimal values, we run the boost model again to see what depth at its ideal number of trees gives us lowest MSE.
 ```{r}
 # get MSE
-# obtained from http://www.samuelbosch.com/2015/09/workaround-ntrees-is-missing-in-r.html
-
 
 mse_1 = mse(biden_boost_1,biden_bag_data_test)
 mse_1
@@ -336,3 +353,6 @@ mse_4 = mse(biden_boost_4,biden_bag_data_test)
 mse_4
 ``` 
 We notice that MSE values have increased slightly. This makes sense because given the same number of trees, a smaller value of lambda increases MSE. Lambda, essentially, is a shrinkage parameter which controls the rate at which boosting learns. So, a very small value of lambda will require a very large number of trees in order to achieve good performance. 
+
+
+##
