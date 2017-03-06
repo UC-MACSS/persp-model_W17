@@ -220,6 +220,7 @@ Using the bagging approach, age appears to be the most influential factor, follo
 ``` r
 mse_rf <- mse(biden_rf, biden_rf_test)
 
+#variable importance measures
 data_frame(var = rownames(importance(biden_rf)),
            MeanDecreaseGini = importance(biden_rf)[,1]) %>%
   mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
@@ -736,7 +737,7 @@ data_frame(var = rownames(importance(mh_rf5)),
 mse_rf5 <- mse(mh_rf5, mh_rf_test)
 ```
 
-Based on this model, income is the most influential factor affecting voter turnout, followed by education level. Mental health does not appear to have a large effect. The test MSE for this model is 0.2036966. The test accuracy rate is 0.7048711, meaning it predicted voting accurately 70.49% of the time. The PRE is 0.0964912, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6874393, which is respectably close to 1.
+Based on this model, income is the most influential factor affecting voter turnout. The test MSE for this model is 0.2036966. The test accuracy rate is 0.7048711, meaning it predicted voting accurately 70.49% of the time. The PRE is 0.0964912, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6874393, which is respectably close to 1.
 
 ### Subpart 2
 
@@ -1105,7 +1106,7 @@ ggplot(data = mh_model_resid, mapping = aes(x = vote96, y = resid)) +
 
 There is more variance among the residuals for cases where respondents did not vote.
 
-The test MSE for this model is 0.2508319, higher than that for the random forest model. The test accuracy rate is 0.6934097, meaning it predicted voting accurately 69.34% of the time. The PRE is 0.0614035, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6804965, significantly lower than the AUC for the random forest model.
+The test MSE for this model is 0.2508319, higher than that for the random forest model. The test accuracy rate is 0.6934097, meaning it predicted voting accurately 69.34% of the time. The PRE is 0.0614035, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6804965, lower than the AUC for the random forest model.
 
 Part 3: OJ Simpson \[4 points\]
 ===============================
@@ -1116,14 +1117,187 @@ Part 3: OJ Simpson \[4 points\]
 
 For this part of the problem I will use a logistic regression model to analyze the relationship between race and belief of OJ Simpson's guilt. As the outcome variable (`guilt`) is a binary categorical variable, it is not normally distributed and thus using a linear regression will not be as useful. Since I will only be using two predictor variables (`black` and `hispanic`) that are also binary, the model need not be complex; therefore, a tree model will probably not improve on a logit model.
 
-I will use 10-fold CV to evaluate model fit.
+I use the validation set approach (70/30 training-test split) to evaluate model fit.
 
 ``` r
 oj <- read.csv("data/simpson.csv")
 
-#guilt_race <- glm(guilt ~ black + hispanic, data = oj, family = binomial)
+#data cleaning
+oj$black <- as.factor(oj$black)
+oj$hispanic <- as.factor(oj$hispanic)
+oj$dem <- as.factor(oj$dem)
+oj$rep <- as.factor(oj$rep)
+oj$educ_lvl <- NA #recode educ in numbers
+oj$educ_lvl[oj$educ == "NOT A HIGH SCHOOL GRAD"] <- 0
+oj$educ_lvl[oj$educ == "HIGH SCHOOL GRAD"] <- 1
+oj$educ_lvl[oj$educ == "SOME COLLEGE(TRADE OR BUSINESS)"] <- 2
+oj$educ_lvl[oj$educ == "COLLEGE GRAD AND BEYOND"] <- 3
+oj$income_lvl <- NA #recode income in numbers
+oj$income_lvl[oj$income == "UNDER $15,000"] <- 0
+oj$income_lvl[oj$income == "$15,000-$30,000"] <- 1
+oj$income_lvl[oj$income == "$30,000-$50,000"] <- 2
+oj$income_lvl[oj$income == "$50,000-$75,000"] <- 3
+oj$income_lvl[oj$income == "OVER $75,000"] <- 4
+
+oj_data <- oj %>%
+  select(-ind) %>%
+  na.omit() #get rid of NAs
+
+oj_split <- resample_partition(oj_data, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+oj_train <- oj_split$train %>% 
+  tbl_df()
+oj_test <- oj_split$test %>% 
+  tbl_df()
+
+guilt_race <- glm(guilt ~ black + hispanic, data = oj_train, family = binomial)
+summary(guilt_race)
 ```
+
+    ## 
+    ## Call:
+    ## glm(formula = guilt ~ black + hispanic, family = binomial, data = oj_train)
+    ## 
+    ## Deviance Residuals: 
+    ##     Min       1Q   Median       3Q      Max  
+    ## -1.8937  -0.6041   0.6034   0.6034   2.0848  
+    ## 
+    ## Coefficients:
+    ##             Estimate Std. Error z value Pr(>|z|)    
+    ## (Intercept)   1.6109     0.1005  16.034   <2e-16 ***
+    ## black1       -3.2194     0.2282 -14.108   <2e-16 ***
+    ## hispanic1    -0.4438     0.2993  -1.483    0.138    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for binomial family taken to be 1)
+    ## 
+    ##     Null deviance: 1137.38  on 938  degrees of freedom
+    ## Residual deviance:  855.14  on 936  degrees of freedom
+    ## AIC: 861.14
+    ## 
+    ## Number of Fisher Scoring iterations: 4
+
+Being hispanic and hispanic both appear to have negative effects on the likelihood of believing in Simpson's guilt. Only the `black` estimate is statistically significant, however.
+
+``` r
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+oj_race_pred <- oj_test %>%
+  add_predictions(guilt_race) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(guilt_pred = as.numeric(prob > .5))
+
+ggplot(data = oj_race_pred, mapping = aes(x = black, y = prob)) + 
+  geom_boxplot() + 
+  scale_x_discrete(labels = c("Not Black", "Black")) + 
+  labs(title = "Race vs. probability of believing OJ Simpson is guilty (boxplot)",
+       subtitle = "Black vs. not black",
+       x = "Race",
+       y = "Probability")
+```
+
+![](ps8_files/figure-markdown_github/oj_race_plots-1.png)
+
+``` r
+ggplot(data = oj_race_pred, mapping = aes(x = hispanic, y = prob)) + 
+  geom_boxplot() + 
+  scale_x_discrete(labels = c("Not Hispanic", "Hispanic")) + 
+  labs(title = "Race vs. probability of believing OJ Simpson is guilty (boxplot)",
+       subtitle = "Hispanic vs. not hispanic",
+       x = "Race",
+       y = "Probability")
+```
+
+![](ps8_files/figure-markdown_github/oj_race_plots-2.png)
+
+As the plots show, being black dramatically decreases the probability of believing in Simpson's guilt, while being hispanic slightly decreases the probability. In both cases, variance is low, such that the boxplots appear as lines.
+
+``` r
+#estimate accuracy rate
+acc_rate_race <- mean(oj_race_pred$guilt == oj_race_pred$guilt_pred, na.rm = TRUE)
+
+#estimate PRE
+y <- oj_race_pred$guilt # get the actual values for y from the data
+y.hat <- oj_race_pred$guilt_pred # get the predicted values for y from the model
+
+## calculate the errors for the null model and each rf model
+race_guilt_mode <- getmode(oj_race_pred$guilt)
+E1 <- sum(y != race_guilt_mode)
+E2 <- sum(y != y.hat)
+pre_race <- (E1 - E2) / E1
+
+#estimate AUC
+auc_oj_race <- auc(oj_race_pred$guilt, oj_race_pred$prob)
+```
+
+The test set accuracy rate is 0.7960199, meaning it predicted the outcome correctly 79.6% of the time. The PRE is 0.3740458, showing this is a signifcant improvement over the useless classifier. The AUC is 0.7277682.
+
+Race alone is unlikely to explain the outcome variable. I estimate a more complex model below.
 
 ### Subpart 2
 
 **How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.**
+
+For this part of the assignment I will use a random forest model using all of the predictors except for `ind` (to avoid correlation among variables). I use random forest because it is flexible and has relatively few assumptions built in, and also because it reduces sample bias through resampling. Also, it's generally competitive with other methods in terms of speed and accuracy.
+
+``` r
+#estimate random forest model
+oj_rf <- randomForest(guilt ~ dem + rep + age + female + 
+                         black + hispanic + educ_lvl + 
+                         income_lvl, data = oj_train, ntree = 500)
+oj_rf
+```
+
+    ## 
+    ## Call:
+    ##  randomForest(formula = guilt ~ dem + rep + age + female + black +      hispanic + educ_lvl + income_lvl, data = oj_train, ntree = 500) 
+    ##                Type of random forest: regression
+    ##                      Number of trees: 500
+    ## No. of variables tried at each split: 2
+    ## 
+    ##           Mean of squared residuals: 0.1413658
+    ##                     % Var explained: 31.88
+
+``` r
+#variable importance plot
+data_frame(var = rownames(importance(oj_rf)),
+           MeanDecreaseGini = importance(oj_rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting belief in OJ Simpson's guilt",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```
+
+![](ps8_files/figure-markdown_github/oj_rf-1.png)
+
+Based on this model, `black` is the most important predictor, followed by age. Other predictors have much less influence.
+
+``` r
+#get predicted values
+oj_rf_pred <- oj_test %>%
+  add_predictions(oj_rf) %>%
+  mutate(guilt_pred = (as.numeric(pred > 0.5))) %>%
+  rename(prob = pred)
+
+#estimate accuracy rate
+acc_rate <- mean(oj_rf_pred$guilt == oj_rf_pred$guilt_pred)
+
+#estimate PRE
+y <- oj_rf_pred$guilt # get the actual values for y from the data
+y.hat <- oj_rf_pred$guilt_pred # get the predicted values for y from the model
+guilt_mode <- getmode(oj_rf_pred$guilt)
+E1 <- sum(y != guilt_mode)
+E2 <- sum(y != y.hat)
+pre <- (E1 - E2) / E1
+
+#AUC
+auc_oj <- auc(oj_rf_pred$guilt, oj_rf_pred$prob)
+```
+
+The test set accuracy rate is 0.7935323, the PRE is 0.3664122, and the AUC is 0.7761472. Interestingly, this expanded model performs similarly to the race-only logistic model, implying that race is the most important predictor of belief in Simpson's guilt.
