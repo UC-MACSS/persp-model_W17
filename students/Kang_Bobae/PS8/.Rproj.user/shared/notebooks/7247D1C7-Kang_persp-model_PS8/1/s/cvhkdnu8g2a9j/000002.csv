@@ -1,0 +1,26 @@
+"0","simpson_logit <- glm(guilt ~ ., data = simpson_train, family='binomial') # logistic regression"
+"0","simpson_rf <- randomForest(as.factor(guilt) ~ ., data = simpson_train, ntree = 5000)"
+"0","simpson_bst <- gbm(guilt ~ ., data = simpson_train, n.trees = 5000)"
+"1","Distribution not specified, assuming bernoulli ...
+"
+"0","simpson_svm_lin <- svm(guilt ~ ., data = simpson_train, kernel = ""linear"", scale = FALSE, probability=TRUE)"
+"0","simpson_svm_poly <- svm(guilt ~ ., data = simpson_train, kernel = ""polynomial"", scale = FALSE, probability=TRUE)"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"0","simpson_svm_rad <- svm(guilt ~ ., data = simpson_train, kernel = ""radial"", scale = FALSE, probability=TRUE)"
