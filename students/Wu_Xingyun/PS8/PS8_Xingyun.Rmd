@@ -831,21 +831,12 @@ auc(roc_logit3_1)
 
 #### 1.2 multiple-variable logistic regression
 
-```{r problem3_2_model, echo=FALSE}
-simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
-# summary(simpson_logit2)
-fitted <- predict(simpson_logit2, as_tibble(simpson_split$test), type = "response")
-logit_err2 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
-
-roc_logit3_2 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
-plot(roc_logit3_2)
-```
-
+  This model uses all the possible predictors.
 
 ```{r problem3_2_model, echo=FALSE}
 simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
 # summary(simpson_logit2)
-fitted <- predict(simpson_logit2, as_tibble(simpson_split$test), type = "response")
+fitted2 <- predict(simpson_logit2, as_tibble(simpson_split$test), type = "response")
 logit_err2 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
 
 roc_logit3_2 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
@@ -855,6 +846,7 @@ plot(roc_logit3_2)
 ```{r problem3_2_evaluation, echo=FALSE}
 auc(roc_logit3_2)
 ```
+
 
 #### 1.3 single_predictor desicion tree
 ```{r problem3_3_model, echo=FALSE}
