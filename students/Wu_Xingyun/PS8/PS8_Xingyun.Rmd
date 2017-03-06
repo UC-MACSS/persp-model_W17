@@ -232,7 +232,7 @@ mse(mod1_2, biden_split$test)
 ### 3. 
   According to the 10-fold cross-validation approach, the optimal level of tree complexity is 3 or 4. The test MSE would keep increasing after adding more complexity.
 
-```{r problem2_1_complexity, echo=FALSE}
+```{r problem2_3_complexity, echo=FALSE}
 set.seed(1234)
 # generate 10-fold CV trees
 biden_cv <- crossv_kfold(biden_split$train$data, k = 10) %>%
@@ -579,7 +579,7 @@ roc_tree4 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted4
 plot(roc_tree4)
 ```
 
-```{r problem2_5_auc, echo=FALSE}
+```{r problem2_4_auc, echo=FALSE}
 auc(roc_tree4)
 ```
 
@@ -892,7 +892,7 @@ auc(roc_line3)
 
 #### 2.2 polynomial kernel
 
-```{r problem3_7_model echo=FALSE}
+```{r problem3_7_model, echo=FALSE}
 set.seed(1234)
 
 simpson_poly_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
