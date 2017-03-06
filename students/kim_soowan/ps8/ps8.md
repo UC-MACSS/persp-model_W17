@@ -14,6 +14,9 @@ March 4, 2017
 -   [Part 2: Modeling voter turnout \[3 points\]](#part-2-modeling-voter-turnout-3-points)
     -   [Subpart 1](#subpart-1-1)
     -   [Subpart 2](#subpart-2-1)
+-   [Part 3: OJ Simpson \[4 points\]](#part-3-oj-simpson-4-points)
+    -   [Subpart 1](#subpart-1-2)
+    -   [Subpart 2](#subpart-2-2)
 
 Part 1: Sexy Joe Biden (redux times two) \[3 points\]
 =====================================================
@@ -1103,3 +1106,24 @@ ggplot(data = mh_model_resid, mapping = aes(x = vote96, y = resid)) +
 There is more variance among the residuals for cases where respondents did not vote.
 
 The test MSE for this model is 0.2508319, higher than that for the random forest model. The test accuracy rate is 0.6934097, meaning it predicted voting accurately 69.34% of the time. The PRE is 0.0614035, indicating that it outperforms the useless classifier by a narrow margin. The AUC is 0.6804965, significantly lower than the AUC for the random forest model.
+
+Part 3: OJ Simpson \[4 points\]
+===============================
+
+### Subpart 1
+
+**What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.**
+
+For this part of the problem I will use a logistic regression model to analyze the relationship between race and belief of OJ Simpson's guilt. As the outcome variable (`guilt`) is a binary categorical variable, it is not normally distributed and thus using a linear regression will not be as useful. Since I will only be using two predictor variables (`black` and `hispanic`) that are also binary, the model need not be complex; therefore, a tree model will probably not improve on a logit model.
+
+I will use 10-fold CV to evaluate model fit.
+
+``` r
+oj <- read.csv("data/simpson.csv")
+
+#guilt_race <- glm(guilt ~ black + hispanic, data = oj, family = binomial)
+```
+
+### Subpart 2
+
+**How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.**

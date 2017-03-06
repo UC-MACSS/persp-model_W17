@@ -729,8 +729,7 @@ I will use 10-fold CV to evaluate model fit.
 ```{r}
 oj <- read.csv("data/simpson.csv")
 
-guilt_race <- glm(guilt ~ Age, data = titanic, family = binomial)
-summary(survive_age)
+#guilt_race <- glm(guilt ~ black + hispanic, data = oj, family = binomial)
 ```
 
 
@@ -738,7 +737,8 @@ summary(survive_age)
 
 ```
 
-  2. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
+###Subpart 2
+**How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.**
 
 ```{r}
 
