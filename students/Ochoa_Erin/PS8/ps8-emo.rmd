@@ -332,16 +332,190 @@ days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless,
 * `married` - 1 if the respondent is currently married, 0 otherwise
 * `inc10` - Family income, in \$10,000s
 
+```{r mh_read, message=FALSE, warning=FALSE}
+mh = read_csv("data/mental_health.csv") %>%
+     mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+     na.omit
 ```
-(mh <- read_csv("data/mental_health.csv") %>%
-  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
-  na.omit)
-  ```
+
+```{r mh_split}
+
+set.seed(1234)
+
+mh_split7030 = resample_partition(mh, c(test = 0.3, train = 0.7))
+mh_train70 = mh_split7030$train %>%
+             tbl_df()
+mh_test30 = mh_split7030$test %>%
+            tbl_df()
+```
+
+
+```{r mh_model1}
+mh_tree1 = tree(vote96 ~ educ, data = mh_train70)
+
+fitted1 = predict(mh_tree1, mh_test30, type = "class")
+tree_err1 = mean(mh_test30$vote96 != fitted1)
+
+roc_tree1 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted))
+
+auc_roc1 = sum(auc(roc_tree1))
+```
+
+
+```{r mh_model2}
+mh_tree2 = tree(vote96 ~ educ + mhealth_sum, data = mh_train70)
+
+fitted2 = predict(mh_tree2, mh_test30, type = "class")
+tree_err2 = mean(mh_test30$vote96 != fitted2)
+
+roc_tree2 <- roc(as.numeric(mh_test30$vote96), as.numeric(fitted2))
+
+auc_roc2 = sum(auc(roc_tree2))
+```
+
+```{r model3}
+mh_tree3 = tree(vote96 ~ educ + mhealth_sum + age, data = mh_train70)
+
+fitted3 = predict(mh_tree3, mh_test30, type = "class")
+tree_err3 = mean(mh_test30$vote96 != fitted3)
+
+roc_tree3 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted3))
+
+auc_roc3 = sum(auc(roc_tree3))
+```
+
+```{r model4}
+mh_tree4 = tree(vote96 ~ educ + mhealth_sum + age + inc10, data = mh_train70)
+
+fitted4 = predict(mh_tree4, mh_test30, type = "class")
+tree_err4 = mean(mh_test30$vote96 != fitted4)
+
+roc_tree4 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted))
+
+auc_roc4 = sum(auc(roc_tree4))
+```
+
+```{r model5}
+mh_tree5 = tree(vote96 ~ ., data = mh_train70)
+
+fitted5 = predict(mh_tree5, mh_test30, type = "class")
+tree_err5 = mean(mh_test30$vote96 != fitted5)
+
+roc_tree5 = roc(as.numeric(mh_test30$vote96), as.numeric(fitted5))
+
+auc_roc5 = sum(auc(roc_tree5))
+```
+
+
+```{r plot_mh_ROCs, echo=FALSE}
+plot(roc_tree1, print.auc = TRUE, col = "deeppink", lwd=2.5, print.auc.x = .2)
+plot(roc_tree2, print.auc = TRUE, col = "purple1", lwd=2.5, print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_tree3, print.auc = TRUE, col = "springgreen1", lwd=2.5, print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_tree4, print.auc = TRUE, col = "orangered", lwd=2.5, print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_tree5, print.auc = TRUE, col = "darkturquoise", lwd=2.5, print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+
+```{r plot_mh__best_tree, echo=FALSE}
+
+plot(mh_tree2, col="springgreen1", lwd=2.5)
+text(mh_tree, col = 'purple1')
+```
 
 
 
+```{r mh_svm1, message=FALSE, warning=FALSE}
+mh_svm1 = tune(svm, vote96 ~ educ + age + mhealth_sum, data = mh_train70,
+          kernel = "linear",
+          range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin1 = mh_svm1$best.model
+summary(mh_lin1)
+
+fitted1 = predict(mh_lin1, mh_test30, decision.values = TRUE) %>%
+          attributes
 
 
+roc_svm1 = roc(mh_test30$vote96, fitted1$decision.values)
+
+auc_svm1 = sum(auc(roc_svm1))
+```
+
+```{r mh_svm2, message=FALSE, warning=FALSE}
+mh_svm2 = tune(svm, vote96 ~ ., data = mh_train70,
+          kernel = "linear",
+          range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin2 = mh_svm2$best.model
+summary(mh_lin2)
+
+fitted2 = predict(mh_lin2, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+
+roc_svm2 = roc(mh_test30$vote96, fitted2$decision.values)
+
+auc_svm2 = sum(auc(roc_svm2))
+```
+
+```{r mh_svm3, message=FALSE, warning=FALSE}
+mh_svm3 = tune(svm, vote96 ~ age + educ + mhealth_sum, data = mh_train70,
+               kernel = "polynomial",
+               range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_poly1 = mh_svm3$best.model
+summary(mh_poly1)
+
+fitted3 = predict(mh_poly1, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+roc_svm3 = roc(mh_test30$vote96, fitted3$decision.values)
+
+auc_svm3 = sum(auc(roc_svm3))
+
+```
+
+```{r mh_svm4, message=FALSE, warning=FALSE}
+mh_svm4 = tune(svm, vote96 ~ ., data = mh_train70,
+               kernel = "polynomial",
+               range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_poly2 = mh_svm4$best.model
+summary(mh_poly2)
+
+fitted4 = predict(mh_poly2, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+roc_svm4 = roc(mh_test30$vote96, fitted4$decision.values)
+```
+
+```{r mh_svm5, message=FALSE, warning=FALSE}
+mh_svm5 = tune(svm, vote96 ~ ., data = mh_train70,
+               kernel = "radial",
+               range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_rad = mh_svm5$best.model
+summary(mh_rad)
+
+fitted5 = predict(mh_rad, mh_test30, decision.values = TRUE) %>%
+          attributes
+
+roc_svm5 = roc(mh_test30$vote96, fitted5$decision.values)
+```
+
+```{r}
+plot(roc_svm1, print.auc = TRUE, col = "deeppink", print.auc.x = .2)
+plot(roc_svm2, print.auc = TRUE, col = "purple1", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_svm3, print.auc = TRUE, col = "springgreen1", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_svm4, print.auc = TRUE, col = "orangered", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_svm5, print.auc = TRUE, col = "darkturquoise", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+
+```
+
+```{r}
+plot(mh_svm2)
+
+```
 
 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
 1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
@@ -365,12 +539,7 @@ oj = oj[(!is.na(oj$guilt)), ]
 oj$Opinion = factor(oj$guilt, levels = c(0,1), labels = c("Probably not guilty", "Probably guilty"))
 ```
 
-
-
-
-
-
-
+Next, we plot a bar chart of opinions by whether the respondent is Black:
 
 ```{r oj_histogram_black, echo=FALSE}
 ggplot(oj, aes(x=black, fill=Opinion)) + geom_bar(position = "dodge") + 
@@ -383,9 +552,9 @@ ggplot(oj, aes(x=black, fill=Opinion)) + geom_bar(position = "dodge") +
        scale_x_continuous(breaks = c(0,1), labels = c("Not Black", "Black"))
 ```
 
+We can clearly see that for Black respondents, the most common opinion by far was that Simpson was probably not guilty; the opposite was true for non-Black respondents.
 
-
-
+Using race alone, we develop a logistic regression model to explain the impact of respondent race on opinion of Simpson guilt:
 
 ```{r oj_basic_logistic_regression}
 
@@ -395,8 +564,9 @@ summary(logit_oj_black)
 mse_logit_oj_black = mse(logit_oj_black, oj)
 ```
 
+The coefficient for Black (`r logit_oj_black$coefficients[2]`) is statistically significant at the p<.001 level, which means that being Black reduces the log-likelihood of holding the opinion that Simpson is probably guilty by `r - logit_oj_black$coefficients[2]`.  This indicates that Black respondents are much more likely to opine that Simpson is probably not guilty compared to non-Black respondents.
 
-
+We generate dataframes for predictions and accuracy:
 
 ```{r bv_gen_dfs_and_vars}
 
@@ -414,9 +584,9 @@ oj_black_accuracy = oj %>%
                     pred = as.numeric(pred > .5))
 ```
 
+We calculate the accuracy rate of the logistic regression model:
 
-
-```{r, ar_auc}
+```{r, oj_ar_roc_auc}
 
 ar = mean(oj_black_accuracy$guilt == oj_black_accuracy$pred, na.rm = TRUE)
 
@@ -427,39 +597,30 @@ cm.5_oj_black = confusionMatrix(oj_black_accuracy$pred, oj_black_accuracy$guilt,
 
 cm.5_table = cm.5_oj_black$table
 
-actlpos = cm.5_table[1,2] + cm.5_table[2,2]
-predposcrrct = cm.5_table[2,2]
-
-actlneg = cm.5_table[1,1] + cm.5_table[2,1]
-prednegcrrct = cm.5_table[1,1]
-
-tpr.notes =  predposcrrct / actlpos
-tnr.notes =  prednegcrrct / actlneg
-
 tpr.cm.5 = sum(cm.5_oj_black$byClass[1])
 tnr.cm.5 = sum(cm.5_oj_black$byClass[2])
 
+roc_oj = roc(as.numeric(oj$guilt), as.numeric(oj_black_pred$pred))
+
+auc_roc_oj = sum(auc(roc_oj))
+```
+
+The logistic regression model has an accuracy rate of `r ar`, which indicates that the model is robust.  The useless classifier (`r uc`) predicts an opinion of "probably not guilty" (but that is based on the entire sample, which was mostly composed of non-Black respondents), so our model improves considerably upon the useless-classifier model.  The logistic regression model has a true positive rate of `r tpr.cm.5 * 100`%, which is notably high; the true negative rate (`r tnr.cm.5 * 100`%), however, is disappointingly low.  This indicates that the model has high sensitivity but only moderate specificity: it is good at capturing opinions of guilt, but mediocre at capturing opinions of innoncence.
+
+We plot the ROC curve:
+
+```{r plot_roc_oj_black, echo=FALSE}
+
+plot(roc_oj, col="purple1", lwd=2.5)
+title("ROC Curve: Logistic Regression Based on Race\n")
 
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+With an AUC of `r auc_roc_oj`, we find that the model performs well, especially considering that it uses only one predictor variable.
 
 Next, we split the dataset into training and validation sets in a ratio of 7:3:
 
-```{r first_tree}
+```{r oj_split}
 
 set.seed(1234)
 
@@ -470,7 +631,7 @@ oj_test30 = oj_split7030$test %>%
             tbl_df()
 ```
 
-
+We estimate a random forest model with 500 trees using all the predictors and based on the training set:
 
 ```{r oj_random_forest}
 
@@ -490,7 +651,6 @@ m_oj = floor(sqrt(9))
 
 (rf_oj = randomForest(Opinion ~ ., data = oj_data_train, mtry = m_oj, ntree = 500))
 ```
-
 
 
 
