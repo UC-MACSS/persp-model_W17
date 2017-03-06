@@ -49,7 +49,7 @@ mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
 
 ```{r read-in_simpson_data, include=FALSE}
 simpsonData <- read.csv("simpson.csv") %>%
-  mutate_each(funs(as.factor(.)), guilt, dem, rep, ind, female, black, hispanic) %>%
+  mutate_each(funs(as.factor(.)), guilt, dem, rep, female, black, hispanic) %>%
   na.omit
 set.seed(1234)
 simpson_split <- resample_partition(simpsonData, p = c("test" = .3, "train" = .7))
@@ -273,8 +273,8 @@ biden_cv %>%
 
 ```{r problem1_3_model, echo = FALSE}
 # estimate model
-biden_tree1_3 <- tree(biden ~ female+age+dem+rep+educ, data = biden_train,
-     control = tree.control(nobs = nrow(biden_train),
+biden_tree1_3 <- tree(biden ~ female+age+dem+rep+educ, data = biden_split$train,
+     control = tree.control(nobs = nrow(biden_split$train),
                             mindev = 0))
 
 mod1_3 <- prune.tree(biden_tree1_3, best = 4)
@@ -294,9 +294,9 @@ ggplot(segment(tree_data2)) +
        subtitle = "female + age + dem + rep + educ")
 ```
 
-  The test MSE of this model is 400.9, which is lower than the test MSE of the previous model. So pruning the tree slightly improves the test MSE.
+  The test MSE of this model is 407.2, which is a little bit higher than the test MSE of the previous model. In this case, pruning the tree does not improve the test MSE.
 ```{r problem1_3_testMSE, echo=FALSE}
-mse(mod1_3, biden_test)
+mse(mod1_3, biden_split$test)
 ```
 
 
@@ -798,18 +798,13 @@ plot(roc_rf, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .
 ## Part 3: OJ Simpson
 
 ### 1. The relationship between race and belief of OJ Simpson's guilt
-  Since this question already has required resopnse variable `guilt` and predictor `black`, I would use logistic regression with resampling methods for this part.
+
+  Since this question already has required resopnse variable `guilt` and predictor `black`, I would use logistic regression and classification tree for analysis in this part.
+  To grow the tree, two-predictor is a more resonable choice. So I would use two predictors `black` and `hispanic`. To make the models comparible, I apply this approach in all models of this part, including the logistic regression model.
 
 #### Preparation
-  Set the random seed as `1234`. Read-in the `Simpson` data and split it into a training set (70%) and a validation set (30%).
-```{r problem3_preparation, echo=FALSE, include=FALSE}
-(simpson <- read_csv("simpson.csv") %>%
-  mutate_each(funs(as.factor(.)), guilt, dem, rep, ind, female, black, hispanic) %>%
-  na.omit)
-set.seed(1234)
-simpson_split <- resample_partition(simpson, p = c("test" = .3, "train" = .7))
-```
 
+  Set the random seed as `1234`. Read-in the `Simpson` data and split it into a training set (70%) and a validation set (30%).
 
 #### 1.1 single-predictor logistic regression
 
@@ -831,7 +826,7 @@ auc(roc_logit3_1)
 
 #### 1.2 multiple-variable logistic regression
 
-  This model uses all the possible predictors.
+  This model uses all the possible predictors. According to the AUC value, the multivariate model does not improve the previous single-predictor model.
 
 ```{r problem3_2_model, echo=FALSE}
 simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
@@ -851,7 +846,7 @@ auc(roc_logit3_2)
 #### 1.3 single_predictor desicion tree
 ```{r problem3_3_model, echo=FALSE}
 simpson_tree <- tree(guilt ~ ., data = as_tibble(simpson_split$train))
-tidy(simpson_tree)
+summary(simpson_tree)
 ```
 
 
