@@ -522,14 +522,6 @@ plot(mh_svm2)
 
 # Part 3: OJ Simpson
 
-
-
-1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
-
-1. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
-
-Select methods that are appropriate for each question and **justify the use of these methods**.
-
 We begin by reading in the data and dropping those observations that are missing data in the response variable, guilt (for which we also make into a factor and assign labels):
 
 ```{r read_data_biden}
@@ -618,41 +610,21 @@ title("ROC Curve: Logistic Regression Based on Race\n")
 
 With an AUC of `r auc_roc_oj`, we find that the model performs well, especially considering that it uses only one predictor variable.
 
-Next, we split the dataset into training and validation sets in a ratio of 7:3:
-
-```{r oj_split}
-
-set.seed(1234)
-
-oj_split7030 = resample_partition(oj, c(test = 0.3, train = 0.7))
-oj_train70 = oj_split7030$train %>%
-             tbl_df()
-oj_test30 = oj_split7030$test %>%
-            tbl_df()
-```
-
-We estimate a random forest model with 500 trees using all the predictors and based on the training set:
+Next, we develop a model to predict a given respondent's opinion of Simpson's guilt given the predictors in the dataset.  We estimate a random forest model with 500 trees:
 
 ```{r oj_random_forest}
 
-set.seed(1234)
-
-oj_data_train = oj_train70 %>%
-                select(-guilt) %>%
-                mutate_each(funs(as.factor(.)), dem, rep) %>%
-                na.omit
-
-oj_data_test = oj_test30 %>%
-               select(-guilt) %>%
-               mutate_each(funs(as.factor(.)), dem, rep) %>%
-               na.omit
+oj_data = oj %>%
+          select(-guilt) %>%
+          mutate_each(funs(as.factor(.)), black, hispanic, female, dem, rep, ind) %>%
+          na.omit
 
 m_oj = floor(sqrt(9))
 
-(rf_oj = randomForest(Opinion ~ ., data = oj_data_train, mtry = m_oj, ntree = 500))
+(rf_oj = randomForest(Opinion ~ ., data = oj_data, mtry = m_oj, ntree = 500))
 ```
 
-
+We plot variable importance for the predictors:
 
 ```{r plot_rf_importance_oj, echo=FALSE}
 rf_oj_importance = as.data.frame(importance(rf_oj))
@@ -666,3 +638,9 @@ ggplot(rf_oj_importance, mapping=aes(x=rownames(rf_oj_importance), y=MeanDecreas
        theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
              panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1), legend.position = 'none') 
 ```
+
+The plot indicates that Black and age produce the largest mean decrease in the Gini index across the 500 random forest trees (each limited to `r m_oj` predictors per split); income is a distant third.  Independent is the least important variable (unsurprisingly, because there are no respondents in this category).
+
+The model's error rate is 18.9%, which is acceptable for this purpose.  This breaks down to a classification error rate of 5.7% (which is quite low) for detecting opinions of guilt and 48.0% (which is quite high) for detecting opinions of innocence.
+
+Given a person's race, ethnicity, gender, income, education, and political affiliation, we can predict their opinion of Simpson's guilt with an accuracy rate of 81.1%.  We find that given the relative importance of the outcome variable, this is a robust model that performs well and is not unduly complex.
