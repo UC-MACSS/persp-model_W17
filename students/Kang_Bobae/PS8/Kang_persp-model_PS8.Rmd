@@ -1,0 +1,545 @@
+---
+title: "Problem set #8: tree-based methods and support vector machines"
+author: "Bobae Kang"
+date: "March 6, 2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning = FALSE, message=FALSE, cache=TRUE)
+
+# import packages
+library(tidyverse)
+library(data.table)
+library(modelr)
+library(broom)
+library(tree)
+library(randomForest)
+library(ggdendro) #devtools::install_github("bensoltoff/ggdendro")
+library(forcats)
+library(gbm)
+library(pROC)
+library(e1071)
+library(rmarkdown)
+library(knitr)
+
+# import data
+biden <- fread('data/biden.csv')
+mhealth <- fread('data/mental_health.csv')
+simpson <- fread('data/simpson.csv')
+
+# set seed for reproducibility
+set.seed(0)
+
+# define a function to get mse
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+```
+
+# Part 1: Sexy Joe Biden (redux times two) [3 points]
+In this part, I use and compare a variety of tree-based models on the `biden.csv` data. In doing so, I use the cross-validation approach, splitting the original data randomly into a training set (70% of all observations) and a test/validation set (30% of all observations).
+```{r Part 1: setup}
+# split into training and test sets
+biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+biden_train <- biden[biden_split$train$idx]
+biden_test <- biden[biden_split$test$idx]
+```
+
+## Fit a decision tree
+Fist, I grow a decision tree using the training data. `biden` is the response variable and other variables are predictors. I have set seed to be 0 for reproducibility. Without any input for control argument, the algorithm chose a model with three terminal nodes. The model predicts that, if an observation is democrat, the themometer score is 74.49. For observations that are not not democrat, the model predicts that the themometer score is 44.17 if an observation is republican and 57.42 otherwise. Its mean squared error (MSE) on the test set is 387.9136.     
+```{r Part 1: a decision tree}
+biden_tree1 <- tree(biden~., data = biden_train)
+
+# look into the fitted model
+summary(biden_tree1)
+
+# test MSE
+print('Test MSE:')
+mse(biden_tree1, biden_test)
+
+# plot the tree
+tree_data <- dendro_data(biden_tree1)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label=label), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label=label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Biden feeling thermometer tree",
+       subtitle = "All predictors")
+
+```
+
+## Fit another decision tree
+What if I let the model to grow more branches? In this second tree with different `control` options, there are 196 terminal nodes. Again, being democrat is responsible for the first split as in the previous tree. However, in the plot, it is difficult to identify what the predictios are at terminal nodes. The MSE is 528.6294, which is significantly larger than the MSE of the previous tree. More splits seemingly lead to worse performance. 
+```{r Part 1: another tree}
+biden_tree2 <- tree(biden ~ ., data = biden_train,
+                    control = tree.control(nobs = nrow(biden_train),
+                              mindev = 0))
+
+# look into the fitted model
+summary(biden_tree2)
+
+# test MSE
+print('Test MSE:')
+mse(biden_tree2, biden_test)
+
+# plot the tree
+tree_data <- dendro_data(biden_tree2)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label=label), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label=label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Biden feeling thermometer tree",
+       subtitle = "All predictors")
+```
+
+## Cross-validation
+To find out the optimal number of terminal nodes, I try the 10-fold cross-validation approach. The plot illustrates the MSE values for different number of terminal nodes. We find that a tree with three terminal nodes has the least MSE value. This is the first tree I fitted above! The MSE score then increases with more terminal nodes. 
+```{r Part 1: CV}
+# generate 10-fold CV trees
+biden_cv <- crossv_kfold(biden, k = 10) %>%
+  mutate(tree = map(train, ~ tree(biden ~ ., data = .,
+                                  control = tree.control(nobs = nrow(biden), mindev = 0))))
+
+# calculate each possible prune result for each fold
+biden_cv <- expand.grid(biden_cv$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(biden_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+biden_cv %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
+## Bagging
+Here, I use bagging approach, growing total 5000 trees. At each split, all five predictors are considered. The MSE score on the test set is 504.1033. The plot shows the effectiveness of all predictors at decreasing the gini index score. Overall, `age` has contributed the most to decreasing the gini index of the model. 
+```{r Part 1: bagging}
+biden_bag <- randomForest(biden ~ ., data = biden_test,
+                          mtry = 5, ntree = 5000)
+
+# look into the fitted model
+biden_bag
+
+# test MSE
+print('Test MSE:')
+mse(biden_bag, biden_test)
+
+# plot bagging
+data_frame(var = rownames(importance(biden_bag)),
+           MeanDecreaseGini = importance(biden_bag)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden feeling thermometer",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```
+
+## Random Forest
+Now, I turn to the random forest approach. Again, I grow 5000 tress. In this case, only one randomly selected predictor is considered at each split. Its test MSE score, 398.9227, is notably lower than that of the bagging model. The plot compares baggning and random forest in terms of the contribution of each predictor to reducing the Gini Index. While `age` makes the greatest contribution in the bagging model, in the random forest model, `dem` makes the greatest contribution.     
+```{r Part 1: random forest}
+biden_rf <- randomForest(biden ~ ., data = biden_test,
+                          ntree = 5000)
+
+# look into the model
+biden_rf
+
+# test MSE
+print('Test MSE:')
+mse(biden_rf, biden_test)
+
+# plot both
+data_frame(var = rownames(importance(biden_rf)),
+           `Random forest` = importance(biden_rf)[,1]) %>%
+  left_join(data_frame(var = rownames(importance(biden_rf)),
+                       Bagging = importance(biden_bag)[,1])) %>%
+  mutate(var = fct_reorder(var, Bagging, fun = median)) %>%
+  gather(model, gini, -var) %>%
+  ggplot(aes(var, gini, color = model)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden feeling thermometer",
+       x = NULL,
+       y = "Average decrease in the Gini Index",
+       color = "Method")
+```
+
+## Boosting
+Here, I fit three models with boosting approach, growing 5000 trees for each model. Each of these models have a different value for the shrinkage parmeter, $\lambda$. The first model has $\lambda$ = 0.001, the second model has $\lambda$ = 0.01, and the final model has $\lambda$ = 0.1. The plot shows the MSE values for each tree with different number of trees. The plot shows changes in test MSE values by the number of trees. With the $\lambda$ = 0.001 model the test MSE keeps decreasing smoothly, even at n.tree = 5000. On the other hand test MSE for the $\lambda$ = 0.1 model remains almost unchanged after n.tree > 2000. Overall, however, the test MSE of the $\lambda$ = 0.01 model is lower at all points than that of the $\lambda$ = 0.001 model. Finally, the $\lambda$ = 0.1 model shows a very distinct pattern: with the very low number of trees, its test MSE reaches its minimum (which, by the way, is the lowest of all for all three models) and continues to increase.   
+```{r Part 1: boosting}
+# fit boosting models
+biden_boosting_models <- list("boosting_shrinkage.001" = gbm(biden ~ ., data = biden_train,
+                                                               n.trees = 5000, shrinkage = 0.001),
+                              "boosting_shrinkage.01" = gbm(biden ~ ., data = biden_train,
+                                                              n.trees = 5000, shrinkage = 0.01),
+                              "boosting_shrinkage.1" = gbm(biden ~ ., data = biden_train,
+                                                             n.trees = 5000, shrinkage = 0.1))
+
+data_frame(shrinkage.001 = predict(biden_boosting_models$boosting_shrinkage.001,
+                                   newdata = as_tibble(biden_test), n.trees = 1:5000) %>%
+             apply(2, function(x) (x - as_tibble(biden_test)$biden)^2) %>%
+             apply(2, mean),
+           shrinkage.01 = predict(biden_boosting_models$boosting_shrinkage.01,
+                                  newdata = as_tibble(biden_test), n.trees = 1:5000) %>%
+             apply(2, function(x) (x - as_tibble(biden_test)$biden)^2) %>%
+             apply(2, mean),
+           shrinkage.1 = predict(biden_boosting_models$boosting_shrinkage.1,
+                                 newdata = as_tibble(biden_test), n.trees = 1:5000) %>%
+             apply(2, function(x) (x - as_tibble(biden_test)$biden)^2) %>%
+             apply(2, mean)) -> boost_test_mse
+
+# plot test MSEs of all three models
+boost_test_mse %>%
+  mutate(id = row_number()) %>%
+  mutate_each(funs(cummean(.)), shrinkage.001:shrinkage.01) %>%
+  gather(model, err, -id) %>%
+  ggplot(aes(id, err, color = model)) +
+  geom_line() +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  labs(title = 'Boosting MSE by shrinkage parameters',
+       x = "Number of trees",
+       y = "Test error",
+       color = 'Model')
+```
+
+
+# Part 2: Modeling voter turnout [3 points]
+In this part, I fit five tree-based models and five support vector machine(SVM)-based models to the `mhealth.csv` data. In doing so, I use the cross-validation approach and split the original data into a training set (70% of all observations) and a test/validation set (30% of all observations.)
+```{r Part 2: setup}
+# Part 2: Prepare the data
+mhealth <- mhealth %>%
+  # remove rows with missing values
+  na.omit() %>% 
+  # make categorical variables into factors
+  mutate(vote96 = factor(vote96, levels = 0:1, labels = c("No", "Yes")),
+         black = factor(black, levels = 0:1, labels = c("not_black", "black")),
+         female = factor(female, levels = 0:1, labels = c('male', 'female')),
+         married = factor(married, levels = 0:1, labels = c('unmarried', 'married')))
+
+# split into training and validation sets
+mhealth_split <- resample_partition(mhealth, c(test = 0.3, train = 0.7))
+mhealth_train <- mhealth[mhealth_split$train$idx,]
+mhealth_test <- mhealth[mhealth_split$test$idx,]
+```
+
+## Fit tree-based models
+Here I fit and compare the following five tree-based models:
+
+* A pruned decision tree (the best number of terminal nodes = 5 is chosen using the 10-fold cv)
+* Bagging (5000 trees)
+* Random forest (5000 trees; 2 predictors tried at each split)
+* Boosting (5000 trees; shrinkage parameter = 0.001)
+* Boosting (5000 trees; shrinkage parameter = 0.1)
+
+```{r Part 2: tree-based model 1}
+# a decision tree
+mhealth_tree <- tree(vote96 ~ .,
+                     data = mhealth_train,
+                     control = tree.control(nobs = nrow(mhealth_train), mindev = .001))
+
+# 10-fold CV trees to find best tree
+mhealth_cv <- mhealth_train %>%
+  crossv_kfold(k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ ., data = .,
+    control = tree.control(nobs = nrow(mhealth_train), mindev = .001))))
+
+# calculate each possible prune result for each fold
+mhealth_cv <-
+  expand.grid(mhealth_cv$.id,
+              seq(from = 2, to = 10)) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhealth_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.misclass(.x, best = .y)),
+         mse = map2_dbl(prune, test, err.rate.tree)) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE))
+
+mhealth_tree_pruned <- prune.tree(mhealth_tree, best = 5)
+summary(mhealth_tree_pruned)
+```
+
+```{r Part 2: tree-based model 2}
+# bagging (n.tree = 5000)
+mhealth_bag <- randomForest(vote96 ~ ., data = mhealth_train,
+                          mtry = 7, ntree = 5000)
+mhealth_bag
+```
+
+```{r Part 2: tree-based model 3}
+# random forest (n.tree = 5000)
+mhealth_rf <- randomForest(vote96 ~ ., data = mhealth_train,
+                         ntree = 5000)
+mhealth_rf
+```
+
+```{r Part 2: tree-based model 4}
+# Re-Prepare the data
+mhealth_train2 <- mhealth_train
+mhealth_test2 <- mhealth_test
+mhealth_train2$vote96 <- (mhealth_train2$vote96 == 'Yes')*1
+mhealth_test2$vote96 <- (mhealth_test2$vote96 == 'Yes')*1
+
+mhealth_bst.001 <- gbm(vote96 ~ ., data = mhealth_train2, n.trees = 5000, shrinkage = 0.001)
+mhealth_bst.001
+```
+
+```{r Part 2: tree-based model 5}
+mhealth_bst.1 <- gbm(vote96 ~ ., data = mhealth_train2, n.trees = 5000, shrinkage = 0.1)
+mhealth_bst.1
+```
+
+## Compare tree-based models
+I now compare these tree-based models using 1) error rate and 2) ROC/AUC. When I compare test error rates of the five models, the boosting model with shrinkage = 0.001 appears to be the best approach, with the lowest test error rate = 0.2664756. The worst model was bagging, with the highest test error rate = 0.3065903.
+```{r Part 2: compare tree-based model, err rate}
+# pruned tree
+err_rate_tree <- err.rate.tree(mhealth_tree_pruned, mhealth_test)
+
+# bagging
+pred_bag <- predict(mhealth_bag, newdata = mhealth_test, type = 'response', n.trees=5000) %>% as.character()
+actual1 <- as.character(mhealth_test$vote96)
+err_rate_bag <- mean(pred_bag != actual1, na.rm = TRUE)
+
+# random forest
+pred_rf <- predict(mhealth_rf, newdata = mhealth_test, type = 'response', n.trees=5000) %>% as.character()
+err_rate_rf <- mean(pred_rf != actual1, na.rm = TRUE)
+
+# boosting, shrinkage = 0.001
+actual2 <- as.character(mhealth_test2$vote96)
+pred_bst.001 <- predict(mhealth_bst.001, newdata = mhealth_test2, type = 'response', n.trees=5000) %>% round() %>% as.character()
+err_rate_bst.001 <- mean(pred_bst.001 != actual2, na.rm = TRUE)
+
+# boosting, shrinkage = 0.01
+pred_bst.1 <- predict(mhealth_bst.1, newdata = mhealth_test2, type = 'response', n.trees=5000) %>% round() %>% as.character()
+err_rate_bst.1 <- mean(pred_bst.1 != actual2, na.rm = TRUE)
+
+Tree_model = c('Pruned tree', 'Bagging', 'Random Forest', 'Boosting, 0.001', 'Boosing, 0.1')
+Test_error_rate = c(err_rate_tree, err_rate_bag, err_rate_rf, err_rate_bst.001, err_rate_bst.1)
+data.frame(Tree_model, Test_error_rate)
+```
+
+Then I compare the area under the curve for the ROC curves of the five tree-based models. The following plot shows the ROC curves of all five models, with the corresponding AUC scores. Here, again, boosting with shrinkage = 0.001 (green) appears to be the best model with the highest AUC score = 0.743. The second best is boosting with shrinkage = 0.1 (purple) with the AUC score = 0.734. The worst is the pruned tree model (red), with the AUC score = 0.593.
+```{r Part 2: compare tree-based model, roc auc}
+# tree (pruned)
+fitted_tree <- predict(mhealth_tree_pruned, as_tibble(mhealth_test), type = "class")
+tree_err <- mean(as_tibble(mhealth_test)$vote96 != fitted_tree)
+roc_tree <- roc(as.numeric(as_tibble(mhealth_test)$vote96), as.numeric(fitted_tree))
+# bagging
+fitted_bag <- predict(mhealth_bag, as_tibble(mhealth_test), type = "prob")[,2]
+roc_bag <- roc(as_tibble(mhealth_test)$vote96, fitted_bag)
+# random forest
+fitted_rf <- predict(mhealth_rf, as_tibble(mhealth_test), type = "prob")[,2]
+roc_rf <- roc(as_tibble(mhealth_test)$vote96, fitted_rf)
+# boost, lambda = 0.001
+fitted_bst.001 <- predict(mhealth_bst.001, as_tibble(mhealth_test2), type = "response", n.trees=5000)
+roc_bst.001 <- roc(as_tibble(mhealth_test2)$vote96, fitted_bst.001)
+# boost, lambda = 0.1
+fitted_bst.1 <- predict(mhealth_bst.1, as_tibble(mhealth_test2), type = "response", n.trees=5000)
+roc_bst.1 <- roc(as_tibble(mhealth_test2)$vote96, fitted_bst.1)
+
+# plot ROC curves
+plot(roc_tree, print.auc = TRUE, col = "red", print.auc.x = .2)
+plot(roc_bag, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_rf, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_bst.001, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_bst.1, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+## Fit SVM models
+Here I fit and compare the following six SVM models:
+
+* SVM, kernel = 'linear'
+* sVM, kernel = 'polynomial'
+* SVM, kernel = 'radial'
+* Tuned SVM, kernel = 'linear'
+* Tuned sVM, kernel = 'polynomial'
+* Tuned SVM, kernel = 'radial'
+
+```{r Part 2: SVM model 1}
+mhealth_svm_lin <- svm(vote96 ~., data = mhealth_train, kernel = "linear", scale = FALSE, cost = 1)
+mhealth_svm_lin
+```
+
+```{r Part 2: SVM model 2}
+mhealth_svm_poly <- svm(vote96 ~., data = mhealth_train, kernel = "polynomial", scale = FALSE, cost = 1)
+mhealth_svm_poly
+```
+
+```{r Part 2: SVM model 3}
+mhealth_svm_rad <- svm(vote96 ~., data = mhealth_train, kernel = "radial", scale = FALSE, cost = 1)
+mhealth_svm_rad
+```
+
+```{r Part 2: SVM model 4}
+mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mhealth_train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mhealth_svm_ltuned <- mh_lin_tune$best.model
+mhealth_svm_ltuned
+```
+
+```{r Part 2: SVM model 5}
+mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mhealth_train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 10, 100)))
+mhealth_svm_ptuned <- mh_poly_tune$best.model
+mhealth_svm_ptuned
+```
+
+```{r Part 2: SVM model 6}
+mh_rad_tune <- tune(svm, vote96 ~ ., data = as_tibble(mhealth_train),
+                     kernel = "radial",
+                     range = list(cost = c(.001, .01, .1, 1, 10, 100)))
+mhealth_svm_rtuned <- mh_rad_tune$best.model
+mhealth_svm_rtuned
+```
+
+## Compare SVM models
+Now I compare SVM models using ROC/AUC. The following plot shows that the tuned model with radial kenel (cyan) is the best model with the highest AUC score: 0.737. The second best model is a tie: both models using the linear kernel (red and green) have the second highest AUC score: 0.736. In fact, as we have seen just above, they are the same model. That is, the best model with the linear kernel is the one with cost = 1 and 491 support vectors, which is identical to the first SVM model. The worst model is the untuned SVM with the polynomial kernel, with the lowest AUC score = 0.601.     
+```{r Part 2: compare SVM models}
+# not tuned
+fitted_lin <- predict(mhealth_svm_lin, as_tibble(mhealth_test), decision.values = TRUE) %>% attributes
+roc_line <- roc(as_tibble(mhealth_test)$vote96, fitted_lin$decision.values)
+fitted_poly <- predict(mhealth_svm_poly, as_tibble(mhealth_test), decision.values = TRUE) %>% attributes
+roc_poly <- roc(as_tibble(mhealth_test)$vote96, fitted_poly$decision.values)
+fitted_rad <- predict(mhealth_svm_rad, as_tibble(mhealth_test), decision.values = TRUE) %>% attributes
+roc_rad <- roc(as_tibble(mhealth_test)$vote96, fitted_rad$decision.values)
+# tuned
+fitted_ltuned <- predict(mhealth_svm_ltuned, as_tibble(mhealth_test), decision.values = TRUE) %>% attributes
+roc_ltuned <- roc(as_tibble(mhealth_test)$vote96, fitted_ltuned$decision.values)
+fitted_ptuned <- predict(mhealth_svm_ptuned, as_tibble(mhealth_test), decision.values = TRUE) %>% attributes
+roc_ptuned <- roc(as_tibble(mhealth_test)$vote96, fitted_ptuned$decision.values)
+fitted_rtuned <- predict(mhealth_svm_rtuned, as_tibble(mhealth_test), decision.values = TRUE) %>% attributes
+roc_rtuned <- roc(as_tibble(mhealth_test)$vote96, fitted_rtuned$decision.values)
+
+plot(roc_line, print.auc = TRUE, col = "red", print.auc.x = .2)
+plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .425, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .35, add = TRUE)
+plot(roc_ltuned, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .275, add = TRUE)
+plot(roc_ptuned, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_rtuned, print.auc = TRUE, col = "cyan", print.auc.x = .2, print.auc.y = .125, add = TRUE)
+```
+
+# Part 3: OJ Simpson [4 points]
+In this part, I use two different approaches to the `simpson.csv` data: explanation and prediction. The goal of explanation is to understand the correlation between the response variable and the predictors. The goal of prediction, on the other hand, is to get best predctions for new observations.
+
+```{r Part 3: setup}
+# remove missing values
+simpson <- simpson %>%
+  na.omit()
+
+# binarize categorical predictors, for prediction part
+simpson_pred <- simpson %>%
+  model.matrix(~ ., data=.) %>% 
+  as.data.table() %>%
+  select(-`(Intercept)`)
+# simplify colnames
+colnames(simpson_pred)  <- c('guilt', 'dem', 'rep', 'ind', 'age', 'educ_hs', 'educ_not_hs', 'educ_ref', 'educ_some_col',
+                        'female', 'black', 'hispanic', 'inc_30to50', 'inc_50to75', 'inc_over75', 'inc_ref', 'inc_under15')
+
+# split data into train and test sets, for prediction part  
+simpson_split <- resample_partition(simpson_pred, c(test = 0.3, train = 0.7))
+simpson_train <- simpson_pred[simpson_split$train$idx]
+simpson_test <- simpson_pred[simpson_split$test$idx]
+
+```
+
+
+## Explain 
+Here, the goal is to explain an individual's race on their beliefs about OJ Simpson's guilt. I use logistic regression for this task because 1) `guilt` is a binary variable with two possible outcomes: guilt or not guilt and 2) logistic regression provides the coefficient for each independent variable, making it easier to understand the precise relationship between the dependent and independent variables. I fit two different logistic regression models where:
+1. Independent variables only include race-related variables: `black` and `hispanic`
+2. Independent variables  include all variables other than the dependent/response variable, `guilt`
+
+In the first model, only `black` appears statistically significant, as the extremely low p-value for the coefficient (<2e-16) suggests. The coefficient for `black` is -3.11438, in terms of log-odds. In terms of odds, the exponentiating the coefficient gives 0.04440603. This indicates that,  holding other variables constant, being black leads to an average change in the odds that the responsdent thinks OJ Simpson was "probabilty guilty" by a multiplicative factor of 0.04440603. In terms of predicted probabilities, this corresponds to a multiplicative factor of 0.04440603 / (1 + 0.04440603) = 0.04251798 for being black holding other variables constant. That if the respondent is black, she is on avergae 4.25% more likely to think that OJ Simpson is "probably guilty" than a non-black respondent. Therefore, although the coefficient is statistically significant, it may not be substantively significant.
+```{r Part 3: explain1}
+simpson_logit1 <- glm(guilt ~ black + hispanic, data = (simpson %>% na.omit()), family='binomial') # only race predictors
+summary(simpson_logit1)
+```
+
+In the second model, coefficients for the following variables are statistically significant: `rep`, `age`, `educHigh School Grad`, `educNOT A HIGH SCHOOL GRAD`, `female`, `black` and `incomeREFUSED/NO ANSWER` with p-values < 0.05. The coefficient for `black` is -2.923476, in terms of log-odds. In terms of odds, the exponentiating the coefficient gives 0.05374654. This indicates that,  holding other variables constant, being black leads to an average change in the odds that the responsdent thinks OJ Simpson was "probabilty guilty" by a multiplicative factor of 0.05374654. In terms of predicted probabilities, this corresponds to a multiplicative factor of 0.05374654 / (1 + 0.05374654) = 0.05100519 for being black holding other variables constant. That if the respondent is black, she is on avergae 5.1% more likely to think that OJ Simpson is "probably guilty" than a non-black respondent. Therefore, although the coefficient is statistically significant, it may not be substantively significant. The AIC score for the current model (1303.1) is lower than that of the previous model (1355.8). The lower AIC values makes the second regression model more preferable.   
+```{r Part 3: explain2}
+simpson_logit2 <- glm(guilt ~ ., data = (simpson %>% na.omit()), family='binomial') # all predictors
+summary(simpson_logit2)
+```
+
+## Predict
+Now, I fit and compare multiple models for prediciton. For this part, I split the data into training (70%) and test (30%) sets. The models I use here are the following:
+
+* Logistic regression
+* Random forest (n.trees = 5000)
+* Boosting (n.trees = 5000)
+* SVM (kernel = 'linear')
+* SVM (kernel = 'polynomial')
+* SVM (kernel = 'radial')
+
+```{r Part 3: predict}
+simpson_logit <- glm(guilt ~ ., data = simpson_train, family='binomial') # logistic regression
+simpson_rf <- randomForest(as.factor(guilt) ~ ., data = simpson_train, ntree = 5000)
+simpson_bst <- gbm(guilt ~ ., data = simpson_train, n.trees = 5000)
+simpson_svm_lin <- svm(guilt ~ ., data = simpson_train, kernel = "linear", scale = FALSE, probability=TRUE)
+simpson_svm_poly <- svm(guilt ~ ., data = simpson_train, kernel = "polynomial", scale = FALSE, probability=TRUE)
+simpson_svm_rad <- svm(guilt ~ ., data = simpson_train, kernel = "radial", scale = FALSE, probability=TRUE)
+```
+
+To find out the best model, I compare ROC/AUC scores of the models. Thefollowing plot shows both the ROC curves and the corresponding AUC scores of all six models. Based on the AUC scores, The best model is boosting with the AUC score: 0.826. The logistic regression model is the second best model with only a slightly lower AUC score: 0.823. The model with the lowest AUC score is the SVM with polynomial kenel: 0.514.  
+
+```{r Part 3: predict -- ROC AUC}
+fitted_logit <- predict(simpson_logit, as_tibble(simpson_test), type = "response")
+fitted_rf <- predict(simpson_rf, as_tibble(simpson_test), type = "prob")[,2]
+fitted_bst <- predict(simpson_bst, as_tibble(simpson_test), type = "response", n.trees=5000)
+fitted_svm_lin <- predict(simpson_svm_lin, as_tibble(simpson_test), decision.values = TRUE) %>% attributes
+fitted_svm_poly <- predict(simpson_svm_poly, as_tibble(simpson_test), decision.values = TRUE) %>% attributes
+fitted_svm_rad <- predict(simpson_svm_rad, as_tibble(simpson_test), decision.values = TRUE) %>% attributes
+
+roc_logit <- roc(as_tibble(simpson_test)$guilt, fitted_logit)
+roc_rf <- roc(as_tibble(simpson_test)$guilt, fitted_rf)
+roc_bst <- roc(as_tibble(simpson_test)$guilt, fitted_bst)
+roc_svm_lin <- roc(as_tibble(simpson_test)$guilt, as.numeric(fitted_svm_lin$decision.values))
+roc_svm_poly <- roc(as_tibble(simpson_test)$guilt, as.numeric(fitted_svm_poly$decision.values))
+roc_svm_rad <- roc(as_tibble(simpson_test)$guilt, as.numeric(fitted_svm_rad$decision.values))
+
+plot(roc_logit, print.auc = TRUE, col = "red", print.auc.x = .2)
+plot(roc_rf, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .425, add = TRUE)
+plot(roc_bst, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .35, add = TRUE)
+plot(roc_svm_lin, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .275, add = TRUE)
+plot(roc_svm_poly, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_svm_rad, print.auc = TRUE, col = "cyan", print.auc.x = .2, print.auc.y = .125, add = TRUE)
+```

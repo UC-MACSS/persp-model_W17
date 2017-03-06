@@ -18,3 +18,5 @@ lattice
 gbm
 pROC
 e1071
+rmarkdown
+knitr
