@@ -7,38 +7,31 @@ output:
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE)
-
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE, echo = FALSE)
 library(tidyverse)
 library(forcats)
 library(broom)
 library(modelr)
-#install.packages('tree')
 library(tree)
-#install.packages('randomForest')
 library(randomForest)
 library(stringr)
-#install.packages('ISLR')
 library(ISLR)
-#install.packages('gridExtra')
 library(gridExtra)
 library(grid)
-#library(rcfss)
 library(pROC)
-install.packages('gbm')
-#library(gbm)
-# to get the tree graphs with the labels and values, use the forked
-# version of ggdendro
-devtools::install_github("bensoltoff/ggdendro")
+library(gbm)
 library(ggdendro)
-library(caret)
-#install.packages('e1071')
+library(devtools)
+devtools::install_github("uc-cfss/rcfss")
+library(rcfss)
+devtools::install_github("bensoltoff/ggdendro")
 library(e1071)
+library(grid)
+library(gridExtra)
 
 options(digits = 3)
 set.seed(1234)
 theme_set(theme_minimal())
-
 ```
 
 ## Part 1: Sexy Joe Biden (redux times two) [3 points] ##
@@ -50,7 +43,8 @@ Split the data into a training set (70%) and a validation set (30%). Be sure to 
 ```{r biden_1, include = FALSE}
 set.seed(1234)
 
-(biden <- read_csv("biden.csv") %>%
+
+(biden_df <- read_csv("biden.csv") %>%
   mutate_each(funs(as.factor(.)), female, dem, rep) %>%
   na.omit)
 biden.split <- resample_partition(biden_df, c(test = .3, train = .7))
@@ -102,14 +96,14 @@ The test MSE is 406
 ```{r biden_3, include=TRUE}
 set.seed(1234)
 
-biden_tree_2 <- tree(biden ~ ., data = biden.split$train, control = tree.control(nobs = nrow(biden.split$train), mindev = 0))
+biden_tree_2 <- tree(biden ~ female + age + dem + rep + educ, data = biden.split$train, control = tree.control(nobs = nrow(biden.split$train), mindev = 0))
 
 ##mse for model2
 mse_biden_2 <- mse(biden_tree_2, biden.split$test)
 
 #Generate 10-fold CV trees
-biden_cv <- crossv_kfold(biden, k = 10) %>%
-  mutate(tree = map(train, ~ tree(biden ~ ., data = ., control = tree.control(nobs = nrow(biden), mindev = 0))))
+biden_cv <- crossv_kfold(biden_df, k = 10) %>%
+  mutate(tree = map(train, ~ tree(biden ~ female + age + dem + rep + educ, data = ., control = tree.control(nobs = nrow(biden_df), mindev = 0))))
 
 # calculate each possible prune result for each fold
 biden_cv <- expand.grid(biden_cv$.id, 2:20) %>%
