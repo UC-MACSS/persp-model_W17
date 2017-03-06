@@ -800,8 +800,6 @@ Based on the data summary in the above table, model 2 and model 4 both have the 
 
 
 # Part 3: OJ Simpson [4 points]
-
-
 You can make full use of any of the statistical learning techniques to complete this part of the assignment:
 
 * Linear regression
@@ -814,3 +812,396 @@ You can make full use of any of the statistical learning techniques to complete 
 
 Select methods that are appropriate for each question and **justify the use of these methods**.
 
+###1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
+
+In this section, I plan to employ the logistic regression, single tree and random forest models, for their ability of providing clearer interpretations about beliefs of OJ Simpson's guilt explained by an individual's race (include black and hispanic). I also split the data into 30% testing and 70% training sets for cross validating their fittness.
+
+####Single Tree
+```{r 3-race-tree}
+set.seed(1234)
+simpson <- read_csv("data/simpson.csv") %>%
+  mutate_each(funs(as.factor(.)), guilt, dem, rep, ind, female, black, hispanic, educ, income)
+#Split data
+simpson_split <- resample_partition(simpson, c(test = 0.3, train = 0.7))
+
+#Grow tree
+simpson_tree_default <- tree(guilt ~ black + hispanic, data = simpson_split$train)
+
+#Plot tree
+tree_data <- dendro_data(simpson_tree_default)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
+  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Simpson guilt opinion tree",
+       subtitle = "black + hispanic")
+
+#ROC
+fitted <- predict(simpson_tree_default, as_tibble(simpson_split$test), type = "class")
+
+roc_t <- roc(as.numeric(as_tibble(simpson_split$test)$guilt), as.numeric(fitted))
+plot(roc_t)
+
+auc1<-auc(roc_t)
+
+#Accuracy
+MSE1 <- err.rate.tree(simpson_tree_default, simpson_split$test)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- MSE1
+PRE1 <- (E1 - E2) / E1
+
+
+```      
+
+
+As for the single tree model with default setting, it gives us a 17.02% test error rate, a 0.4341 PRE, and a 0.744 AUC, exactly the same as we got from the logistic model. Basically, the tree model uses only black to estimate the guilt belief.
+
+If the person is not black, the model estimates that the person would believe Simpson is guilty.
+If the person is black, the model estimates that the person would believe Simpson is not guilty.
+
+
+####Random Forest
+
+```{r 3-race-forest}
+set.seed(1234)
+
+simpson_rf <- randomForest(guilt ~ black + hispanic, data = na.omit(as_tibble(simpson_split$train)), ntree = 500)
+simpson_rf
+
+data_frame(var = rownames(importance(simpson_rf)),
+           MeanDecreaseRSS = importance(simpson_rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseRSS)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting opinion on Simpson guilty",
+       subtitle = "Random forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+
+#ROC
+fitted <- predict(simpson_rf, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
+
+roc_rf <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted)
+plot(roc_rf)
+
+auc2<-auc(roc_rf)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.1843
+MSE2<-E2
+PRE2 <- (E1 - E2) / E1
+
+
+
+```      
+
+As for the random forest model with default setting and 500 trees, it gives us a 19.1% test error rate (estimated by out-of-bag error estimate) and a 38.71% PRE, both are worse than the previous two models. However, the random forest model has a 0.745 AUC at a similar level as the previous model doed. Regarding the predictor importance, the black has a way higher average decrease in the Gini index than hispanic, which indicates black's importance and confirms the results from the previous model.
+
+#### Logistic model
+
+```{r 3-race-logistic}
+set.seed(1234)
+
+getProb <- function(model, data){
+  data <- data %>% 
+    add_predictions(model) %>% 
+    mutate(prob = exp(pred) / (1 + exp(pred)),
+           pred_bi = as.numeric(prob > .5))
+  return(data)
+}
+
+
+
+model_logistic <- glm(guilt ~ black + hispanic, data = simpson_split$train, family = binomial)
+summary(model_logistic)
+
+df_logistic_test <- getProb(model_logistic, as.data.frame(simpson_split$test))
+
+#ROC
+auc3 <- auc(df_logistic_test$guilt, df_logistic_test$pred_bi)
+
+
+#Accuracy
+accuracy3 <- mean(df_logistic_test$guilt == df_logistic_test$pred_bi, na.rm = TRUE)
+
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 1 - accuracy3
+MSE3<-E2
+PRE3 <- (E1 - E2) / E1
+
+
+```      
+
+In the logistic model by using the `black` and `haspanic` as two independent variables, it gives the 17.00% test error rate, a 0.434 PRE, and a 0.744 AUC. As shown above, both two independent variables included in the model have statistically significant relationships with the guilt, with black (p-value < 2e-16) at a 99.9% confidence level and hispanic (p-value = 0.058) at a 90% confidence level. Both of them have negative relationship with the responsive variable, which means that when the respondent is black (parameter est. = -3.0529) or hispanic (parameter est. = -0.5388), the predected probability of believing Simpson's guilty has a differential increase. Black has a even stronger power than hispanic as it has a smaller p-value and a larger parameter absolute value. The amount of the change in the probability depends on the initial value of the changing independent variable. To interpret the co-effecient in this model: being as a black people, the odds of thinking Simpson guilty will only be exp(-3.0529)=4.72% than those non-black people; being as a haspanic people, the odds of thinking Simpson guilty will only be exp(-0.5388)=58.3% than those non-haspanic people.
+
+
+```{r 3-race-logistic2}
+logistic_grid <- as.data.frame(simpson_split$test) %>%
+  data_grid(black, hispanic) %>%
+  add_predictions(model_logistic) %>% 
+  mutate(prob = exp(pred) / (1 + exp(pred)))
+
+ggplot(logistic_grid, aes(black, pred, group = factor(hispanic), color = factor(hispanic))) +
+  geom_line() +
+  scale_color_discrete(name = "Hispanic or not (hispanic = 1)") +
+  labs(title = "Log-odds of guilt belief",
+       subtitle = "by race",
+       x = "Black or not (black = 1)",
+       y = "Log-odds of voter turnout")
+
+ggplot(logistic_grid, aes(black, prob, group = factor(hispanic), color = factor(hispanic))) +
+  geom_line() +
+  scale_color_discrete(name = "Hispanic or not (hispanic = 1)") +
+  labs(title = "Predicted probability of guilt belief",
+       subtitle = "by race",
+       x = "Black or not (black = 1)",
+       y = "Predicted probability of voter turnout")
+
+```    
+
+The above graphs illustrate the relationship between black, hispanic status, and the belief of Simpson's guilty. In the graph Log-odds of guilt belief, we observe the mentioned negative relationship between race and guilt belief log-odds. The log-odds goes down when people are black, as the lines with a negative slope. In addition, hispanic people have a line below the non-hispanic people. That is, The log-odds of guilt belief is lower for hispanic people. This could be because the the similarity between the respondents and Simpson in terms of race. 
+
+While both the logistic model and tree model perform well, I'll choose the logistic model as my final model, since its interpretability in terms of single relationship direction, the strength of effect, and the specific amount of effect in estimation. I thus redo the logistic model with a 100-time 10-fold cross validation to examine its robustness.
+
+```{r 3-race-validation}
+
+
+sum3<-data_frame("model"=c("model1","model2","model3"),
+           "Error Rate"=c(MSE1, MSE2, MSE3),
+           "PRE" =c(PRE1,PRE2,PRE3),
+           "AUC" =c(auc1,auc2,auc3)
+           )
+
+pander(sum3)
+
+
+fold_model_mse <- function(df, k){
+  cv10_data <- crossv_kfold(df, k = k)
+  cv10_models <- map(cv10_data$train, ~ glm(guilt ~ black + hispanic, family = binomial, data = .))
+  cv10_prob <- map2(cv10_models, cv10_data$train, ~getProb(.x, as.data.frame(.y)))
+  cv10_mse <- map(cv10_prob, ~ mean(.$guilt != .$pred_bi, na.rm = TRUE))
+  return(data_frame(cv10_mse))
+}
+
+set.seed(1234)
+mses <- rerun(100, fold_model_mse(simpson, 10)) %>%
+  bind_rows(.id = "id")
+
+ggplot(data = mses, aes(x = "MSE (100 times 10-fold)", y = as.numeric(cv10_mse))) +
+  geom_boxplot() +
+  labs(title = "Boxplot of MSEs - logistic model",
+       x = element_blank(),
+       y = "MSE value")
+
+mse_100cv10 <- mean(as.numeric(mses$cv10_mse))
+mseSd_100cv10 <- sd(as.numeric(mses$cv10_mse))
+mse_100cv10
+mseSd_100cv10
+
+
+```    
+
+In the final step, by using the cross validation, I intend to examine the robustness of my logistic model. The model gets a `r mse_100cv10 * 100%` average error rate, which is still pretty good, with a small std of the error rate at `r mseSd_100cv10`.
+
+
+
+###2. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
+
+In this section, the  SVM with linear, polynomimal, radial, sigmoid kernel and single tree models were examined for their ability to predict the beliefs of OJ Simpson's guilt explained by all the available predictors. 
+
+####SVM, Linear Kernel
+```{r 3-2-0}
+
+set.seed(1234)
+
+simpson_lin_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(simpson_lin_tune)
+
+simpson_lin <- simpson_lin_tune$best.model
+summary(simpson_lin)
+
+#Best
+simpson_lin <- simpson_lin_tune$best.model
+summary(simpson_lin)
+
+#ROC
+fitted <- predict(simpson_lin, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(simpson_split$test)$guilt, fitted$decision.values)
+plot(roc_line)
+
+auc(roc_line)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.1905
+PRE <- (E1 - E2) / E1
+PRE
+
+```  
+
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 0.01, and a 19.1% 10-fold CV error rate. Also, the AUC us 0.796 and the PRE is 36.6% (the model MSE is estimated by the 10-fold error rate).
+
+
+####SVM, polynominal Kernel
+```{r 3-2-1}
+
+set.seed(1234)
+
+simpson_poly_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(simpson_poly_tune)
+
+simpson_poly <- simpson_poly_tune$best.model
+summary(simpson_poly)
+
+#Best
+simpson_poly <- simpson_poly_tune$best.model
+summary(simpson_poly)
+
+#ROC
+fitted <- predict(simpson_poly, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(simpson_split$test)$guilt, fitted$decision.values)
+plot(roc_poly)
+
+auc(roc_poly)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.1986
+PRE <- (E1 - E2) / E1
+PRE
+
+```  
+
+Using polynomial kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100) and different degree levels (3, 4, and 5), the model gets the best cost level at 10, degree level at 3, and a 19.9% 10-fold CV error rate. Also, the AUC as 0.766 and the PRE is 34.00% (the model MSE is estimated by the 10-fold error rate). Generally, the model is slightly worse than the linear one.
+
+####SVM, radial Kernel
+```{r 3-2-2}
+
+set.seed(1234)
+
+simpson_rad_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(simpson_rad_tune)
+
+simpson_rad <- simpson_rad_tune$best.model
+summary(simpson_rad)
+
+#Best
+simpson_rad <- simpson_rad_tune$best.model
+summary(simpson_rad)
+
+#ROC
+fitted <- predict(simpson_rad, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad <- roc(as_tibble(simpson_split$test)$guilt, fitted$decision.values)
+plot(roc_rad)
+
+auc(roc_rad)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.1905
+PRE <- (E1 - E2) / E1
+PRE
+
+```  
+
+Using polynomial kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100) and different degree levels (3, 4, and 5), the model gets the best cost level at 10, degree level at 3, and a 19.86% 10-fold CV error rate. Also, the AUC as 0.771 and the PRE is 36.6% (the model MSE is estimated by the 10-fold error rate). Generally, the model is slightly worse than the linear one.
+
+####SVM, sigmodial Kernel
+```{r 3-2-sig}
+
+set.seed(1234)
+
+simpson_sig_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "sigmoid",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(simpson_sig_tune)
+
+simpson_sig <- simpson_sig_tune$best.model
+summary(simpson_sig)
+
+#Best
+simpson_sig <- simpson_sigtune$best.model
+summary(simpson_sig)
+
+#ROC
+fitted <- predict(simpson_sig, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_sig <- roc(as_tibble(simpson_split$test)$guilt, fitted$decision.values)
+plot(roc_sig)
+
+auc(roc_sig)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(simpson_split$test)$guilt))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.191
+PRE <- (E1 - E2) / E1
+PRE
+
+# plot all the ROC curves:
+plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_poly, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_sig, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+
+
+# summarize:
+sum4<-data_frame("model"=c("model1","model2","model3","model4"),
+           "Error Rate"=c(0.1905, 0.1986, 0.1905, 0.1910),
+           "PRE" =c(0.366, 0.340, 0.366, 0.365),
+           "AUC" =c(0.796, 0.766, 0.771, 0.782)
+           )
+
+pander(sum4)
+```  
+
+Using polynomial kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). the model gets the best cost level at 4 with a 19.1% 10-fold CV error rate. Also, the AUC us 0.782 and the PRE is 36.5% (the model MSE is estimated by the 10-fold error rate). Generally, the model is still worse than the linear one.
+
+```{r 3-2-summary}
+
+
+# plot all the ROC curves:
+plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_poly, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_sig, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+
+
+# summarize:
+sum4<-data_frame("model"=c("model1","model2","model3","model4"),
+           "Error Rate"=c(0.1905, 0.1986, 0.1905, 0.1910),
+           "PRE" =c(0.366, 0.340, 0.366, 0.365),
+           "AUC" =c(0.796, 0.766, 0.771, 0.782)
+           )
+
+pander(sum4)
+```  
+
+According to the error rate, PRE and AUC, I think the model1 (linear kernel) is the best model I got. It has the lowest Error rate, and highest PRE as well as the highest AUC, which indicates this model has the best performance among all the four models
