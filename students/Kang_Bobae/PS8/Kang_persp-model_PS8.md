@@ -422,13 +422,12 @@ Now, I fit and compare multiple models for prediciton. For this part, I split th
 -   Random forest (n.trees = 5000)
 -   Boosting (n.trees = 5000)
 -   SVM (kernel = 'linear')
--   SVM (kernel = 'polynomial')
 -   SVM (kernel = 'radial')
 
 <!-- -->
 
     ## Distribution not specified, assuming bernoulli ...
 
-To find out the best model, I compare ROC/AUC scores of the models. Thefollowing plot shows both the ROC curves and the corresponding AUC scores of all six models. Based on the AUC scores, The best model is boosting with the AUC score: 0.826. The logistic regression model is the second best model with only a slightly lower AUC score: 0.823. The model with the lowest AUC score is the SVM with polynomial kenel: 0.514.
+To find out the best model, I compare ROC/AUC scores of the models. Thefollowing plot shows both the ROC curves and the corresponding AUC scores of all six models. Based on the AUC scores, The best model is boosting with the AUC score: 0.826. The logistic regression model is the second best model with only a slightly lower AUC score: 0.823. The model with the lowest AUC score is the SVM with radial kenel: 0.773.
 
 ![](Kang_persp-model_PS8_files/figure-markdown_github/Part%203:%20predict%20--%20ROC%20AUC-1.png)

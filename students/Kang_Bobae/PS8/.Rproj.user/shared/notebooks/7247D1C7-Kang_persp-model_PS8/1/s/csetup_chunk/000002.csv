@@ -11,6 +11,8 @@
 "0","library(gbm)"
 "0","library(pROC)"
 "0","library(e1071)"
+"0","library(rmarkdown)"
+"0","library(knitr)"
 "0","# import data"
 "0","biden <- fread('data/biden.csv')"
 "0","mhealth <- fread('data/mental_health.csv')"

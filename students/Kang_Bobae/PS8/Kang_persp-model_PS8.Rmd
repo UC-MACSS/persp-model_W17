@@ -507,39 +507,34 @@ Now, I fit and compare multiple models for prediciton. For this part, I split th
 * Random forest (n.trees = 5000)
 * Boosting (n.trees = 5000)
 * SVM (kernel = 'linear')
-* SVM (kernel = 'polynomial')
 * SVM (kernel = 'radial')
 
 ```{r Part 3: predict}
 simpson_logit <- glm(guilt ~ ., data = simpson_train, family='binomial') # logistic regression
 simpson_rf <- randomForest(as.factor(guilt) ~ ., data = simpson_train, ntree = 5000)
 simpson_bst <- gbm(guilt ~ ., data = simpson_train, n.trees = 5000)
-simpson_svm_lin <- svm(guilt ~ ., data = simpson_train, kernel = "linear", scale = FALSE, probability=TRUE)
-simpson_svm_poly <- svm(guilt ~ ., data = simpson_train, kernel = "polynomial", scale = FALSE, probability=TRUE)
-simpson_svm_rad <- svm(guilt ~ ., data = simpson_train, kernel = "radial", scale = FALSE, probability=TRUE)
+simpson_svm_lin <- svm(guilt ~ ., data = simpson_train, kernel = "linear", scale = FALSE)
+simpson_svm_rad <- svm(guilt ~ ., data = simpson_train, kernel = "radial", scale = FALSE)
 ```
 
-To find out the best model, I compare ROC/AUC scores of the models. Thefollowing plot shows both the ROC curves and the corresponding AUC scores of all six models. Based on the AUC scores, The best model is boosting with the AUC score: 0.826. The logistic regression model is the second best model with only a slightly lower AUC score: 0.823. The model with the lowest AUC score is the SVM with polynomial kenel: 0.514.  
+To find out the best model, I compare ROC/AUC scores of the models. Thefollowing plot shows both the ROC curves and the corresponding AUC scores of all six models. Based on the AUC scores, The best model is boosting with the AUC score: 0.826. The logistic regression model is the second best model with only a slightly lower AUC score: 0.823. The model with the lowest AUC score is the SVM with radial kenel: 0.773.  
 
 ```{r Part 3: predict -- ROC AUC}
 fitted_logit <- predict(simpson_logit, as_tibble(simpson_test), type = "response")
 fitted_rf <- predict(simpson_rf, as_tibble(simpson_test), type = "prob")[,2]
 fitted_bst <- predict(simpson_bst, as_tibble(simpson_test), type = "response", n.trees=5000)
 fitted_svm_lin <- predict(simpson_svm_lin, as_tibble(simpson_test), decision.values = TRUE) %>% attributes
-fitted_svm_poly <- predict(simpson_svm_poly, as_tibble(simpson_test), decision.values = TRUE) %>% attributes
 fitted_svm_rad <- predict(simpson_svm_rad, as_tibble(simpson_test), decision.values = TRUE) %>% attributes
 
 roc_logit <- roc(as_tibble(simpson_test)$guilt, fitted_logit)
 roc_rf <- roc(as_tibble(simpson_test)$guilt, fitted_rf)
 roc_bst <- roc(as_tibble(simpson_test)$guilt, fitted_bst)
 roc_svm_lin <- roc(as_tibble(simpson_test)$guilt, as.numeric(fitted_svm_lin$decision.values))
-roc_svm_poly <- roc(as_tibble(simpson_test)$guilt, as.numeric(fitted_svm_poly$decision.values))
 roc_svm_rad <- roc(as_tibble(simpson_test)$guilt, as.numeric(fitted_svm_rad$decision.values))
 
 plot(roc_logit, print.auc = TRUE, col = "red", print.auc.x = .2)
 plot(roc_rf, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .425, add = TRUE)
 plot(roc_bst, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .35, add = TRUE)
 plot(roc_svm_lin, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .275, add = TRUE)
-plot(roc_svm_poly, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .2, add = TRUE)
-plot(roc_svm_rad, print.auc = TRUE, col = "cyan", print.auc.x = .2, print.auc.y = .125, add = TRUE)
+plot(roc_svm_rad, print.auc = TRUE, col = "cyan", print.auc.x = .2, print.auc.y = .2, add = TRUE)
 ```
