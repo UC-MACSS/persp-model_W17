@@ -25,27 +25,46 @@ library(ggdendro)
 library(dplyr)
 library(e1071)
 
-options(digits = 3)
+options(digits = 4)
 set.seed(1234)
 theme_set(theme_minimal())
 ```
 
+
 ```{r read-in data, include=FALSE}
-bidenData <- read.csv("biden.csv")
+#bidenData <- read.csv("biden.csv")
+bidenData <- read.csv("biden.csv") %>%
+  mutate_each(funs(as.factor(.)), female, dem, rep) %>%
+  na.omit
+```
+
+```{r read-in_voterturnout_data, include=FALSE}
 mhlthData <- na.omit(read.csv("mental_health.csv"))
-simpsonData <- read.csv("simpson.csv")
-```
-
-## Part 1: Sexy Joe Biden
-
-1. The `biden` data is splitted as required.
-```{r problem1_1, echo=FALSE}
+mh <- read_csv("mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit
 set.seed(1234)
-biden_split <- resample_partition(bidenData, c(test = 0.3, train = 0.7))
+mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
 ```
 
-2. 
-```{r problem1_segment, echo = FALSE}
+```{r read-in_simpson_data, include=FALSE}
+simpsonData <- read.csv("simpson.csv") %>%
+  mutate_each(funs(as.factor(.)), dem, rep, ind, female, black, hispanic) %>%
+  na.omit
+set.seed(1234)
+simpson_split <- resample_partition(simpsonData, p = c("test" = .3, "train" = .7))
+```
+
+
+```{r MSE_function, echo=FALSE, include=FALSE}
+# MSE function
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+```{r problem1_segment, echo = FALSE, include = FALSE}
 # hackish function to get line segment coordinates for ggplot
 partition.tree.data <- function (tree, label = "yval", add = FALSE, ordvars, ...) 
 {
@@ -160,70 +179,37 @@ partition.tree.data <- function (tree, label = "yval", add = FALSE, ordvars, ...
 }
 ```
 
-```{r problem1_2_model, echo = FALSE}
-biden_train <- biden_split$train %>%
-  as_tibble() %>%
-  mutate(female = factor(female, levels = 0:1, labels = c("Male", "Female")), 
-         dem = factor(dem, levels = 0:1, labels = c("Non-Democrat", "Democrat")),
-         rep = factor(rep, levels = 0:1, labels = c("Non-Republican", "Republican")))
+
+## Part 1: Sexy Joe Biden
+
+### 1. 
+  The `biden` data is splitted as required.
+```{r problem1_1, echo=FALSE}
+set.seed(1234)
+biden_split <- resample_partition(bidenData, c(test = 0.3, train = 0.7))
 ```
+
+### 2. 
+  `biden` is the response variable, and all the other variables are predictors. Contents below show the results and plot of the tree with default setting.
+  According to the summary table, only two predictors are actually used in tree construction: `dem` and `rep`.
+  According to the tree plot, we get the following results:
+(1) When the observation is a Democrat (`dem` = 1, indicating 'True'), the average biden thermometer would be 74.51.
+(2) When the observation is not a Democrat (`dem` = 0, indicating 'False'):
+  - when the observation is a Republican (`rep` = 1, indicating 'True'), the average biden thermometer would be 43.23;
+  - when the observation is not a Republican (`rea` = 0, indicating 'False'), the average biden thermometer would be 57.60.
 
 ```{r problem1_2, echo=FALSE}
 biden_tree1_2 <- tree(biden ~ female + age + dem + rep + educ, data = biden_split$train)
-summary(biden_tree1_2)
+#summary(biden_tree1_2)
 
-mod1_2 <- prune.tree(biden_tree1_2, best = 3)
+# use the unpruned tree
+mod1_2 <- biden_tree1_2
 summary(mod1_2)
 ```
 
 ```{r problem1_2_plot, echo = FALSE}
 # plot tree
 tree_data <- dendro_data(mod1_2)
-ptree <- ggplot(segment(tree_data)) +
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
-               alpha = 0.5) +
-  geom_text(data = label(tree_data), 
-            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
-  geom_text(data = leaf_label(tree_data), 
-            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
-  theme_dendro()
-
-
-# plot region space
-preg <- ggplot(biden_split$train$data, aes(dem, rep)) +
-  geom_point(alpha = .2) +
-  geom_segment(data = partition.tree.data(mod1_2)[[1]],
-               aes(x = xmin, xend = xmax, y = ymin, yend = ymax)) +
-  geom_text(data = partition.tree.data(mod1_2)[[2]],
-            aes(x = x, y = y, label = label)) +
-  coord_cartesian(xlim = c(min(biden_split$train$data$dem), max(biden_split$train$data$rep)),
-                  ylim = c(min(biden_split$train$data$rep), max(biden_split$train$data$rep)),
-                  expand = FALSE) +
-  theme(panel.border = element_rect(fill = NA, size = 1))
-
-# display plots side by side
-grid.arrange(ptree, preg, ncol = 2,
-             top = textGrob(str_c("Terminal Nodes = ", ceiling(length(mod1_2$frame$yval) / 2)),
-                            gp = gpar(fontsize = 20)))
-```
-
-2. `biden` is the response variable, and all the other variables are predictors. Contents below show the results and plot of the tree.
-  Only two predictors are actually used in tree construction: `dem` and `rep`. 
-```{r problem1_2_test, echo=FALSE}
-biden_train <- biden_split$train$data %>%
-  as_tibble() %>%
-  mutate(female = factor(female, levels = 0:1, labels = c("Male", "Female")), 
-         dem = factor(dem, levels = 0:1, labels = c("Non-Democrat", "Democrat")),
-         rep = factor(rep, levels = 0:1, labels = c("Non-Republican", "Republican")))
-
-# estimate model
-biden_tree <- tree(biden ~ female + age + dem + rep + educ, data = biden_train)
-
-# plot unpruned tree
-mod <- biden_tree
-summary(mod)
-
-tree_data <- dendro_data(mod)
 ggplot(segment(tree_data)) +
   geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
                alpha = 0.5) +
@@ -231,57 +217,60 @@ ggplot(segment(tree_data)) +
             aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
   geom_text(data = leaf_label(tree_data), 
             aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
-  theme_dendro() +
-  labs(title = "Biden theremometer tree",
+  theme_dendro()+
+  labs(title = "Biden thermometer tree (by default)",
        subtitle = "female + age + dem + rep + educ")
-```
-  The test MSE of this model is 401.
-```{r problem1_2_test_mse, echo=FALSE}
-# MSE function
-mse <- function(model, data) {
-  x <- modelr:::residuals(model, data)
-  mean(x ^ 2, na.rm = TRUE)
-}
 
-# convert the qualitative variables in testing data
-biden_test <- biden_split$test$data %>%
+```
+
+  The test MSE is 406.4.
+```{r problem1_2_testMSE, echo=FALSE}
+mse(mod1_2, biden_split$test)
+```
+
+
+### 3. 
+  According to the 10-fold cross-validation approach, the optimal level of tree complexity is 3 or 4. The test MSE would keep increasing after adding more complexity.
+
+```{r problem2_1_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+biden_cv <- crossv_kfold(biden_split$train$data, k = 10) %>%
+  mutate(tree = map(train, ~ tree(biden ~ female + age + dem + rep + educ, data = .,
+     control = tree.control(nobs = nrow(biden_split$train$data),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+biden_cv <- expand.grid(biden_cv$.id, 2:10) %>%
   as_tibble() %>%
-  mutate(female = factor(female, levels = 0:1, labels = c("Male", "Female")), 
-         dem = factor(dem, levels = 0:1, labels = c("Non-Democrat", "Democrat")),
-         rep = factor(rep, levels = 0:1, labels = c("Non-Republican", "Republican")))
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(biden_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
 
-mse(mod, biden_test)
-```
-
-
-3. According to the cross-validation approach with LOOCV, the optimal level of tree complexity is 4. Although adding a second-order polynomial would increase the MSE, compared with the MSE of the model only having the linear term, we could get lower MSE (also compared to the MSE with only the linear term) after adding the fourth-order polynomial. However, the MSE would greatly increase after adding the fifth-order polynomial. So the optimal level of tree complexity is 4.
-```{r problem1_3_complexity, echo = FALSE}
-# use cross-validation to deter mine the optimal level of tree complexity
-loocv_data <- crossv_kfold(bidenData, k = nrow(bidenData))
-
-cv_error <- vector("numeric", 5)
-terms <- 1:5
-
-for(i in terms){
-  loocv_models <- map(loocv_data$train, ~ lm(biden ~ poly(female+age+dem+rep+educ, i), data = .))
-  loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
-  cv_error[[i]] <- mean(loocv_mse)
-}
-
-cv_mse <- data_frame(terms = terms,
-           cv_MSE = cv_error)
-cv_mse
-
-# plot
-ggplot(cv_mse, aes(terms, cv_MSE)) +
+biden_cv %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
   geom_line() +
-  labs(title = "Comparing quadratic linear models",
-       subtitle = "Using LOOCV",
-       x = "Highest-order polynomial",
-       y = "Mean Squared Error")
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
 ```
 
-  According to the table and plot, among the predictors put into the model, only `dem`, `rep` and `age` are actually used by the tree. 
+  According to the table, among the predictors put into the model, only `dem`, `rep` and `age` are actually used by the tree. Since the tree plot of 3 nodes would not actually include the variable `age`, I would use the tree with 4 nodes to include more information.
+  According to the tree plot, the results are:
+(1) When the observation is non-Democrat (`dem` = 0):
+  - when the observation is non-Republican (`rep` = 0), the predicted biden thermometer would be 58.41;
+  - when the observation is Republican (`rep` = 1), the predicted biden thermometer would be 42.71.
+(2) When the observation is Democrat (`dem` = 1):
+  - when the observation is less than 53.5 years old, the predicted biden thermometer would be 72.39???
+  - when the observation is more than 53.5 years old, the predicted biden thermometer would be 77.93.
+
 ```{r problem1_3_model, echo = FALSE}
 # estimate model
 biden_tree1_3 <- tree(biden ~ female+age+dem+rep+educ, data = biden_train,
@@ -305,75 +294,88 @@ ggplot(segment(tree_data2)) +
        subtitle = "female + age + dem + rep + educ")
 ```
 
-  The test MSE of this model is 398, which is lower than the test MSE of the previous model. So pruning the tree slightly improves the test MSE.
+  The test MSE of this model is 400.9, which is lower than the test MSE of the previous model. So pruning the tree slightly improves the test MSE.
 ```{r problem1_3_testMSE, echo=FALSE}
 mse(mod1_3, biden_test)
 ```
 
 
-4. 
+### 4. 
+  Since there are 5 predictors, I set mtry = 5 for this Out-of-Bag estimate. The test MSE is 483.9. And among all the predictors, `age` is the most important, `dem` is the second important, and `educ` is the third important. `req` and `female` is relatively unimportant.
+  The test MSE is higher than previous models, and the results of important variables are also different from previous models.
+  
 ```{r problem1_4_model, echo = FALSE}
-biden_rf_data <- biden_split$train$data %>%
-    select(-age, -educ) %>%
-    mutate_each(funs(as.factor(.)), female, dem, rep) %>%
-    na.omit
+#biden_rf_data <- biden_split$train$data %>%
+#    select(-age, -educ) %>%
+#    mutate_each(funs(as.factor(.)), female, dem, rep) %>%
+#    na.omit
 
-(biden_bag <- randomForest(biden ~ ., data = biden_rf_data,
-                             mtry = 5, ntree = 500))
+biden_bag <- randomForest(biden ~ ., data = biden_split$train,
+                             mtry = 5, ntree = 500)
+biden_bag
 ```
+
 ```{r problem1_4_importance, echo = FALSE}
 importance(biden_bag)
 ```
-  And the test MSE of this model is 396.
+  And the test MSE of this model is 396.2, which is lower than the previous two models.
 ```{r problem1_4_testMSE, echo=FALSE}
-# preparing the testing data
-biden_rf_data_test <- biden_split$test$data %>%
-    select(-age, -educ) %>%
-    mutate_each(funs(as.factor(.)), female, dem, rep) %>%
-    na.omit
-
-mse(biden_bag, biden_rf_data_test)
+mse(biden_bag, biden_split$test)
 ```
 
-5. The test MSE is 407, which is larger than the tree generated with the bagging approach.
+5. The test MSE is 409.7, which is larger than the tree generated with the Out-of-Bag bagging approach. In this sense, this is a better model than the previous one in Question 4.
+  According to the importance measures, among all predictors, `dem`, `rep` and `age` are the three most important predictors, which is consistent with the results of Question 2 and Question 3. And `educ` and `female` is relatively unimportant.
+  According to the obtained test MSE of this question and the obtained test MSE of the previous question, the error rate would increase with the increase of m, the number of variable considered at each split. So when m is too large, it may cause over-fitting problem.
 ```{r problem1_5_model, echo=FALSE}
-(biden_rf <- randomForest(biden ~ ., data = biden_rf_data,
-                            ntree = 500))
-summary(biden_rf)
+biden_rf <- randomForest(biden ~ ., data = biden_split$train,
+                            ntree = 500)
+biden_rf
 ```
+
+```{r problem1_5_importance, echo=FALSE}
+importance(biden_rf)
+```
+
 ```{r problem1_5_testMSE, echo = FALSE}
-mse(biden_rf, biden_rf_data_test)
+mse(biden_rf, biden_split$test)
 ```
 
-```{r problem1_5_variable_used, echo = FALSE}
-seq.int(biden_rf$ntree) %>%
-  map_df(~ getTree(biden_rf, k = ., labelVar = TRUE)[1,]) %>%
-  count(`split var`) %>%
-  knitr::kable(caption = "Variable used to generate the first split in each tree",
-               col.names = c("Variable used to split", "Number of training observations"))
-```
-```{r problem1_5_error_rate, echo = FALSE}
-err.rate.rf <- function(model, data) {
-  data <- as_tibble(data)
-  response <- as.character(model$terms[[2]])
-  
-  pred <- predict(model, newdata = data, type = "response")
-  actual <- data[[response]]
-  
-  return(mean(pred != actual, na.rm = TRUE))
-}
-err.rate.rf(biden_rf, biden_rf_data)
-```
 
-6. 
+### 6. 
+ I would start with `intercept.depth = 1`. With number of trees `B = 10000`, the test MSE I obtain is 399.5. However, for different values of lambda, the test MSE is different.
 ```{r problem1_6, echo = FALSE}
 set.seed (1234)
-biden_boost=gbm(biden~.,data=biden_split$train, distribution="gaussian", n.trees=5000, interaction.depth=4)
-summary(biden_boost)
+biden_boost=gbm(biden~.,data=biden_split$train, distribution="gaussian",  n.trees=10000, interaction.depth=1)
+#summary(biden_boost)
 ```
 
 ```{r problem1_6_testMSE, echo=FALSE}
-#mse(biden_boost, biden_split$test)
+boost_predicted = predict(biden_boost, newdata = biden_split$test, n.trees = 10000)
+
+mean((boost_predicted - bidenData[biden_split$test[2]$idx, ]$biden)^2)
+```
+
+  According to the plot below, when the shrinkage parameter lambda increases, the test MSE changes. When `lambda = 2`, the test MSE decreases dramatically and reaches its lowest point. However, when `lambda` gets greater than 2, the test MSEs increases. Thus among the four models, the model with `lambda = 2` may provide best fit to the testing data.
+
+```{r problem1_6_lambda, echo=FALSE}
+mses <- numeric(4)
+shrinkages <- numeric(4)
+for (s in 1:4){
+  shrinkages[s] <- 10^(-s)
+  biden_boost <- gbm(biden ~ ., data = biden_split$train, distribution="gaussian", n.trees = 10000, interaction.depth = 1, shrinkage = shrinkages[s])
+  yhat.boost = predict(biden_boost, newdata = biden_split$test, n.trees = 10000)
+  mses[s] <- mean((yhat.boost - bidenData[biden_split$test[2]$idx, ]$biden)^2)
+}
+
+#plot
+data_frame(mse = mses, shrinkage = shrinkages) %>% 
+  ggplot(aes(shrinkage, mse)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Predicting Biden thermometer",
+       subtitle = "female + age + dem + rep + educ",
+       x = "Shrinkage",
+       y = "Test MSE")
 ```
 
 
@@ -382,16 +384,16 @@ summary(biden_boost)
 Models description:
   In this part, the response variable would be `vote96`, and the predictors would be all the other variables: `mhealth_sum`, `age`, `educ`, `black`, `female`, `married` and `inc10`.
 
-### Preparation: split the data into a training set (70%) and a validation set (30%).
-```{r problem2_1_split, echo=FALSE}
-set.seed(1234)
-mhlth_split <- resample_partition(mhlthData, c(test = 0.3, train = 0.7))
-```
+### Preparation
+
+  The data is splitted into a training set (70%) and a validation set (30%) as required.
 
 ### 1. Five tree-based models of voter turnout
 
-#### 1.1 classification tree
-  Using a 10-fold CV with ramdem seed = 1234, I decide that the optimal tree size is 7. When the complexity reaches 5, the test MSE obtains its lowest point among the attempts. In addition, since simply increasing the complexity could cause over-fitting problem, I would not increase the tree size to numbers that would not lower the test MSE any more.
+#### 1.1 classification tree with optimal level of complexity
+
+  Using a 10-fold CV with random seed = 1234, I decide that the optimal tree size is 7. When the complexity reaches 7, the test MSE obtains nearly its lowest point among the attempts. In addition, since simply increasing the complexity could cause over-fitting problem, I would not increase the tree size to numbers that would not contribute much to further lower the test MSE.
+  
 ```{r problem2_1_complexity, echo=FALSE}
 set.seed(1234)
 # generate 10-fold CV trees
@@ -424,7 +426,7 @@ mhlth_cv %>%
 
 
 ```{r problem2_1_model, echo=FALSE}
-mhlth <- mhlth_split$train %>%
+mhlth <- mh_split$train %>%
   as_tibble() %>%
   mutate(vote96 = factor(vote96, levels = 0:1, labels = c("not-voted", "voted")),
          black = factor(black, levels = 0:1, labels = c("non-black", "black")),
@@ -436,8 +438,8 @@ mhlth_tree <- tree(vote96 ~ mhealth_sum + age + educ + black + female + married 
                      control = tree.control(nobs = nrow(mhlth),
                             mindev = .001))
 
-# plot unpruned tree
-mod2_1 <- prune.tree(mhlth_tree, best=5)
+# plot pruned tree
+mod2_1 <- prune.tree(mhlth_tree, best=7)
 summary(mod2_1)
 
 tree_data2_1 <- dendro_data(mod2_1)
@@ -451,108 +453,111 @@ ggplot(segment(mhlth_tree_data)) +
             aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
   theme_dendro() +
   labs(title = "Voter Turnout",
-       subtitle = "mental health + educ")
+       subtitle = "mental health + age + educ + black + female + married + inc10")
 ```
-  According to the computation below, the test MSE of this model is 0.295.
+  The RPC curve is shown as below.
 ```{r problem2_1_fit, echo=FALSE}
+set.seed(1234)
+fitted1 <- predict(mhlth_tree, as_tibble(mh_split$test), type = "class")
 
+roc_tree1 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted1))
+plot(roc_tree1)
 ```
+
+```{r problem2_1_roc, echo=FALSE}
+auc(roc_tree1)
+```
+
 
 #### 1.2: Bagging approach
 
 ```{r problem2_2_model, echo=FALSE}
-mhlth_rf_data <- mhlth_split$train$data %>%
-    select(-mhealth_sum, -age, -educ, -inc10) %>%
-    mutate_each(funs(as.factor(.)), black, female, married) %>%
-    na.omit
-
-(mhlth_bag <- randomForest(as.factor(vote96) ~ ., data = mhlth_rf_data,
-                             mtry = 3, ntree = 500))
+mhlth_bag <- randomForest(as.factor(vote96) ~ ., data = mh_split$train,
+                             mtry = 7, ntree = 500)
 ```
+
+```{r problem2_2_fit, echo=FALSE}
+set.seed(1234)
+fitted2 <- predict(mhlth_bag, as_tibble(mh_split$test), type = "class")
+
+roc_tree2 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted2))
+plot(roc_tree2)
+```
+
+```{r problem2_2_auc, echo=FALSE}
+auc(roc_tree2)
+```
+
 
 #### 1.3 Random forest approach
+
 ```{r problem2_3_model, echo=FALSE}
-(mhlth_rf <- randomForest(as.factor(vote96) ~ ., data = mhlth_rf_data,
-                            ntree = 500))
+mhlth_rf <- randomForest(as.factor(vote96) ~ ., data = mh_split$train,
+                            ntree = 500)
 ```
 
+```{r problem2_3_fit, echo=FALSE}
+set.seed(1234)
+fitted3 <- predict(mhlth_rf, as_tibble(mh_split$test), type = "class")
+
+roc_tree3 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted3))
+plot(roc_tree3)
+```
+
+```{r problem2_3_auc, echo=FALSE}
+auc(roc_tree3)
+```
+
+
 #### 1.4 Boosting: depth = 1
+
 ```{r problem2_4_model, echo=FALSE}
-boosting_depth1 = gbm(as.numeric(vote96) ~ ., 
-                      data = mhlth_split$train, 
+boosting_depth1 = gbm(vote96 ~ ., 
+                      data = mh_split$train, 
                       n.trees = 10000, 
                       interaction.depth = 1)
 ```
 
+```{r problem2_4_fit, echo=FALSE}
+set.seed(1234)
+fitted4 <- predict(boosting_depth1, newdata = mh_split$test, n.trees=10000)
+
+roc_tree4 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted4))
+plot(roc_tree4)
+```
+
+```{r problem2_4_auc, echo=FALSE}
+auc(roc_tree4)
+```
+
 
 #### 1.5 Boosting: depth = 3
+
 ```{r problem2_5_model, echo=FALSE}
-boosting_depth2 = gbm(as.numeric(vote96) ~ ., 
-                      data = mhlth_split$train, 
+boosting_depth3 = gbm(vote96 ~ ., 
+                      data = mh_split$train, 
                       n.trees = 10000, 
                       interaction.depth = 3)
 ```
 
+```{r problem_2_5_fit, echo=FALSE}
+fitted5 <- predict(boosting_depth3, newdata = mh_split$test, n.trees = 10000, decision.values = TRUE) %>%
+  attributes
+
+roc_depth3 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted4))
+plot(roc_depth3)
+```
+
+```{r problem2_5_fit, echo=FALSE}
+set.seed(1234)
+fitted5 <- predict(boosting_depth1, newdata = mh_split$test, n.trees=10000)
+
+roc_tree5 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted5))
+plot(roc_tree5)
+```
+
 #### 1.6 model comparison
-```{r problem2_comparison1_set_models, echo=FALSE}
-mhlth_split <- resample_partition(mhlth_rf_data, p = c("test" = .3,
-                                                           "train" = .7))
 
-mhlth_models <- list("bagging" = randomForest(vote96 ~ ., data = mhlth_split$train,
-                                                mtry = 7, ntree = 10000),
-                       "boosting_depth1" = gbm(as.numeric(vote96)  ~ .,
-                                               data = mhlth_split$train,
-                                               n.trees = 10000, interaction.depth = 1),
-                       "boosting_depth2" = gbm(as.numeric(vote96)  ~ .,
-                                               data = mhlth_split$train,
-                                               n.trees = 10000, interaction.depth = 3),
-                       "boosting_depth4" = gbm(as.numeric(vote96)  ~ .,
-                                               data = mhlth_split$train,
-                                               n.trees = 10000, interaction.depth = 5))
-```
-
-
-```{r problem2_comparison1, echo=FALSE}
-boost_test_err <- data_frame(bagging = predict(mhlth_models$bagging,
-                                               newdata = as_tibble(mhlth_split$test$data),
-                                               predict.all = TRUE)[[2]] %>%
-                               apply(2, function(x) x != as_tibble(mhlth_split$test$data)$vote96) %>%
-                               apply(2, mean),
-                             
-                             boosting_depth1 = predict(mhlth_models$boosting_depth1,
-                                                       newdata = as_tibble(mhlth_split$test$data),
-                                                       n.trees = 1:10000) %>%
-                               apply(2, function(x) round(x) == as.numeric(as_tibble(mhlth_split$test$data)$vote96)) %>%
-                               apply(2, mean),
-                             
-                             boosting_depth3 = predict(mhlth_models$boosting_depth3,
-                                                       newdata = as_tibble(mhlth_split$test$data),
-                                                       n.trees = 1:10000) %>%
-                               apply(2, function(x) round(x) == as.numeric(as_tibble(mhlth_split$test$data)$vote96)) %>%
-                               apply(2, mean),
-                             
-                             boosting_depth5 = predict(mhlth_models$boosting_depth5,
-                                                       newdata = as_tibble(mhlth_split$test$data),
-                                                       n.trees = 1:10000) %>%
-                               apply(2, function(x) round(x) == as.numeric(as_tibble(mhlth_split$test$data)$vote96)) %>%
-                               apply(2, mean))
-
-boost_test_err %>%
-  mutate(id = row_number()) %>%
-  mutate_each(funs(cummean(.)), bagging:rf_mtry4) %>%
-  gather(model, err, -id) %>%
-  mutate(model = factor(model, levels = names(mhlth_models),
-                        labels = c("Bagging",
-                                   "Boosting: depth = 1",
-                                   "Boosting: depth = 3",
-                                   "Boosting: depth = 5"))) %>%
-  ggplot(aes(id, err, color = model)) +
-  geom_line() +
-  scale_color_brewer(type = "qual", palette = "Dark2") +
-  labs(x = "Number of trees",
-       y = "Test classification error",
-       color = "Model")
-```
 
 
 ### 2. Five SVM models
@@ -563,10 +568,13 @@ boost_test_err %>%
 (mh <- read_csv("mental_health.csv") %>%
   mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
   na.omit)
+set.seed(1234)
 mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
 ```
 
 #### 2.1 Linear kernel
+
+  The SVM model of voter turnout with linear kernel is shown as below. The AUC is 0.742.
 
 ```{r problem2_6_model, echo=FALSE}
 mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
@@ -574,7 +582,7 @@ mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
 #summary(mh_lin_tune)
 mh_lin <- mh_lin_tune$best.model
-#summary(mh_lin)
+summary(mh_lin)
 fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
   attributes
 
@@ -587,6 +595,9 @@ auc(roc_line)
 ```
 
 #### 2.2 Polynomial kernel
+
+  The SVM model of voter turnout with polynomicl dernel is shown as below. The AUC is 0.749.
+
 ```{r problem2_7, echo=FALSE}
 mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
                     kernel = "polynomial",
@@ -606,7 +617,11 @@ plot(roc_poly)
 auc(roc_poly)
 ```
 
+
 #### 2.3 Logistic regression
+
+  The SVM model using logistic regression is shown as below. The AUC is 0.754.
+
 ```{r problem2_8_model, echo=FALSE}
 mh_logit <- glm(vote96 ~ ., data = as_tibble(mh_split$train), family = binomial)
 #summary(mh_logit)
@@ -622,6 +637,9 @@ auc(roc_logit)
 ```
 
 #### 2.4 Desicion tree
+
+  The SVM model using decision tree is shown as below. The AUC is 0.56.
+
 ```{r problem2_9_model, echo=FALSE}
 mh_tree <- tree(vote96 ~ ., data = as_tibble(mh_split$train))
 
@@ -636,7 +654,11 @@ plot(roc_tree)
 auc(roc_tree)
 ```
 
+
 #### 2.5 Random forest
+
+The SVM model using random forest is shown as below. The AUC is 0.715.
+
 ```{r problem2_10_model, echo=FALSE}
 mh_rf <- randomForest(vote96 ~ ., data = as_tibble(mh_split$train))
 
@@ -651,6 +673,10 @@ auc(roc_rf)
 ```
 
 #### Comparison
+
+  According to the AUC values and the plot below, the best SVM model is the one using logistic regression, with the highest AUV value among the five models as 0.754. The AUC value of SVM model using random forest is also very close, which reaches 0.749. And the worst SVM model is the one using decision tree. This makes sense, since decision trees basically provide predictions instead
+of probabilities.
+
 ```{r problem2_comparison2, echo=FALSE}
 plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
 plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.x = .2)
@@ -665,14 +691,106 @@ plot(roc_rf, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .
 ### 1. The relationship between race and belief of OJ Simpson's guilt
   Since this question already has required resopnse variable `guilt` and predictor `black`, I would use logistic regression with resampling methods for this part.
 
-#### 1.1 logistic regression with the whole data
+#### Preparation
+  Set the random seed as `1234`. Read-in the `Simpson` data and split it into a training set (70%) and a validation set (30%).
+```{r problem3_preparation, echo=FALSE, include=FALSE}
+(simpson <- read_csv("simpson.csv") %>%
+  mutate_each(funs(as.factor(.)), guilt, dem, rep, ind, female, black, hispanic) %>%
+  na.omit)
+set.seed(1234)
+simpson_split <- resample_partition(simpson, p = c("test" = .3, "train" = .7))
+```
 
+#### 1.1 single-predictor logistic regression
+```{r problem3_1_model, echo=FALSE}
+simpson_logit1 <- glm(guilt ~ black, data = as_tibble(simpson_split$train), family = binomial)
+# summary(simpson_logit1)
+fitted <- predict(simpson_logit1, as_tibble(simpson_split$test), type = "response")
+logit_err1 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
 
-#### 1.2 logistic regression with 10-fold cross-validation
+roc_logit3_1 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
+plot(roc_logit3_1)
+```
+
+```{r problem3_1_evaluation, echo=FALSE}
+auc(roc_logit3_1)
+```
+
+#### 1.2 multiple-variable logistic regression
+```{r problem3_2_model, echo=FALSE}
+simpson_logit2 <- glm(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = simpson_split$train, family = binomial)
+# summary(simpson_logit2)
+fitted <- predict(simpson_logit2, as_tibble(simpson_split$test), type = "response")
+logit_err2 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
+
+roc_logit3_2 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
+plot(roc_logit3_2)
+```
+
+```{r problem3_2_evaluation, echo=FALSE}
+auc(roc_logit3_2)
+```
+
+#### 1.3 single_predictor desicion tree
+```{r problem3_3_model, echo=FALSE}
+simpson_tree <- tree(guilt ~ ., data = as_tibble(simpson_split$train))
+tidy(simpson_tree)
+```
 
 
 #### 1.3 logistic regression with bootstrap approach
 
 
 ### 2. Predict whether individuals believe OJ Simpson to be guity
-  Since this question does not have specific predictors, I would use tree-based models for this part.
+  Since this question does not have specific predictors, I would use tree-based models for this part. As the first step of building tree-models, I need to mark the qualitative variables.
+
+```{r problem3_2_preparation, echo=FALSE, include=FALSE}
+simpson_train <- simpson_split$train %>%
+  as_tibble() %>%
+  mutate(#guilt = factor(guilt, levels = 0:1, labels = c("not-guity", "guity")),
+         dem = factor(dem, levels = 0:1, labels = c("non-Democrat", "Democrat")),
+         rep = factor(rep, levels = 0:1, labels = c("non-Republican", "Republican")),
+         black = factor(black, levels = 0:1, labels = c("non-black", "black")),
+         female = factor(female, levels = 0:1, labels = c("male", "female")),
+         hispanic = factor(hispanic, levels = 0:1, labels = c("non-Hispanic", "Hispanic")))
+```
+
+  Using a 10-fold CV with ramdem seed = 1234, I decide that the optimal tree size is 7. When the complexity reaches 5, the test MSE obtains its lowest point among the attempts. In addition, since simply increasing the complexity could cause over-fitting problem, I would not increase the tree size to numbers that would not lower the test MSE any more.
+```{r problem2_1_complexity, echo=FALSE}
+# generate 10-fold CV trees
+simpson_cv <- simpson_split %>%
+  na.omit() %>%
+  crossv_kfold(k = 10) %>%
+  mutate(tree = map(train, ~ tree(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = .,
+     control = tree.control(nobs = nrow(simpson_split$train$data),
+                            mindev = .001))))
+
+# calculate each possible prune result for each fold
+simpson_cv <- expand.grid(simpson_cv$.id,
+                          seq(from = 2, to = ceiling(length(mod$frame$yval) / 2))) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(titanic_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.misclass(.x, best = .y)),
+         mse = map2_dbl(prune, test, err.rate.tree))
+
+titanic_cv %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Simpson guilt tree",
+       subtitle = "Age + Gender",
+       x = "Number of terminal nodes",
+       y = "Test error rate")
+```
+
+#### 2.1 Classification trees
+
+```{r problem3_4. echo=FALSE}
+
+
