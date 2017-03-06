@@ -1,0 +1,226 @@
+---
+title: "MACSS Problem Set #6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+
+library(tidyverse)
+library(broom)
+library(modelr)
+library(pROC)
+library(MASS)
+
+gss = read.csv('gss2006.csv')
+mental_health = read.csv('mental_health.csv')
+```
+## Describe the Data
+```{r describe_p1, echo=TRUE, warning=FALSE}
+ ggplot(mental_health, aes(vote96, fill = ifelse(vote96 == 1, 'Voted', 'Did Not Vote'))) +
+   labs(title = 'Voter Turnout in 1996', x = 'Voted Yes/No', y = 'Number of people') +
+   geom_bar() + 
+  scale_x_continuous(breaks = NULL) +
+  guides(fill = guide_legend(title = ''))
+
+ggplot(mental_health, aes(mhealth_sum, vote96)) +
+  geom_point() +
+  geom_smooth(method = lm) + 
+  scale_y_continuous(breaks = c(0, 1)) + 
+  labs(title = "Voting in 1996 vs Mental Health Index",
+       y = "Voted (1) / Did not Vote (0)",
+       x = "Mental Health Index")
+```
+
+1. The unconditional probability is 62.96%.  This represents the modeled probability of voting without any interaction variables.  Note: throughout this analysis I am dropping rows where voting is N/A.
+
+2. The scatterplot with the linear smoothing line tells us that  as mental health gets worse (index increases) the probability that the person voted decreases.  The problem with this graph is that with a linear model we get values for voted that will not make sense.  For example for large values on the mental health index the value for voting will be negative.  Furthremore, someone will either vote (1) or not vote (0) and no other values should be predicted by our model.  However by using a linear models values predicted include .5 .33 etc which do not make sense in this context
+
+## Basic Model
+```{r basic_model 1, echo=TRUE, warning=FALSE}
+
+mental_health_logit <- glm(vote96 ~ mhealth_sum, data=mental_health, family=binomial())
+summary(mental_health_logit)
+
+param <- mental_health_logit$coefficients[2]
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+prob2odds <- function(x){
+  x / (1 - x)
+}
+
+prob2logodds <- function(x){
+  log(prob2odds(x))
+}
+
+# add calculated values to dataset
+vote_mental_pred <- mental_health %>%
+  add_predictions(mental_health_logit) %>%
+  mutate(prob = logit2prob(pred)) %>%
+  mutate(odds = prob2odds(prob)) %>%
+  mutate(logodds = prob2logodds(prob))
+```
+
+1. The relationship between mental health and voter turnout is stasitically significant with a p-value very close to zero (3.13e-13).  In addition, the odds ratio is -0.14348 which is substantial.  Keep in mind this is a ratio of odds not an absolute value.
+
+```{r basic_model 2, echo=TRUE, warning=FALSE}
+ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
+  geom_line(aes(y = logodds), color = "red", size = 1) +
+  labs(title = "Log-odds of Voter Turout vs Mental Health",
+       x = "Mental health",
+       y = "Log-odds of voter turnout")
+```
+
+2. The log-odds graph is above.  With a 1 unit increase in mental helath there is a .1435 decrease in the log-odds of voting decision.
+
+```{r basic_model 3, echo=TRUE, warning=FALSE}
+ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
+  geom_line(aes(y = odds), color = "green", size = 1) +
+  labs(title = "Odds of voter turout vs Mental Health",
+       x = "Mental health",
+       y = "Odds of voter turnout")
+```
+
+3. The graph of odds is above.  With a one unit increase in mental health, there is a 1.15 decrease in odds of voting.
+
+```{r basic_model 4a, echo=TRUE, warning=FALSE}
+ggplot(vote_mental_pred, aes(x = mhealth_sum)) +
+ 
+  geom_line(aes(y = prob), color = "red", size = 1) +
+  labs(title = "Probability of voter turout for different mental health states",
+       subtitle = '0 = no, 1 = yes; missing values are removed',
+       x = "Mental health",
+       y = "Probability of voter turnout")
+
+```{r basic_model 4b, echo=TRUE, warning=FALSE}
+prob1 <- exp(1.1392097 + (1 * -0.1434752)) / (1 + exp(1.1392097 + (1 * -0.1434752)))
+prob2 <- exp(1.1392097 + (2 * -0.1434752)) / (1 + exp(1.1392097 + (2 * -0.1434752)))
+diff1 <-  prob1 - prob2 
+diff1
+prob3 <- exp(1.1392097 + (5 * -0.1434752)) / (1 + exp(1.1392097 + (5 * -0.1434752)))
+prob4 <- exp(1.1392097 + (6 * -0.1434752)) / (1 + exp(1.1392097 + (6 * -0.1434752)))
+diff2 <- prob3 - prob4
+diff2
+```
+
+4. With a one unit increase in mental health, there is about 0.53 decrease in the odds of voting.  The difference seems to increase as the mental health increases.  For example, from 1 to 2 the probability of voting decreases by 2.92% while when moving from 5 to 6 the probability of voting decreases by 3.48%.
+
+
+```{r basic model 5, echo=TRUE, warning=FALSE}
+accuracy <- mental_health %>%
+  add_predictions(mental_health_logit) %>%
+  mutate(pred = logit2prob(pred),
+         prob = pred,
+         pred = as.numeric(pred > .5))
+
+accuracy_rate <- mean(accuracy$vote96 == accuracy$pred, na.rm = TRUE)
+accuracy_rate
+
+PRE <- function(model){
+  y <- model$y
+  y.hat <- round(model$fitted.values)
+  E1 <- sum(y != median(y))
+  E2 <- sum(y != y.hat)
+  PRE <- (E1 - E2) / E1
+  return(PRE)
+}
+
+PRE(mental_health_logit)
+auc <- auc(accuracy$vote96, accuracy$prob)
+auc
+```
+
+5. The model has an accuracy of 67.7%, PRE of 0.016 and AUC of 0.62.  Keep in mind since there are only two outcomes (voted and not voted) that a random model would have an accuracy of 50%.  That means my model is a little better than random.
+
+## Multiple variable model
+
+```{r multiple model 1, echo=TRUE, warning=FALSE}
+mental_health_logit_all <- glm(vote96 ~ ., data = mental_health, family = binomial)
+```
+
+1. Here are the compontents.
+
+- Link function, $$g(vote96_i) = \frac{1}{1 + e^{-vote96_i}}$$
+
+- Linear predictor, $$vote96_{i} = \beta_{0} + \beta_{1}mhealth_sum + \beta_{2}age + \beta_{3}educ + \beta_{4}black + \beta_{5}female + \beta_{6}married + \beta_{7}inc10$$
+
+- Probability Distribution, is a binomial random varaible.  Each row in the dataset is a Bernoulli RV with an outcome of 1 (with a probability p) and 0 (with a probability (1-p)).  Thus the sum will be a binomial random variable.
+
+```{r multiple model 2, echo=TRUE, warning=FALSE}
+summary(mental_health_logit_all)
+```
+
+2.  A summary of the model is above.
+
+3.  As can be seen in the output above, the model shows three variables are signicant at the .001 level.  They are mhealth_sum, age, and education.  Compared to the basic model the coefficient to mhealth_sum smaller at -0.089.  It was previously -.14.  This suggests that some of the influence of mental health was actually probably another variable, perhaps age.  For example as someone gets older their mental health might also decrease.  The coefficients in the summary have to be interpreted in terms of log-odds.  For example the coefficient for age (0.042) is intepretead as a one unit increase in age (the person is one year older) will produce a 0.042 increase in the log-odds the person votes.  Below I dig into two variables in more depth, age and married.
+
+```{r multiple model age, echo=TRUE, warning=FALSE}
+mental_health %>%
+  data_grid(age, married, .model = mental_health_logit_all) %>%
+  add_predictions(mental_health_logit_all, var = 'logit') %>%
+  mutate(prob = logit2prob(logit)) %>%
+  {.} -> grid.bsel.age
+
+ggplot(grid.bsel.age, aes(x = age, y = prob, color = ifelse(married == 1, 'Married', 'Unmarried'))) +
+  geom_line() +
+  labs(title = 'Effect of Age on Voting for Married and Unmarried',
+    x = 'Age', y = 'Predicted Probability of Voting in 1996') +
+  guides(color = guide_legend('')) + 
+  scale_y_continuous(breaks = c(0, .25, .5, .75, 1))
+```
+
+Digging into the age variable I plot the probability that a person will vote depending on their age and separating married vs unmarried.  As can be seen in the graph, someone who is married is more likely to vote at the same age than an umarried person.  This might be because spouses encourage each other to vote.
+
+## Modeling TV Consumption
+
+1. Here are the compontents.
+
+- Link function, $$g(vote96_i) = \log(tvhours_{i})$$
+
+- Linear predictor, $$tvhours_{i} = \beta_{0} + \beta_{1}age + \beta_{2}childs + \beta_{3}educ + \beta_{4}female + \beta_{5}grass + \beta_{6}hrsrelax + \beta_{7}black$$ $$+ \beta_{8}social_connect + \beta_{9}voted04 + \beta_{10}xmovie + \beta_{11}zodiac + \beta_{12}dem + \beta_{13}rep + \beta_{14}ind$$
+
+- Probability Distribution, is a poisson random variable.  $$Pr(tvhours = k|\lambda) = \frac{\lambda^{k}e^{-\lambda}}{k!}$$
+
+
+``` {r reg model, echo=TRUE, warning=FALSE}
+gss <- na.omit(gss)
+pois_gss_all <- glm(tvhours ~ ., data = gss, family = poisson)
+pois_gss_none <- glm(tvhours ~ 1, data = gss, family = poisson)
+gss_bselect <- stepAIC(pois_gss_all, trace = 0)
+summary(gss_bselect)
+
+acc_pre_auc = function(df, logit_model, dep_var = 'vote96', thold = .5){
+  df %>%
+    na.omit() %>%
+    add_predictions(logit_model, var = 'logit') %>%
+    mutate(prob = logit2prob(logit)) %>%
+    mutate(odds = prob2odds(prob)) %>%
+    mutate(pred = ifelse(prob > thold, 1, 0)) %>%
+    {.} -> pred
+
+  acc_rate <- mean(pred[[dep_var]] == pred$pred)
+  e2 <- 1 - acc_rate
+  e1 <- 1 - mean(pred[[dep_var]] == 1)
+  pre <- (e1 - e2) / e1
+  auc_score = auc(pred[[dep_var]], pred$prob)
+  return(list('acc_rate' = acc_rate, 'pre' = pre, 'auc' = auc_score))
+}
+
+bsel_crit <- acc_pre_auc(gss, gss_bselect, 'tvhours')
+bsel_crit
+
+ggplot(gss, mapping = aes(x = gss$tv)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Histogram of number of hours of TV wathced per Day",
+       x = "Number of Hour",
+       y = "Number of People")
+```
+
+2.  My model resuls are estimated above.
+
+3.  After the model ran only four variables were used, educ, grass, hrsrelax, black.  educ, hrsrelax, black were all significant at the .001 level.  I calculated the accuracy rate of the model and got 22.6%.  This is not bad considering there are 24 distinct answers in the survey.  However I also plotted a histogram of number of tv hours watched and as can be seen here most of the observastions (over 90%) are 5 hours or less.  The coefficients for education and grass are negative which suggest more educated people watch less tv and also people who think marajuana should be legalized watch less tv.  On the other hand people with more hours in the day to relax and african americans watch more tv.  These conclusions reflect the change in the variable when all others are held constant.
+

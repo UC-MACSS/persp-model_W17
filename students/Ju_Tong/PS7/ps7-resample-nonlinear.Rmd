@@ -1,0 +1,725 @@
+---
+title: "Problem set #7: resampling and nonlinearity"
+author: "Tong Ju"
+date: "**20170227**"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', warning = FALSE)
+# install.packages("ISLR")
+# install.packages("splines")
+# getwd()
+# setwd("/Users/tongju/Desktop/MAC-Surface/CSS-HW/MACS_2017_Winter/persp-model/students/Ju_Tong/PS7")
+library(tidyverse)
+library(modelr)
+library(broom)
+library(MASS)
+library(gam)
+library(ISLR)
+library(pander)
+
+biden = read.csv('data/biden.csv')
+college = read.csv('data/College.csv')
+
+
+```
+
+# Part 1: Sexy Joe Biden 
+
+Given the following functional form:
+
+$$Y = \beta_0 + \beta_{1}X_1 + \beta_{2}X_2 + \beta_{3}X_3 + \beta_{4}X_4 + \beta_{5}X_5 + \epsilon$$
+
+where $Y$ is the Joe Biden feeling thermometer, $X_1$ is age, $X_2$ is gender, $X_3$ is education, $X_4$ is Democrat, and $X_5$ is Republican.
+
+1)Estimate the training MSE of the model using the traditional approach.
+
+```{r 1.1}
+# linear regression model using the entire dataset
+biden_all <- lm(biden ~ age + female + educ + dem + rep, data = biden)
+
+# calculate the mean squared error for the training set.
+calc_mse <- function(model, data){
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+train_only <- calc_mse(biden_all, biden)
+
+pander (biden_all)
+```
+
+Based on the linear regression model, the estimated parameters and p-values are reported in the above table. Using the entire dataset as training and testing set, the mean squared error is `r round(train_only, 2)`. 
+
+2)Estimate the test MSE of the model using the validation set approach.
+ 
+```{r 1.2}
+set.seed(1234)
+# split the dataset
+biden_split <- resample_partition(biden, c(valid = 0.3, train = 0.7))
+# modelin of the train data set
+biden_train <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+
+mse1 <- calc_mse(biden_train, biden_split$valid)
+
+```
+ 
+I fit the linear regression model using only the training observations. The mean squared error for the test data on this model is `r round(mse1, 2)` , which is larger than the previous MSE. Because the model built upon the training dataset cannot perfectly generalize the remaining 70% observation in test set, this model is less accurate than the one in section 1.1.  
+ 
+    
+3)Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+
+```{r 1.3}
+set.seed(1234)
+# replicate the validation set approach for 100 times
+mse100 <- replicate(100, {
+  biden_split <- resample_partition(biden, c(valid = 0.3, train = 0.7))
+  biden_train <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+  calc_mse(biden_train, biden_split$valid)
+})
+mse100_mean <- mean(mse100)
+
+
+mse1000 <- replicate(1000, {
+  biden_split <- resample_partition(biden, c(valid = 0.3, train = 0.7))
+  biden_train <- lm(biden ~ age + female + educ + dem + rep, data = biden_split$train)
+  calc_mse(biden_train, biden_split$valid)
+})
+mse1000_mean <- mean(mse1000)
+
+# histogram of the MSE values
+
+ggplot(mapping = aes(mse100)) + 
+  geom_histogram(color = 'black', fill = 'blue') +
+  theme_bw()+
+  geom_vline(aes(xintercept = mse100_mean, color = 'MSE for 100-times Validation')) +
+  geom_vline(aes(xintercept = mse1000_mean, color = 'MSE for 1000-times Validation')) +
+  geom_vline(aes(xintercept = mse1, color = 'MSE for 1-time Validation')) +
+  geom_vline(aes(xintercept = train_only, color = 'MSE for all data model')) + 
+  labs(title = "Distribution of MSE using Validation Set Approach 100 times and 1000 times",
+        x = "MSE values",
+        y = "Frequency") 
+
+```
+Based on the histogram above, repeating the validation set approach for 100 times did not really improve the MSE (the MSE value is `r round(mse100_mean,2)`, which is even a little bit larger than the one-time validation). However, after repeating for 1000 times, the MSE (`r round(mse1000_mean,2)`) is much  closer to the MSE for all-data model. This result may suggest when validation set approach is deployed for more times, the avarage value of MSE will be much closer to the MSE for the model based on all the observations. More importantly, the distribution of MSE ranges from 330 to 450, indicating that the validation set approach is not so steady and vulnerable to the split of the training and test sets.   
+
+4)Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+
+```{r 1.4}
+# LOOCV method
+biden_loocv <- crossv_kfold(biden, k = nrow(biden))
+biden_models <- map(biden_loocv$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+biden_mses <- map2_dbl(biden_models, biden_loocv$test, calc_mse)
+mse_loocv <- mean(biden_mses)
+
+
+```
+
+The estimated test MSE of the model using the LOOCV approach is `r mse_loocv`. This value is much closer to the training MSE of the model (`r round(mean(train_only),2)`) we obtained in the section 1.1. Given that the LOOCV method doesn't depend on the sampling process for training/test sets, it is a much more steady method. However, this method is rather time consuming.
+
+5)Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
+
+```{r 1.5}
+set.seed(1234)
+# 10-fold cross-validation
+biden_10fold <- crossv_kfold(biden, k = 10)
+biden_10models <- map(biden_10fold$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+biden_10mses <- map2_dbl(biden_10models, biden_10fold$test, calc_mse)
+mse_10fold <- mean(biden_10mses, na.rm = TRUE)
+
+```
+
+Using 10-fold cross-validation approach,  MSE = `r round(mse_10fold, 2)` is gained, which is slightly smaller than leave-one-out approach. Since this approach repeats the validation approach for 10 times rather than the count of observations, the flexibility decreases. However, the computational efficiency increases.
+
+
+6)Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
+
+```{r 1.6}
+set.seed(1234)
+# 10-fold cross-validation for 100 times
+mse_10fold_100 <- replicate(100, {
+  biden_10fold <- crossv_kfold(biden, k = 10)
+  biden_10models <- map(biden_10fold$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  biden_10mses <- map2_dbl(biden_10models,
+                           biden_10fold$test, calc_mse)
+  mse_10fold <- mean(biden_10mses)
+})
+
+mean_mse_10fold<- mean(mse_10fold_100)
+
+ggplot(mapping = aes(mse_10fold_100)) + 
+  geom_histogram(color = 'black', fill = 'blue') +
+  theme_bw()+
+  geom_vline(aes(xintercept = mean_mse_10fold, color = 'MSE for 100-times Validation')) +
+  geom_vline(aes(xintercept = mse_10fold, color = 'MSE for 1-time Validation')) +
+  geom_vline(aes(xintercept = train_only, color = 'MSE for all data model')) + 
+  labs(title = "Distribution of MSE using 10-fold Cross-validation Approach for 100 Times ",
+        x = "MSE values",
+        y = "Frequency") 
+
+
+```
+
+Although the average MSE of 10-fold cross-validation for 100 times is a little bit larger than that for 1-time, the plot above suggests that 10-fold cross-validation approach is much more steady than the validation set approach in the section 1.3, since in cross-validation approach, the much narrower distributrion of MSE (distribution range:397 to 400)is found than that of validation set approach (disribution range: 330-450). Therefore, the 10-fold validation approach is less vulnerable to the process of data splitting than validation set approach. 
+
+7)Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$)
+
+By using the bootstrap approach (1000 times), the co-effecient of the model is listed as below.
+```{r 1.7-1}
+set.seed(1234)
+# Boot-strap 
+biden_boot <- biden %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~lm(biden ~ age + female + educ + dem + rep, data =.)),
+  coef = map(model, tidy))
+
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+
+```
+
+Compared to the co-effecients of the model in 1.1 (model based on all the observations):
+```{r 1.7-2}
+coef(summary(biden_all))
+```
+
+the standard errors for `age`, `female`, `educ`, and `rep` in the model built by the bootstrap approach are slightly larger than those in the model 1.1. This is because bootstrap approach does not rely on distributional assumptions, and thus can give more robust estimations. 
+
+
+
+# Part 2: College (bivariate) [3 points]
+
+##  Instructional expenditure per student as predictor:
+
+I first choose the expenditure as the independnet variable and plot the relation between Out-of-state tuition with the expenditure of student below. It is obvious the relationship between them is not linear. Following Tukey and Mosteller's “bulging rule”, I use the Log(X) for power transformation.
+$$Outstate = \beta_0 + \beta_{1}log(Expend) $$
+
+Below, I show the regression curve (red) and the residual plots. 
+
+```{r 2.1}
+# plot of the expend 
+ggplot(college, aes(x=Expend, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  labs(title = "Scatter plot of Out-of-state tuition on Instructional expenditure per student",
+        x = "Instructional expenditure per student",
+        y = "Out-of-state tuition")
+
+# set up the model with log(X).
+log_exp <- lm(Outstate ~ log(Expend), data = college)
+
+grid1 <-college %>%
+  add_predictions(log_exp) %>%
+  add_residuals(log_exp)
+
+ggplot(college, aes(x=Expend, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_line(aes(y=pred), data = grid1, color = 'red', size = 1) +
+  labs(title = "Regression of Out-of-state tuition on Instructional expenditure per student",
+        x = "Instructional expenditure per student",
+        y = "Out-of-state tuition")
+
+
+ggplot(grid1, aes(x = pred, y = resid)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_hline(yintercept = 0, color = 'blue', size = 1, linetype = 'dashed') +
+  labs(title = "Predicted Value and Residuals of linear regression (Outstate vs. log(Expend))",
+        x = "Predicted Out-of-state tuition",
+        y = "Residuals")
+
+```
+
+To validate this model, 10-fold validation for log(x) transformation is conducted. 
+
+```{r 2.1-2}
+set.seed(1234)
+ex10_data <- crossv_kfold(college, k = 10)
+ex_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  ex10_models <- map(ex10_data$train, ~ lm(Outstate ~ poly(Expend, i), data = .))
+  ex10_mse <- map2_dbl(ex10_models, ex10_data$test, calc_mse)
+  ex_error_fold10[[i]] <- mean(ex10_mse)
+}
+
+exlog_10fold <- crossv_kfold(college, k = 10)
+exlog_10models <- map(exlog_10fold$train, ~ lm(Outstate ~ log(Expend), data = .))
+
+exlog_10mses <- map2_dbl(exlog_10models, exlog_10fold$test, calc_mse)
+mse_exlog10 <- mean(exlog_10mses, na.rm = TRUE)
+
+data_frame(terms = terms,
+           fold10 = ex_error_fold10) %>%
+  ggplot(aes(x=terms, y=fold10)) +
+  geom_line() +
+  theme_bw()+
+  geom_hline(aes(yintercept = mse_exlog10, color = 'MSE for log transformation'), linetype = 'dashed') + 
+  scale_colour_manual("", values = c("MSE for log transformation"="orange")) +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+
+```
+
+Form the above graph, the 10-fold MSE is actually lower for a third degree polynomial of Expend than it is for the log(Expend). However, sine MSE decreases only by `r round(((ex_error_fold10[3] - mse_exlog10)/mse_exlog10), 2)`, I decided to use this Y~log(X) model.  
+
+```{r 2.1-3}
+pander(summary(log_exp))
+```
+
+The parameter and co-effecient of this model is listed in the table above. There is a statistically significant (p-value<0.001), strong and positive relation between expenditure and tuition. The interpretation of the co-effecient on log(Expend):one percent increase in instructional expenditure per student is associated with a $74.82 increase in Out-of-state tuition.
+
+
+##  Graduation rate as predictor:
+
+Then I choose the Graduation rate as the independnet variable and make the scatter plot between Out-of-state tuition with it as below. It appears there is a linear relationship between graduation rate and the Out-of-state tuition. However, based on the residual plot below, it seems there is correlation between the residuals and the predicted values.
+
+```{r 2.2.1}
+# scatter plot
+ggplot(college, aes(x=Grad.Rate, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  labs(title = "Scatter plot of Out-of-state tuition on Graduation Rate",
+        x = "Graduation Rate",
+        y = "Out-of-state tuition")
+
+# set up the model with Grad.Rate.
+g_rate <- lm(Outstate ~ Grad.Rate, data = college)
+
+grid2 <-college %>%
+  add_predictions(g_rate) %>%
+  add_residuals(g_rate)
+
+ggplot(college, aes(x=Grad.Rate, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_line(aes(y=pred), data = grid2, color = 'red', size = 1) +
+  labs(title = "Regression of Out-of-state tuition on Graduation Rate",
+        x = "Graduation Rate",
+        y = "Out-of-state tuition")
+
+
+ggplot(grid2, aes(x = pred, y = resid)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_hline(yintercept = 0, color = 'blue', size = 1, linetype = 'dashed') +
+  labs(title = "Predicted Value and Residuals of linear regression (Outstate vs. Graduation Rate)",
+        x = "Predicted Out of State Tuition",
+        y = "Residuals")
+
+pander(summary(g_rate))
+```
+
+In order to validate this model, 10-fold validation for such simple linear regression is conducted. 
+
+```{r 2.2.2}
+set.seed(1234)
+ex10_data <- crossv_kfold(college, k = 10)
+ex_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  ex10_models <- map(ex10_data$train, ~ lm(Outstate ~ poly(Grad.Rate, i), data = .))
+  ex10_mse <- map2_dbl(ex10_models, ex10_data$test, calc_mse)
+  ex_error_fold10[[i]] <- mean(ex10_mse)
+}
+
+exlog_10fold <- crossv_kfold(college, k = 10)
+exlog_10models <- map(exlog_10fold$train, ~ lm(Outstate ~ Grad.Rate, data = .))
+
+exlog_10mses <- map2_dbl(exlog_10models, exlog_10fold$test, calc_mse)
+mse_exlog10 <- mean(exlog_10mses, na.rm = TRUE)
+
+data_frame(terms = terms,
+           fold10 = ex_error_fold10) %>%
+  ggplot(aes(x=terms, y=fold10)) +
+  geom_line() +
+  theme_bw()+
+  geom_hline(aes(yintercept = mse_exlog10, color = 'MSE for 10-fold cross validation'), linetype = 'dashed') + 
+  scale_colour_manual("", values = c("MSE for identity transformation"="orange")) +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+
+```
+
+Looking at this graph of MSE, we see that a 4th degree polynomialprovides the lowest MSE under 10-fold cross validation. Thus, I create a 4th degree polynomial linear model and report the result as below: 
+by removing some data (graduation rate larger than 100), the curve of the new model fit the data very well, (the R square value increase from 0.3264 to 0.349).
+
+
+```{r 2.2.3}
+college2<-college %>%
+ filter(Grad.Rate <= 100)
+
+grate4 <- lm(Outstate ~ poly(Grad.Rate, 4), data = college2)
+
+grid3 <-college2 %>%
+  add_predictions(grate4) %>%
+  add_residuals(grate4)
+
+ggplot(college2, aes(x=Grad.Rate, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_line(aes(y=pred), data = grid3, color = 'red', size = 1) +
+  labs(title = "Regression of Out-of-state tuition on Graduation Rate",
+        x = "Graduation Rate",
+        y = "Out-of-state tuition")
+
+
+ggplot(grid3, aes(x = pred, y = resid)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_hline(yintercept = 0, color = 'blue', size = 1, linetype = 'dashed') +
+  labs(title = "Predicted Value and Residuals of polynominal regression (Outstate vs. Graduation Rate)",
+        x = "Predicted Out of State Tuition",
+        y = "Residuals")
+
+
+pander(summary(grate4))
+```
+
+In the above summary table for the co-effecients and parameters for the polynominal model, we can find there are statistically significant association between graduation rates with the Out-of-state tuition.  
+
+
+##  Room and board costs as predictor:
+
+Finally, I choose the Room and board costs as the independnet variable and make the scatter plot between Out-of-state tuition with it as below. There is a linear relationship between graduation rate and the Out-of-state tuition. However, based on the residual plot below, the residuals appear to be correlated with the predicted values.
+
+```{r 2.3.1}
+# scatter plot
+ggplot(college, aes(x=Room.Board, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  labs(title = "Scatter plot of Out-of-state tuition on Room and Board Cost",
+        x = "Room and Board Cost",
+        y = "Out-of-state tuition")
+
+# set up the model with Grad.Rate.
+rb <- lm(Outstate ~ Room.Board, data = college)
+
+grid4 <-college %>%
+  add_predictions(rb) %>%
+  add_residuals(rb)
+
+ggplot(college, aes(x=Room.Board, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_line(aes(y=pred), data = grid4, color = 'red', size = 1) +
+  labs(title = "Regression of Out-of-state tuition on Room and Board Cost",
+        x = "Room and Board Cost",
+        y = "Out-of-state tuition")
+
+
+ggplot(grid4, aes(x = pred, y = resid)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_hline(yintercept = 0, color = 'blue', size = 1, linetype = 'dashed') +
+  labs(title = "Predicted Value and Residuals of linear regression (Outstate vs. Room and Board Cost)",
+        x = "Predicted Out of State Tuition",
+        y = "Residuals")
+
+
+pander(summary (rb))
+```
+
+To validate this model, 10-fold validation for simple linear regression is conducted. 
+
+```{r 2.3.2}
+set.seed(1234)
+ex10_data <- crossv_kfold(college, k = 10)
+ex_error_fold10 <- vector("numeric", 5)
+terms <- 1:5
+
+for(i in terms){
+  ex10_models <- map(ex10_data$train, ~ lm(Outstate ~ poly(Room.Board, i), data = .))
+  ex10_mse <- map2_dbl(ex10_models, ex10_data$test, calc_mse)
+  ex_error_fold10[[i]] <- mean(ex10_mse)
+}
+
+exlog_10fold <- crossv_kfold(college, k = 10)
+exlog_10models <- map(exlog_10fold$train, ~ lm(Outstate ~ Room.Board, data = .))
+
+exlog_10mses <- map2_dbl(exlog_10models, exlog_10fold$test, calc_mse)
+mse_exlog10 <- mean(exlog_10mses, na.rm = TRUE)
+
+data_frame(terms = terms,
+           fold10 = ex_error_fold10) %>%
+  ggplot(aes(x=terms, y=fold10)) +
+  geom_line() +
+  theme_bw()+
+  geom_hline(aes(yintercept = mse_exlog10, color = 'MSE for 10-fold cross validation'), linetype = 'dashed') + 
+  scale_colour_manual("", values = c("MSE for identity transformation"="orange")) +
+  labs(title = "MSE estimates",
+       x = "Degree of Polynomial",
+       y = "Mean Squared Error")
+
+```
+
+Looking at this graph of MSE, we see that the lowest MSE could be observed at the degree of polynomial = 2. Therefore, I made a polinominal model.  
+
+```{r 2.3.3}
+
+
+rb2 <- lm(Outstate ~ poly(Room.Board, 2), data = college)
+
+grid5 <-college %>%
+  add_predictions(rb2) %>%
+  add_residuals(rb2)
+
+ggplot(college, aes(x=Room.Board, y=Outstate)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_line(aes(y=pred), data = grid5, color = 'red', size = 1) +
+  labs(title = "Regression of Out-of-state tuition on Graduation Rate",
+        x = "Graduation Rate",
+        y = "Room and Board Cost")
+
+
+ggplot(grid5, aes(x = pred, y = resid)) +
+  geom_point(alpha=0.2) +
+  theme_bw()+
+  geom_hline(yintercept = 0, color = 'blue', size = 1, linetype = 'dashed') +
+  labs(title = "Predicted Value and Residuals of polynominal regression (Outstate vs. Room and Board Cost)",
+        x = "Predicted Out of State Tuition",
+        y = "Residuals")
+
+
+pander(summary(rb2))
+```
+
+In the above summary table for the co-effecients and parameters for the polynominal model, we can find there are statistically significant association between board and room cost with the Out-of-state tuition. In addition, compared with the simple linear model, the R square value of this new model is enhanced from 0.4281 to 0.4315. 
+
+To sum up,  the three predictors I chose, instructional expenditure per student,graduation rate, and room and board costs, all have statistically significant relationship with out-of-state tuition. Through 10-fold cross-validation approach, I confirm three bivariate models by using tuition as the dependent variable. The relation between it with graduation rate and room/board costs can be explained in two polinominal models. 
+Because interpretation is more tractable for a regression on log(Expend), I choose the model of Tuition~log(Expenditure) rather than polynominal model.  
+
+
+
+# Part 3: College (GAM) [3 points]
+
+1)Split the data into a training set and a test set:
+
+```{r 3.1}
+set.seed(1234)
+split <- resample_partition(college, c(test = 0.3, train = 0.7))
+```
+
+
+2)Estimate an OLS model on the training data:
+
+```{r 3.2}
+college_train <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, 
+                       data = split$train)
+
+pander(summary(college_train))
+
+```
+
+As the table shown above, this model's R-square is 0.7263, implying it could explain about 72.63% of the variance in the training data. Based on the p-value reported in the table above, all the six independent variabls are statistically significant. I will interpret the co-effecients on each independent variable as below:
+
+a)PrivateYes: Holding the other variables constant, private university will have averagely 2575 dollars higher in its tuition than other non-private university.
+
+b)Roo,.Board: Holding the other variables constant, with room-board costs increasing by 1 dollar, the out-of-state tuition would increase 0.9927 dollar. 
+
+c)PhD percentage: Holding the other variables constant, as the portion of facaulty with Ph.D. increase by 1 percent,averagely the tuition would get higher by 36.53 dollars. 
+
+d)percentage of alumni: Holding the other variables constant, as the portion of alumni who donates increase by 1 percent, the tuition would be 53.39 dollars higher. 
+
+e)Expend: Holding the other variables constant, as the expenditure per student increase by 1 dollar, the tuition will increase by 0.2067 dollars, on average.
+
+f)graduation rate: Holding the other variables constant, the tuition would be 30.73 dollars more if the graduation rate increases by 1 unit.
+
+In the following graph, I make the residual plot for this linear model. Except the range with larger predicted values,it appears that the predicted value is not in correlation with the residuals. 
+
+```{r 3.2-2}
+college[unlist(split$train["idx"], use.names = FALSE),] %>%
+  add_predictions(college_train) %>%
+  add_residuals(college_train) %>%
+  ggplot(aes(pred, resid)) +
+  geom_point()+
+  theme_bw()+
+  labs(title = "Predicted Value and Residuals of linear regression",
+        x = "Predicted Value",
+        y = "Residuals")
+  
+```
+
+3)GAM model:
+I will use a GAM model that regresses Outstate on the binary predictor Private, a 2nd degree polynomial of Room.Board (from in part 2), local regressions for PhD and perc.alumni, the log(Expend) (from part 2), and a fourth degree polynomial for Grad.Rate (from part 2).
+
+```{r 3.3}
+gam <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) + log(Expend) + poly(Grad.Rate, 4),data = split$train)
+summary(gam)
+```
+
+As the simple linear model, all the independent variables in this model have statistically significant association with the Out-of-state tuition. While all of them have (at the 0 level) F-values for parametric effects, only `Ph.D.` has statistically significant (at the $\alpha = .05$ level) nonparametric F-value, indicating that there is likely to be a nonparametric effect on `Outstate`. 
+In the next step, I present the relation between the depedent variable with each of six independent variables as below:  
+
+
+```{r 3.3-2}
+clg_gam_terms <- preplot(gam, se = TRUE, rug = FALSE)
+
+# PhD
+data_frame(x = clg_gam_terms$`lo(PhD)`$x,
+           y = clg_gam_terms$`lo(PhD)`$y,
+           se.fit = clg_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "PHD",
+       y = expression(f[3](PhD)))
+
+# perc.alumni
+data_frame(x = clg_gam_terms$`lo(perc.alumni)`$x,
+           y = clg_gam_terms$`lo(perc.alumni)`$y,
+           se.fit = clg_gam_terms$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Local Regression",
+       x = "perc.alumni",
+       y = expression(f[4](perc.alumni)))
+
+# Expend
+data_frame(x = clg_gam_terms$`log(Expend)`$x,
+           y = clg_gam_terms$`log(Expend)`$y,
+           se.fit = clg_gam_terms$`log(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Log Transformation",
+       x = "Expend",
+       y = expression(f[5](expend)))
+
+# Grad.Rate
+data_frame(x = clg_gam_terms$`poly(Grad.Rate, 4)`$x,
+           y = clg_gam_terms$`poly(Grad.Rate, 4)`$y,
+           se.fit = clg_gam_terms$`poly(Grad.Rate, 4)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "4th Degree Polynominal",
+       x = "Grad.Rate",
+       y = expression(f[6](Grad.Rate)))
+
+# Private
+data_frame(x = clg_gam_terms$Private$x,
+           y = clg_gam_terms$Private$y,
+           se.fit = clg_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of Out-of-state Tuition",
+       x = "Is Private School or Not",
+       y = expression(f[1](private)))
+
+# Room.Board
+data_frame(x = clg_gam_terms$`poly(Room.Board, 2)`$x,
+           y = clg_gam_terms$`poly(Room.Board, 2)`$y,
+           se.fit = clg_gam_terms$`poly(Room.Board, 2)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of Out-of-state Tuition",
+       subtitle = "Linear Regression",
+       x = "Room.Board",
+       y = expression(f[2](Room.Board))) 
+```
+
+According to the plots above, it appears that all these six variables have  have substantial and significant relationships with out-of-state tuition.
+
+a)`PhD`:The wide confidence intervals for values of PhD below 30% indicate that the effect of the portion of facaulty with PhD is not so strong in that range. However, the confidence interval decreases in size as PhD grows larger, eventually showing us that as PhD increases, Out-of-state tuition does as well.
+
+b)`perc.alumni`: It appears that the effect of the portion of alumni who donate on the out-of-state tuition will be weaker when it is larger than 40% or smaller than 15%. 
+
+c)`Expend`:The plot shows as the expenditure increases, the positive effect of it on the out-of state tuition will be weaker, since the cofeident intervals become more broad at the higher value of `expend`.
+
+d)`Grad.Rate`:From the lower values of graduation rate, the effect is hard to determine. As it increases past these values, however, it starts to increase out-of-state tuition until the higher levels of graduation rate in which the confidence interval becomes wider again. 
+
+e)`Private`: From the plot, we see being private or not has very strong relation with the amount of tuitions.Non-private universities are more likely to have lower tuition than the private universities.
+
+f)Room.Board: There is strong and positive relation between the room and board costs with the tuitions. In addition, the strength of this effect of board costs on the tution only persists in a middle range from 4000 to 6000 dollars.  
+
+4)Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.
+
+```{r 3.4}
+
+mse_1 <- calc_mse(college_train, split$test)
+mse_2 <- calc_mse(gam, split$test)
+
+```
+
+The MSE for the OLS is 3652035, larger than that of the GAM (3595260), indicating that the GAM model more accurately fit the test data. 
+
+
+5)For which variables, if any, is there evidence of a non-linear relationship with the response?
+
+I test three variables in the model, Ph.D., Expend, and Grad.Rate to see whether they are really in non-linear relationship with the dependent variable. I examine the p-value for the models without the variable, with the variable as a linear form, and with the variable in the non-linear form.
+
+```{r 3.4-phd}
+#PhD
+gam_PhD_rm<-gam(Outstate ~ Private + poly(Room.Board, 2) + lo(perc.alumni) + log(Expend) + poly(Grad.Rate, 4), data = split$train)
+
+gam_PhD_lm<-gam(Outstate ~ Private + poly(Room.Board, 2) + PhD+ lo(perc.alumni) + log(Expend) + poly(Grad.Rate, 4), data = split$train)
+
+pander(anova(gam_PhD_rm, gam_PhD_lm, gam, test = "F"))
+```
+
+Since the p-value for both linear model and the non-linear model in terms of `PhD` are not statistically significant, larger than 0.01. It is hard to determine whether the PhD has a linear relationship with the dependent variable or not. 
+
+
+```{r 3.4-expend}
+
+#expend
+
+gam_exp_rm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) +  poly(Grad.Rate, 4),data = split$train)
+
+gam_exp_lm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) +  poly(Grad.Rate, 4) + Expend,data = split$train)
+
+pander(anova(gam_exp_rm, gam_exp_lm, gam, test = "F"))
+```
+In the examination of `Expend`, I found the p-value for the linear model for it is very small, indicating that it is more appopriate to adopt the linear relationship between expenditure with the out-of-state tuition. 
+
+
+```{r 3.4-grad}
+
+#Grad.Rate
+gam_gr_rm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) + log(Expend) ,data = split$train)
+gam_gr_lm <- gam(Outstate ~ Private + poly(Room.Board, 2) + lo(PhD) + lo(perc.alumni) + log(Expend) + Grad.Rate,data = split$train)
+
+pander(anova(gam_PhD_rm, gam_PhD_lm, gam, test = "F"))
+```
+
+The result for `Grad.Rate` is similar to that in `PhD`, the p-value of linear or non-linear relationship is not statistically significant and close to each other, so there is no strong evidence to refute or confirm the GAM model in the section 3.2, by using this approach. 
