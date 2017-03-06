@@ -27,6 +27,8 @@ library(rcfss)
 library(pROC)
 library(gbm)
 library(pander)
+library(e1071)
+
 
 ## To install the ggendro package!!!
 # to get the tree graphs with the labels and values, use the forked
@@ -272,20 +274,530 @@ Compared with the bagged model, which considered all the predictors in the split
 In the above plot, we can conclude that, compared with the bagged model, age is no longer important in the random forest model, while the affilication with republilcan will be much more important. Except `rep`, we can also observe that the average decrease in the Gini index associated with each variable is generally smaller using the random forest method compared to bagging - this is because of the variable restriction imposed when considering splits. To sum up, the choice m = p/3 gave a significant improvement over bagging (m = p) in this example. 
 
 
-
-
-
-
-
-
-
 ###6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
+
+In this section, first, I explore the optimal number of boosting iterations for the boosting models with various interaction depth 1, 2, or 4. Then by using the optimized number, I calculate out the MSE for each boosting model. It appears that at the optimized number of boosting iterations, both boosting model with depth2 and depth4 have the similar and small enough MSE. Therefore, in the next step, I determine to set the `interaction.depth` as 4 and `n.trees` as 2080, and subsequently investigate how the $\lambda$ influence the test MSE.
+```{r 1-boosting-optimal}
+set.seed(1234)
+
+
+# Define a function to calculate the MSE for each bossting model
+mse_biden_boost <-function(model, test, tree_number) {
+  yhat.boost <- predict (model, newdata = test, n.trees=tree_number)
+  mse <- mean((yhat.boost - (as_tibble(test))$biden)^2)
+  return (mse)
+}
+
+biden_models <- list("boosting_depth1" = gbm(biden ~ .,
+                                               data = biden_split$train,
+                                               n.trees = 5000, interaction.depth = 1),
+                       "boosting_depth2" = gbm(biden - 1 ~ .,
+                                               data = biden_split$train,
+                                               n.trees = 5000, interaction.depth = 2),
+                       "boosting_depth4" = gbm(biden~ .,
+                                               data = biden_split$train,
+                                               n.trees = 5000, interaction.depth = 4))
+
+data_frame(depth = c(1, 2, 4),
+           model = biden_models[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE),
+           mse = c(mse_biden_boost(biden_models$boosting_depth1,biden_split$test, 3248),
+                   mse_biden_boost(biden_models$boosting_depth2,biden_split$test, 2551),
+                   mse_biden_boost(biden_models$boosting_depth4,biden_split$test, 2080))) %>%
+  select(-model) %>%
+  knitr::kable(caption = "Optimal number of boosting iterations",
+               col.names = c("Depth", "Optimal number of iterations", "MSE"))
+
+
+
+
+
+``` 
+
+The default shrinkage number is 0.001, so I try different shrinkage number from 0.00025 to 0.4, and plot the MSE vs. the shrinkage number. As the blot below, I found that test MSE score first decrease to reach its minimal value = 402 (when $\lambda$ = 0.002), then increases as the $\lambda$ increases. Since $\lambda$, essentially, is a shrinkage parameter which controls the rate at which boosting learns, very small  $\lambda$ will require very large value of B in order to achieve the good performance. In our case, given the tree number, if the lambda is too small, then the B is not big enough for the model to achieve good result.However, in our case, when the $\lambda$ to a rather large number (larger than 0.1), the MSE also increases, the accuracy of the model decreases.  
+
+In conclusion, based on the optimized number of boosting iterations, I choose the best boosting model as B = 2080, depth =4, $\lambda$ = 0.002, which gave the MSE as 402, the lowest MSE in all the models. 
+
+
+```{r 1-boosting-shrinkage}
+
+s <- c(0.00025, 0.0005, 0.001, 0.002, 0.004, 0.006, 0.008, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.2, 0.4)
+
+MSE<-list()
+for (i in s) {
+  boost <- gbm(biden~ .,data = biden_split$train,n.trees = 2080, interaction.depth = 4, shrinkage = i)
+  MSE <- append(MSE, mse_biden_boost(boost,biden_split$test, 2080))
+}
+
+MSE_lambda<-data_frame (shrinkage = s,
+            MSE = unlist(MSE))
+
+pander(MSE_lambda)
+
+ggplot(MSE_lambda, aes(x=shrinkage, y=MSE)) +
+  geom_line()+
+  labs(x = "Shrinkage parameter",
+       y = "test MSE",
+       title = "MSE vs. Shrinkage parameter (0.00025 ~ 0.4) for Boosting",
+       subtitle ="num. of trees = 2080, interaction depth = 4")
+  
+```    
+
+
 
 # Part 2: Modeling voter turnout [3 points]
 
 
-1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
-1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+###1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+In this section, I have built up 5 trees/forests: 1) singel tree by using all independent variables; 2) bagging approach; 3) random forest; 4) single tree by using the age as the independent variabes; 5) single tree with full nodes. 
+
+#####Model 1: simple tree with all independent variables
+```{r 2-tree-1}
+set.seed(1234)
+# factorize the original data
+mh <- read_csv("data/mental_health.csv") %>% 
+  mutate(vote96 = factor(vote96, levels = 0:1, labels = c("xvote", "vote")), black = factor(black), female = factor(female), married = factor(married))
+
+na.omit(mh)
+#split the data
+mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
+# Define the error rate function 
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+
+  return(mean(pred != actual, na.rm = TRUE))
+}
+##########################################################
+
+# Model 1) simple tree with all the independent variables
+tree_default <- tree(vote96 ~ ., data = mh_split$train)
+
+#Plot tree
+tree_data <- dendro_data(tree_default)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
+  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter turnout tree",
+       subtitle = "mhealth_sum + age + educ + black + female + married + inc10")
+
+#ROC
+fitted <- predict(tree_default, as_tibble(mh_split$test), type = "class")
+
+roc_td <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_td, main = "ROC for model 1")
+auc1 <-auc(roc_td)
+
+#Mse
+mse1 <- err.rate.tree(tree_default, mh_split$test)
+
+
+#PRE
+real <- as.numeric(na.omit(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- mse1 
+PRE1 <- (E1 - E2) / E1
+
+```  
+
+This decision tree is established with full nodes by using all the independent variables. Test error rate is 28.1%, AUC is 0.638 and the PRE is 4.29%, meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by only 4.29%. The tree model stress the age, education, income and mental health status. The tree model can be explained as below:
+
+If age < 44.5, then we proceed down the left branch to the next internal node.
+
+If educ < 12.5 (year), then the model estimates the person don't vote.
+If educ >= 12.5, then we proceed down the right branch to the next internal node.
+If the mental health index < 4.5, then the model estimates the person vote.
+If the mental health index >= 4.5, then the model estimates the person don't vote.
+If age >= 44.5, then we proceed down the right branch to the next internal node.
+
+If inc10 < 1.08335 (in $10,000s), then the model estimates the person vote.
+If inc10 > 1.08335, the we proceed down the right branch to the next internal node.
+If the mental health index < 4.5, then the model estimates the person vote.
+If the mental health index >= 4.5, then the model estimates the person vote.
+
+
+#####Model 2: Bagging approach
+```{r 2-tree-2}
+set.seed(1234)
+
+# Model 2) bagging
+bagging <- randomForest(vote96 ~ ., data = na.omit(as_tibble(mh_split$train)), mtry = 7, ntree = 500)
+
+data_frame(var = rownames(importance(bagging)),
+           MeanDecreaseRSS = importance(bagging)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseRSS)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting voter turnout",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+
+
+
+#ROC
+fitted <- predict(bagging, as_tibble(mh_split$test), type = "prob")[,2]
+
+roc_td <- roc(as.numeric(as_tibble(mh_split$test)$vote96), fitted)
+plot(roc_td, main = "ROC for model 2")
+auc2 <-auc(roc_td)
+
+#Mse
+mse2 <- err.rate.tree(bagging, mh_split$test)
+
+
+#PRE
+real <- as.numeric(na.omit(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- mse2
+PRE2 <- (E1 - E2) / E1
+
+```  
+
+Through bagging approach, with all predictor variables, the model emphasizes age, inc10, educ, and mental health and has a test error rate 31.5% (estimated by out-of-bag error estimate), which is higher than the default one and indicates a potential overfitting problem. Also, the AUC us 0.73 and the PRE is -7.26%, meaning when compared to the NULL model, estimating all with the median data value, this model even increases the error rate by 7.26%.
+
+
+#####Model 3: Random Forest
+```{r 2-tree-3}
+set.seed(1234)
+
+# Model 3) bagging
+rf<- randomForest(vote96 ~ ., data = na.omit(as_tibble(mh_split$train)), ntree = 500)
+
+data_frame(var = rownames(importance(rf)),
+           MeanDecreaseRSS = importance(rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseRSS)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting voter turnout",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+
+
+
+#ROC
+fitted <- predict(rf, as_tibble(mh_split$test), type = "prob")[,2]
+
+roc_td <- roc(as.numeric(as_tibble(mh_split$test)$vote96), fitted)
+plot(roc_td, main = "ROC for model 3")
+auc3 <-auc(roc_td)
+
+#Mse
+mse3 <- err.rate.tree(rf, mh_split$test)
+
+
+#PRE
+real <- as.numeric(na.omit(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- mse3
+PRE3 <- (E1 - E2) / E1
+
+```   
+
+Similar as in the bagging appraoch, the random forest also stresses age, income, education and mental health status, with the test error rate as 28.4%, AUC as 0.766, PRE as 3.18%.  
+
+#####Model 4: Simple tree with only age
+```{r 2-tree-4}
+tree_age <- tree(vote96 ~ age, data = mh_split$train)
+
+#Plot tree
+tree_data <- dendro_data(tree_age)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
+  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter turnout tree",
+       subtitle = " vote96 ~ age ")
+
+#ROC
+fitted <- predict(tree_default, as_tibble(mh_split$test), type = "class")
+
+roc_td <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_td, main = "ROC for model 4")
+auc4 <-auc(roc_td)
+
+#Mse
+mse4 <- err.rate.tree(tree_age, mh_split$test)
+
+
+#PRE
+real <- as.numeric(na.omit(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- mse4
+PRE4<- (E1 - E2) / E1
+
+```      
+
+In this model, with the default condition, I only include the education as the independent variable. The results show that the error rate is 0.293, PRE is 0 (indicating the model has a performance equals to the NULL model), and AUC as 0.638.
+
+
+#####Model 5: Simple tree with controlled condition
+```{r 2-tree-5}
+tree_control <- tree(vote96 ~ ., data = mh_split$train, control = tree.control(nobs = nrow(mh_split$train), mindev = 0))
+
+#Plot tree
+tree_data <- dendro_data(tree_control)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
+  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter turnout tree",
+       subtitle = " all the independent variables, under controlled condition ")
+
+#ROC
+fitted <- predict(tree_control, as_tibble(mh_split$test), type = "class")
+
+roc_td <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_td, main = "ROC for model 5")
+auc5 <-auc(roc_td)
+
+#Mse
+mse5 <- err.rate.tree(tree_control, mh_split$test)
+
+
+#PRE
+real <- as.numeric(na.omit(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- mse5
+PRE5<- (E1 - E2) / E1
+
+```      
+
+In this model, with the default condition, I only include the education as the independent variable. The results show that the error rate is 0.293, PRE is 0 (indicating the model has a performance equals to the NULL model), and AUC as 0.614.
+
+To sum up, according to the error rate and PRE, the first single tree model (model 1) is the bset in all five models, sicne it has the lowest error rate and highest PRE value. However, the AUC number of model 1 is not the highest in all five models. From this aspect, the best model is the model 3 (random forests). 
+Nevertheless, considering the AUC with single turning point in the sigle tree model, the AUC is not so informative, thus is not so imprtant when comparing the models.  
+
+```{r 2-tree-6}
+
+sum<-data_frame("model"=c("model1","model2","model3","model4","model5"),
+           "Error Rate"=c(mse1,mse2,mse3,mse4,mse5),
+           "PRE" =c(PRE1,PRE2,PRE3,PRE4,PRE5),
+           "AUC" =c(auc1,auc2,auc3,auc4,auc5)
+           )
+
+pander(sum)
+```      
+
+
+
+###2. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+
+####Model 1:  Linear Kernel with education and age
+
+```{r 2-SVM-1}
+library(caret)
+library(e1071)
+set.seed(1234)
+
+mh_split <- resample_partition(na.omit(mh), p = c("test" = .3, "train" = .7))
+
+mh_lin_tune <- tune(svm, vote96 ~ educ + age, data =  as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_lin_tune)
+# Best 
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+
+# ROC
+
+fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_line, main = "ROC of Voter Turnout - Linear Kernel, Partial Model")
+
+auc1<-auc(roc_line)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.319
+PRE1 <- (E1 - E2) / E1
+
+
+```      
+
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 3 and has a 10-fold CV error rate 31.9%.  In addition, the AUC us 0.736 and the PRE is 4.85% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 4.85%. 
+
+
+####Model 2:  Linear Kernel with all independent variables
+
+```{r 2-SVM-2}
+set.seed(1234)
+mh_lin_tune <- tune(svm, vote96 ~ ., data =  as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_lin_tune)
+# Best 
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+
+# ROC
+
+fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line2 <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_line2, main = "ROC of Voter Turnout - Linear Kernel, Full Model")
+
+auc2<-auc(roc_line2)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.297
+PRE2 <- (E1 - E2) / E1
+
+
+```      
+
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 6 and has a 10-fold CV error rate 29.7 %.  In addition, the AUC us 0.746 and the PRE is 11.40% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 11.40%. Based on PRE, AUC and error rate, this full model is better than the partial model above. 
+
+####Model 3:  Polynomial kernel (full model)
+
+```{r 2-SVM-3}
+set.seed(1234)
+
+
+mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_poly_tune)
+
+#Best
+mh_poly <- mh_poly_tune$best.model
+summary(mh_poly)
+
+# ROC
+
+fitted <- predict(mh_poly, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_poly, main = "ROC of Voter Turnout - Polinominal Kernel, Full Model")
+
+auc3<-auc(roc_poly)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.302
+PRE3 <- (E1 - E2) / E1
+
+
+```      
+
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 5 and has a 10-fold CV error rate 30.2 %.  In addition, the AUC us 0.741 and the PRE is 9.92% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 9.92%. It appears this polynominal kernal is worse than the linear one. 
+
+####Model 4:  Radial kernel (full model)
+
+```{r 2-SVM-4}
+set.seed(1234)
+
+
+mh_rad_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_rad_tune)
+
+mh_rad <- mh_rad_tune$best.model
+summary(mh_rad)
+# ROC
+
+fitted <- predict(mh_rad, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_rad, main = "ROC of Voter Turnout - Radial Kernel, Full Model")
+
+auc4<-auc(roc_rad)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.292
+PRE4 <- (E1 - E2) / E1
+
+
+```      
+
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 5 and has a 10-fold CV error rate 29.2 %.  In addition, the AUC us 0.737 and the PRE is 12.9% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 12.9%. This model is stil not as good as the linear full model.
+
+####Model 5:  Sigmoid kernel (full model)
+
+```{r 2-SVM-5}
+set.seed(1234)
+
+
+mh_sig_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "sigmoid",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_sig_tune)
+
+mh_rad <- mh_sig_tune$best.model
+summary(mh_sig)
+# ROC
+
+fitted <- predict(mh_sig, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_sig <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_sig, main = "ROC of Voter Turnout - Radial Kernel, Full Model")
+
+auc5<-auc(roc_sig)
+
+#PRE
+real <- na.omit(as.numeric(as_tibble(mh_split$test)$vote96))
+E1 <- mean(as.numeric(real != median(real)))
+E2 <- 0.319
+PRE5 <- (E1 - E2) / E1
+
+
+```      
+
+Using linear kernel, with all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100), the model gets the best cost level at 3 and has a 10-fold CV error rate 31.9 %.  In addition, the AUC us 0.737 and the PRE is 4.85% (the model MSE is estimated by the 10-fold error rate), meaning when compared to the NULL model, estimating all with the median data value, this model decreases the error rate by 4.85%. This model is even worse than the radial kernal. 
+
+```{r 2-SVM-sum}
+
+
+plot(roc_line, print.auc = TRUE, col = "black", print.auc.y = .1, add = TRUE)
+plot(roc_line2, print.auc = TRUE, col = "red")
+plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.y = .4, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.y = .3, add = TRUE)
+plot(roc_sig, print.auc = TRUE, col = "green", print.auc.y = .2, add = TRUE)
+
+
+
+sum2<-data_frame("model"=c("model1","model2","model3","model4","model5"),
+           "Error Rate"=c(0.329, 0.297, 0.302, 0.292, 0.319),
+           "PRE" =c(PRE1,PRE2,PRE3,PRE4,PRE5),
+           "AUC" =c(auc1,auc2,auc3,auc4,auc5)
+           )
+
+pander(sum2)
+
+```      
+
+Based on the data summary in the above table, model 2 and model 4 both have the alomst similar and small error rate in five models. However, model 4 has a little bit larger PRE than model 2, while the model 2 has the highest AUC value. From the plot above, it is also obvious that for model 2, there are more area under the curve than the other curves. Therefore, the model 2 (linear full model) is the best one, then model 4(radial), then the model 3 (polynominal), the model 5(sigmodial), the worse one is the model 1(partial linear). However, the SVM models is good at prediction rather than interpretation and do not provide clear ways for interpreting the relative importance and influence of individual predictors on the separating hyperplane. 
+
+
 
 # Part 3: OJ Simpson [4 points]
 
