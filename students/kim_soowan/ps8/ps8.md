@@ -241,10 +241,14 @@ First, we calculate the optimal number of iterations when depth = 4:
 biden_boost <- gbm(biden ~ ., data = biden_train, 
                    distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
 
-gbm.perf(biden_boost, plot.it=FALSE)
+opt_iter <- gbm.perf(biden_boost, plot.it=FALSE)
 ```
 
     ## Using OOB method...
+
+``` r
+opt_iter
+```
 
     ## [1] 2097
 
@@ -252,7 +256,7 @@ Then we fit the boosting model with the optimal number of trees.
 
 ``` r
 biden_boost_opt <- gbm(biden ~ ., data = biden_train, 
-                   distribution = "gaussian", n.trees = 2051, interaction.depth = 4)
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4)
 
 summary(biden_boost_opt)
 ```
@@ -260,14 +264,14 @@ summary(biden_boost_opt)
 ![](ps8_files/figure-markdown_github/biden_boost_opt_mod-1.png)
 
     ##           var   rel.inf
-    ## dem       dem 61.014515
-    ## rep       rep 18.907948
-    ## age       age 11.970245
-    ## educ     educ  4.757345
-    ## female female  3.349946
+    ## dem       dem 60.762848
+    ## rep       rep 18.851629
+    ## age       age 12.209014
+    ## educ     educ  4.806662
+    ## female female  3.369847
 
 ``` r
-yhat_boost <- predict(biden_boost_opt, newdata = biden_test, n.trees = 2051)
+yhat_boost <- predict(biden_boost_opt, newdata = biden_test, n.trees = opt_iter[[1]])
 mse_boost <- mean((yhat_boost - biden_test$biden)^2)
 ```
 
@@ -287,37 +291,37 @@ plot(biden_boost,i="educ")
 
 Expected Biden warmth increases with Democratic party identification and decreases with Republican party identification. There is an overall upward trend as age increases, and an overall downward trend as education increases.
 
-The test MSE is 404.9256424.
+The test MSE is 404.6510492.
 
 Increasing the shrinkage parameter lambda increases the MSE, as shown below:
 
 ``` r
 #fit different models with varying lambda values
 biden_boost1 <- gbm(biden ~ ., data = biden_train, 
-                   distribution = "gaussian", n.trees = 2051, interaction.depth = 4,
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4,
                    shrinkage = 0.001, verbose = F)
 
 biden_boost2 <- gbm(biden ~ ., data = biden_train, 
-                   distribution = "gaussian", n.trees = 2051, interaction.depth = 4,
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4,
                    shrinkage = 0.005, verbose = F)
                    
 biden_boost3 <- gbm(biden ~ ., data = biden_train, 
-                   distribution = "gaussian", n.trees = 2051, interaction.depth = 4,
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4,
                    shrinkage = 0.02, verbose = F)
 
 biden_boost4 <- gbm(biden ~ ., data = biden_train, 
-                   distribution = "gaussian", n.trees = 2051, interaction.depth = 4,
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4,
                    shrinkage = 0.03, verbose = F)
 
 biden_boost5 <- gbm(biden ~ ., data = biden_train, 
-                   distribution = "gaussian", n.trees = 2051, interaction.depth = 4,
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4,
                    shrinkage = 0.1, verbose = F)
 
 boost_models <- c(biden_boost1, biden_boost2, biden_boost3, biden_boost4, biden_boost5)
 
 #calculate MSEs for each
 mse_booster <- function(model) {
-  yhat_boost <- predict(model, newdata = biden_test, n.trees = 2051)
+  yhat_boost <- predict(model, newdata = biden_test, n.trees = opt_iter[[1]])
   mse <- mean((yhat_boost - biden_test$biden)^2)
 }
 
@@ -345,8 +349,12 @@ ggplot(data = boost_df, mapping = aes(x = Lambda, y = MSE)) +
 ``` r
 #make chart of mse values by method 
 subpart_list <- as.data.frame(c(2, 3, 3, 4, 5, 6))
-desc_list <- as.data.frame(c("Single tree, default control options", "Single tree, not pruned", "Single tree, pruned (3 leaves)", "Bagging", "Random forest", "Boosting"))
-mse_list <- as.data.frame(c(mse_default, mse_whole, mse_pruned, mse_bagged, mse_rf, mse_boost))
+desc_list <- as.data.frame(c("Single tree, default control options", 
+                             "Single tree, not pruned", 
+                             "Single tree, pruned (3 leaves)", 
+                             "Bagging", "Random forest", "Boosting"))
+mse_list <- as.data.frame(c(mse_default, mse_whole, 
+                            mse_pruned, mse_bagged, mse_rf, mse_boost))
 
 mse_df <- cbind(subpart_list, desc_list)
 mse_df <- cbind(mse_df, mse_list)
@@ -433,7 +441,7 @@ Random forest
 Boosting
 </td>
 <td style="text-align:right;">
-404.9256
+404.6510
 </td>
 </tr>
 </tbody>
