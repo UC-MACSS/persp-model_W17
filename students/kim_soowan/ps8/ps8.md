@@ -12,6 +12,8 @@ March 4, 2017
     -   [Subpart 6](#subpart-6)
     -   [MSE by Method Comparison Chart](#mse-by-method-comparison-chart)
 -   [Part 2: Modeling voter turnout \[3 points\]](#part-2-modeling-voter-turnout-3-points)
+    -   [Subpart 1](#subpart-1-1)
+    -   [Subpart 2](#subpart-2-1)
 
 Part 1: Sexy Joe Biden (redux times two) \[3 points\]
 =====================================================
@@ -293,7 +295,7 @@ Expected Biden warmth increases with Democratic party identification and decreas
 
 The test MSE is 404.6510492.
 
-Increasing the shrinkage parameter lambda increases the MSE, as shown below:
+Increasing the shrinkage parameter *λ* increases the MSE, as shown below:
 
 ``` r
 #fit different models with varying lambda values
@@ -449,6 +451,290 @@ Boosting
 Part 2: Modeling voter turnout \[3 points\]
 ===========================================
 
-1.  Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+### Subpart 1
 
-2.  Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+**Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)**
+
+For this part of the problem I will estimate five random forest models:
+
+1.  vote96 ~ mhealth\_sum
+2.  vote96 ~ mhealth\_sum + I(mhealth\_sum^2)
+3.  vote96 ~ mhealth\_sum + age
+4.  vote96 ~ mhealth\_sum + inc10
+5.  vote96 ~ mhealth\_sum + educ + inc10
+
+I use the validation set approach (70/30 training-test split) to train and test each model.
+
+``` r
+mh <- read.csv("data/mental_health.csv")
+
+#define regression models
+model1 <- vote96 ~ mhealth_sum
+model2 <- vote96 ~ mhealth_sum + I(mhealth_sum^2)
+model3 <- vote96 ~ mhealth_sum + age
+model4 <- vote96 ~ mhealth_sum + inc10
+model5 <- vote96 ~ mhealth_sum + educ + inc10
+
+mh_rf_data <- mh %>% #prep data for random forest method
+  select(-black, -female, -married) %>%
+  na.omit
+
+mh_rf_split <- resample_partition(mh_rf_data, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+mh_rf_train <- mh_rf_split$train %>% 
+  tbl_df()
+mh_rf_test <- mh_rf_split$test %>% 
+  tbl_df()
+
+#estimate random forest models
+mh_rf1 <- randomForest(model1, data = mh_rf_train, ntree = 500)
+mh_rf2 <- randomForest(model2, data = mh_rf_train, ntree = 500)
+mh_rf3 <- randomForest(model3, data = mh_rf_train, ntree = 500)
+mh_rf4 <- randomForest(model4, data = mh_rf_train, ntree = 500)
+mh_rf5 <- randomForest(model5, data = mh_rf_train, ntree = 500)
+```
+
+``` r
+#Test each model and report the results
+
+#Test MSEs
+mse_list <- as.data.frame(c(mse(mh_rf1, mh_rf_test), 
+                            mse(mh_rf2, mh_rf_test), 
+                            mse(mh_rf3, mh_rf_test), 
+                            mse(mh_rf4, mh_rf_test), 
+                            mse(mh_rf5, mh_rf_test)))
+
+#test error rate
+mh_model_accuracy <- mh_rf_test %>%
+  as_tibble() %>%
+  add_predictions(mh_rf1) %>% #model 1
+  mutate(pred1 = as.numeric(pred > .5)) %>%
+  rename(prob1 = pred) %>%
+  add_predictions(mh_rf2) %>% #model 2
+  mutate(pred2 = as.numeric(pred > .5)) %>%
+  rename(prob2 = pred) %>%
+  add_predictions(mh_rf3) %>% #model 3
+  mutate(pred3 = as.numeric(pred > .5)) %>%
+  rename(prob3 = pred) %>%
+  add_predictions(mh_rf4) %>%
+  mutate(pred4 = as.numeric(pred > .5)) %>%
+  rename(prob4 = pred) %>%
+  add_predictions(mh_rf5) %>%
+  mutate(pred5 = as.numeric(pred > .5)) %>%
+  rename(prob5 = pred)
+
+mh_model_acc1 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred1, na.rm = TRUE)
+mh_model_acc2 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred2, na.rm = TRUE)
+mh_model_acc3 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred3, na.rm = TRUE)
+mh_model_acc4 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred4, na.rm = TRUE)
+mh_model_acc5 <- mean(mh_model_accuracy$vote96 == mh_model_accuracy$pred5, na.rm = TRUE)
+
+acc_list <- as.data.frame(c(mh_model_acc1,
+              mh_model_acc2,
+              mh_model_acc3,
+              mh_model_acc4,
+              mh_model_acc5))
+
+#PREs
+# get the actual values for y from the data
+y <- mh_model_accuracy$vote96
+# get the predicted values for y from the model
+y.hat1 <- mh_model_accuracy$pred1
+y.hat2 <- mh_model_accuracy$pred2
+y.hat3 <- mh_model_accuracy$pred3
+y.hat4 <- mh_model_accuracy$pred4
+y.hat5 <- mh_model_accuracy$pred5
+
+# calculate the errors for the null model and each rf model
+
+getmode <- function(v) { #function to calculate mode
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+vote_mode <- getmode(mh_model_accuracy$vote96)
+
+E1 <- sum(y != vote_mode)
+E2_1 <- sum(y != y.hat1)
+E2_2 <- sum(y != y.hat2)
+E2_3 <- sum(y != y.hat3)
+E2_4 <- sum(y != y.hat4)
+E2_5 <- sum(y != y.hat5)
+
+# calculate the proportional reduction in error
+pre1 <- (E1 - E2_1) / E1
+pre2 <- (E1 - E2_2) / E1
+pre3 <- (E1 - E2_3) / E1
+pre4 <- (E1 - E2_4) / E1
+pre5 <- (E1 - E2_5) / E1
+
+pre_list <- as.data.frame(c(pre1, pre2, pre3, pre4, pre5))
+
+#put metrics in one table and report
+
+model_list <- as.data.frame(c("vote96 ~ mhealth_sum",
+                              "vote96 ~ mhealth_sum + I(mhealth_sum^2)",
+                              "vote96 ~ mhealth_sum + age",
+                              "vote96 ~ mhealth_sum + inc10",
+                              "vote96 ~ mhealth_sum + educ + inc10"))
+
+eval_df <- cbind(model_list, mse_list)
+eval_df <- cbind(eval_df, acc_list)
+eval_df <- cbind(eval_df, pre_list)
+
+colnames(eval_df) <- c("Model", "Test MSE", "Test accuracy", "PRE")
+
+kable(eval_df, caption = "Test MSEs, accuracy rates, and PREs for random forest models", format = "html")
+```
+
+<table>
+<caption>
+Test MSEs, accuracy rates, and PREs for random forest models
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Model
+</th>
+<th style="text-align:right;">
+Test MSE
+</th>
+<th style="text-align:right;">
+Test accuracy
+</th>
+<th style="text-align:right;">
+PRE
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum
+</td>
+<td style="text-align:right;">
+0.2146718
+</td>
+<td style="text-align:right;">
+0.6733524
+</td>
+<td style="text-align:right;">
+0.0000000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + I(mhealth\_sum^2)
+</td>
+<td style="text-align:right;">
+0.2141773
+</td>
+<td style="text-align:right;">
+0.6962751
+</td>
+<td style="text-align:right;">
+0.0701754
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + age
+</td>
+<td style="text-align:right;">
+0.2143814
+</td>
+<td style="text-align:right;">
+0.6876791
+</td>
+<td style="text-align:right;">
+0.0438596
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + inc10
+</td>
+<td style="text-align:right;">
+0.2192961
+</td>
+<td style="text-align:right;">
+0.6647564
+</td>
+<td style="text-align:right;">
+-0.0263158
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+vote96 ~ mhealth\_sum + educ + inc10
+</td>
+<td style="text-align:right;">
+0.2036966
+</td>
+<td style="text-align:right;">
+0.7048711
+</td>
+<td style="text-align:right;">
+0.0964912
+</td>
+</tr>
+</tbody>
+</table>
+I plot the ROC curves below:
+
+``` r
+roc1 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob1)
+roc2 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob2)
+roc3 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob3)
+roc4 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob4)
+roc5 <- roc(mh_model_accuracy$vote96, mh_model_accuracy$prob5)
+
+plot.new()
+plot(roc1, print.auc = TRUE, col = "red", print.auc.x = .2)
+plot(roc2, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+plot(roc3, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc4, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc5, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+```
+
+![](ps8_files/figure-markdown_github/mh_rf_roc-1.png)
+
+The purple line represents the `vote96 ~ mhealth_sum + educ + inc10` model. Overall, the `vote96 ~ mhealth_sum + educ + inc10` model performs best.
+
+``` r
+mh_rf5
+```
+
+    ## 
+    ## Call:
+    ##  randomForest(formula = model5, data = mh_rf_train, ntree = 500) 
+    ##                Type of random forest: regression
+    ##                      Number of trees: 500
+    ## No. of variables tried at each split: 1
+    ## 
+    ##           Mean of squared residuals: 0.2078628
+    ##                     % Var explained: 5.02
+
+``` r
+data_frame(var = rownames(importance(mh_rf5)),
+           MeanDecreaseGini = importance(mh_rf5)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting voting turnout",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```
+
+![](ps8_files/figure-markdown_github/mh_rf_interpret-1.png)
+
+``` r
+mse_rf5 <- mse(mh_rf5, mh_rf_test)
+```
+
+Based on this model, income is the most influential factor affecting voter turnout, followed by education level. Mental health does not appear to have a large effect. The test MSE for this model is 0.2036966. The test accuracy rate is 0.7048711, meaning it predicted voting accurately 70.49% of the time. The PRE is 0.0964912, indicating that it outperforms the useless classifier. The AUC is 0.6874393, which is respectably close to 1.
+
+### Subpart 2
+
+**Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)**
