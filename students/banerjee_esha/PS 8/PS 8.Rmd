@@ -6,7 +6,10 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE)
 ```
 
 
@@ -30,13 +33,12 @@ library(e1071)
 
 theme_set(theme_minimal())
 ```
-
-#### Part 1: Sexy Joe Biden (redux times two)
+# Part 1: Sexy Joe Biden (redux times two)
 ```{r}
 # read in data
 biden <- read_csv("biden.csv")
 ```
-# Split the data into a training set (70%) and a validation set (30%). Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.
+####Split data into a training set (70%) and a validation set (30%). Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.
 
 ```{r}
 # For reproducibility
@@ -45,8 +47,7 @@ set.seed(123)
 biden_split <- resample_partition(biden, c(test = .3, train = .7))
 ```
 
-
-# Fit a decision tree to the training data, with biden as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE? Leave the control options for tree() at their default values
+#### Fit a decision tree to the training data, with biden as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE? Leave the control options for tree() at their default values
 
 ```{r}
 set.seed(123)
@@ -72,8 +73,7 @@ We evaluate the model with the testing data and find that the mean squared error
 
 The model shows that being a Democrat is the strongest predictor of feelings of warmth toward Joe Biden, being a Republican is the second-strongest predictor. These splits indicate that party affiliation is the most important factor in predicting an individual's feelings of warmth toward Joe Biden.
 
-
-# Now fit another tree to the training data with the following control options: tree(control = tree.control(nobs = # number of rows in the training set,mindev = 0)). Use cross-validation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?
+#### Now fit another tree to the training data with the following control options: tree(control = tree.control(nobs = # number of rows in the training set,mindev = 0)). Use cross-validation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?
 
 ```{r}
 set.seed(123) # For reproducibility
@@ -124,9 +124,9 @@ text(biden_pruned6, col='black')
 mse_biden_pruned
 
 ```
-Pruning to 6 nodes reduces the MSE from `r mse_biden_1` (which was obtained using all defaults) to `r mse_biden_pruned`.However `r mse_test` which was obtained in this set after splitting and before pruning gave a high mse for the test data implying that it overfitted during training with the 70 % data. The tree indicates that for Democrats, age is the next most important variable. Among Republicans age is important followed by education but educationis a factor only for voters aged 43.5 years and above. Gender, strangely has no effect. 
+Pruning to 6 nodes reduces the MSE from `r mse_biden_1` (which was obtained using all defaults) to `r mse_biden_pruned`.However `r mse_test` which was obtained in this set after splitting and before pruning gave a high mse for the test data implying that it overfitted during training with the 70 % data. The tree indicates that for Democrats, age is the next most important variable. Among Republicans age is important followed by education but educationis a factor only for voters aged 43.5 years and above. Gender, strangely has no effect.
 
-# Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+#### Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
 ```{r}
 set.seed(123)
 
@@ -233,15 +233,15 @@ data_frame(depth = c(1, 2, 4),
                col.names = c("Depth", "Optimal number of iterations"))
 biden_boost_1 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 3302, interaction.depth = 1)
+                                               n.trees = 3468, interaction.depth = 1)
 
 biden_boost_2 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2700, interaction.depth = 2)
+                                               n.trees = 2665, interaction.depth = 2)
 
 biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2094, interaction.depth = 4)
+                                               n.trees = 2160, interaction.depth = 4)
 predict.gbm <- function (object, newdata, n.trees, type = "link", single.tree = FALSE, ...) {
   if (missing(n.trees)) {
     if (object$train.fraction < 1) {
@@ -273,15 +273,15 @@ set.seed(123)
 
 biden_boost_1 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 3302, interaction.depth = 1,shrinkage=0.02)
+                                               n.trees = 3468, interaction.depth = 1,shrinkage=0.02)
 
 biden_boost_2 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2700, interaction.depth = 2,shrinkage=0.02)
+                                               n.trees = 2665, interaction.depth = 2,shrinkage=0.02)
 
 biden_boost_4 = gbm(as.numeric(biden) - 1 ~ .,
                                                data = biden_bag_data_train,
-                                               n.trees = 2094, interaction.depth = 4,shrinkage=0.02)
+                                               n.trees = 2160, interaction.depth = 4,shrinkage=0.02)
 
 mse_1 = mse(biden_boost_1,biden_bag_data_test)
 mse_1
