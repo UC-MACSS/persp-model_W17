@@ -1,0 +1,567 @@
+---
+title: 'Perspectives on Computational Modeling: Problem Set #7'
+author: "Xingyun Wu"
+date: "2017/2/26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR)
+library(tidyverse)
+library(readr)
+library(modelr)
+library(broom)
+library(dplyr)
+library(rcfss)
+library(knitr)
+library(splines)
+library(lattice)
+library(gam)
+library(stargazer)
+```
+
+
+```{r read-in the datasets, include=FALSE}
+bidenData <- read.csv(file="biden.csv")
+collegeData <- read.csv(file="College.csv")
+```
+
+
+## Part 1: Sexy Joe Biden (redux)
+
+1. The mean squared error for the linear regression model using the training set is 395.2702.
+
+```{r problem1_1, echo=FALSE}
+#define the function of MSE
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+# linear regression
+problem1_1 <- lm(biden ~ age + female + dem + rep + educ, data = bidenData)
+summary(problem1_1)
+
+# MSE
+mse(problem1_1, bidenData)
+```
+
+2. The test MSE fo the model using the validation set approach: 399.8303. Compared to the training MSE with the entire dataset, the test MSE is a little bit higher. This means the model fits the training data better, but on the other hand produces more errors when fitting the testing data.
+
+```{r problem1_2, echo=FALSE}
+# spit the sample
+set.seed(1234)
+biden_split <- resample_partition(bidenData, c(test = 0.3, train = 0.7))
+
+# fit the linear regression model
+problem1_2 <- lm(biden ~ age + female + dem + rep + educ, data = biden_split$train)
+summary(problem1_2)
+
+# MSE
+mse(problem1_2, biden_split$test)
+```
+
+3. After repeating the validation set approach 100 times, I found the test MSEs are not stable. According to the histogram generated with the 100 test MSEs, they could be widely spread. And everytime I rerun the validation set approach, the distribution of the test MSEs are not exactly the same.
+
+```{r problem1_3, echo=FALSE}
+mse_variable <- function(data){
+  data_split <- resample_partition(data, c(test = 0.3, train = 0.7))
+  data_train <- data_split$train %>%
+    tbl_df()
+  data_test <- data_split$test %>%
+    tbl_df()
+  
+  model = lm(biden ~ age+female+educ+dem+rep,
+                                          data = data_train)
+
+  results <- data_frame(MSE = mse(model, data_test))
+
+  return(results)
+}
+
+
+# build an empty dataframe
+data_split <- data.frame(MSE=c(NA))
+
+i <- 0
+while(i < 100){
+  i <- i + 1;
+  temp_mse <- mse_variable(bidenData)
+  data_split <- rbind(data_split, temp_mse)
+  data_split <- tail(data_split, 100)
+}
+
+ggplot(data_split, mapping=aes(x=MSE))+
+  geom_histogram(binwidth = 5, fill=I('blue'), col=I('black'))+
+  labs(title="The distribution of MSEs",
+         x="MSE",
+         y="Frequency")
+
+mean(data_split$MSE)
+```
+
+4. Using the leave-one-out cross-validation (LOOCV) approach, the test MSE is 397.9555. It is close to, but in many times of my running this approach smaller than the test MSEs estimated by the validation set approach. This means the LOOCV approach may produce less errors than the validation set approach. And the test MSE is very stable, which is another advantage over the validation set approach.
+
+```{r problem1_4, echo=FALSE}
+loocv_data <- crossv_kfold(bidenData, k = nrow(bidenData))
+
+loocv_models <- map(loocv_data$train, ~ lm(biden ~ age+female+educ+dem+rep, data = .))
+loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+mean(loocv_mse)
+```
+
+5. The mean MSE I got is 397.5972. Compared to the LOOCV approach, the test MSEs tends to be close to but lower for the 10-fold cross-validation approach.
+
+```{r problem1_5, echo=FALSE}
+cv10_data <- crossv_kfold(bidenData, k = 10)
+cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+mean(cv10_mse)
+```
+
+6. Repeat the 10-fold cross-validation approach 100 times, using 100 different splits of the observations into 10-folds, we get the results below. The mean MSE I got is 398.1786. And according to the histogram I got, most of the MSEs are located between 397 and 399, which are similar to and even many times higher than the single 10-fold cross-validation approach. Taking efficiency into consideration, I would prefer the single 10-fold cross-validation approach.
+
+```{r problem1_6, echo=FALSE}
+cv_mse <- c()
+for (i in 1:100){
+  cv10_data <- crossv_kfold(bidenData, k = 10)
+  cv10_models <- map(cv10_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+  cv10_mse <- map2_dbl(cv10_models, cv10_data$test, mse)
+  cv_mse[[i]] <- mean(cv10_mse)
+}
+mean(cv_mse)
+
+ggplot(mapping=aes(x=cv_mse))+
+  geom_histogram(binwidth = 0.1, fill=I('blue'), col=I('black'))+
+  labs(title="The distribution of MSEs",
+         x="MSE",
+         y="Frequency")
+```
+
+
+7. The estimated parameters are similar between the results of the original model in step 1 is close and the results of the bootstrap.
+  The standard errors are also similar. But for 4 out of 5 variables, `age`, `female`, `educ` and `rep`, the standard errors of the bootstrap is slightly larger than the standard errors of the original model. This may due to the bootstrap approach does not rely on any distributional assumptions.
+  
+```{r problem1_7_origin, echo=FALSE}
+# traditional parameter estimates and standard errors
+biden_lm <- lm(biden ~ age+female+educ+dem+rep, data = bidenData)
+tidy(biden_lm)
+```
+
+```{r problem1_7_boots, echo=FALSE}
+# bootstrapped estimates of the parameter estimates and standard errors
+biden_boot <- bidenData %>%
+  modelr::bootstrap(1000) %>%
+  mutate(model = map(strap, ~ lm(biden ~ age+female+educ+dem+rep, data = .)),
+         coef = map(model, tidy))
+
+biden_boot %>%
+  unnest(coef) %>%
+  group_by(term) %>%
+  summarize(est.boot = mean(estimate),
+            se.boot = sd(estimate, na.rm = TRUE))
+```
+
+
+## Part 2: College (bivariate)
+
+### 1. Instructional expenditure per student vs. out-of-state Tuition
+
+1.1 No transformation
+  This is a simple linear regression model, estimating the relationship between `Expend`, instructional expenditure per student, and `Outstate`, the out-of-state tuition, without transformation. According to the plot below, the simple linear regression without transforamtion does not fit the data vell, although it seems to have captured a positive relationship.
+  
+```{r problem2_1_model, echo=FALSE}
+sim_linear_mod <- lm(Outstate ~ Expend, data = collegeData)
+summary(sim_linear_mod)
+
+ggplot(collegeData, aes(Expend, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+```
+
+  The plot below shows the histogram of residuals. If the linear assumption holds true, the distribution of residuals should have been normally distributed. However, the distribution shown below is not strictly normal.
+  
+```{r problem2_1_residuals, echo=FALSE}
+sim_linear_pred <- collegeData %>%
+  add_predictions(sim_linear_mod) %>%
+  add_residuals(sim_linear_mod)
+
+# distribution of residuals
+ggplot(sim_linear_pred, aes(resid)) +
+  geom_histogram(aes(y = ..density..), binwidth=100) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(sim_linear_pred$resid),
+                            sd = sd(sim_linear_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+```
+
+  The residuals are not randomly distributed around the predicted values. They are correlated with fitted values, which again violate the linear assumption of OLS.
+  
+```{r problem2_1_pred&resid, echo=FALSE}
+# predicted vs. residuals
+ggplot(sim_linear_pred, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+
+1.2 Polynomial regression
+  This model has the same predictor and response as the previous model, but it applies the polynomial regression approach. According to the results of the model, the parameters for each one of linear, quadratic and cubic terms are statistically significant on the 0.001 significance level. With a better use of information, this model provides a better estimation, compared to the previous model without transformation.
+  And the parameter of the intercept becomes smaller and less statistically significant, which means some unexplained variance in the non-transformation model has been explained by this polynomial regression model.
+  
+```{r problem2_2_model, echo=FALSE}
+# estimate model
+problem2_2 <- glm(Outstate ~ I(Expend^1) + I(Expend^2) + I(Expend^3), data = collegeData)
+summary(problem2_2)
+```
+
+  According to the plot below, this approach fits the data well. Compared to the non-transformation model, more data points are fitted by this model and captured by the 95% confidence interval. This again justify the polynomial regression approach.
+  
+```{r problem2_2_estimate&plot, echo=FALSE}
+# estimate the predicted values and confidence interval
+college_pred <- augment(problem2_2, newdata = data_grid(collegeData, Expend)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+
+# plot the curve
+ggplot(college_pred, aes(Expend)) +
+  geom_point(data = collegeData, aes(Expend, Outstate), alpha = .05) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  labs(title = "Polynomial regression of Outstate vs. Expend",
+       subtitle = "With 95% confidence interval",
+       x = "Expend",
+       y = "Predicted percent of new students from out-of-state tuition")
+```
+
+```{r problem2_2_vcov, echo=FALSE}
+vcov(problem2_2) %>%
+  kable(caption = "Variance-covariance matrix of Outstate vs. Expend polynomial regression",
+        digits = 5)
+```
+
+
+### 2. Percent of faculty with Ph.D.'s vs. out-of-state tuition
+
+2.2 No transformation
+  First, we use a non-transformation linear model to see how it fits. Although the parameter for `PhD` is statistically significant on the 0.001 level, the plot shows that the relationship is not perfectly captured by the simple linear regression line and its 95% confidence interval.
+  
+```{r problem2_3_model, echo=FALSE}
+sim_linear_mod2 <- lm(Outstate ~ PhD, data = collegeData)
+summary(sim_linear_mod2)
+
+ggplot(collegeData, aes(PhD, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+```
+
+  Again, the residuals are not strictly normally distributed.
+  
+```{r problem2_3_residuals, echo=FALSE}
+sim_linear_pred2 <- collegeData %>%
+  add_predictions(sim_linear_mod2) %>%
+  add_residuals(sim_linear_mod2)
+
+# distribution of residuals
+ggplot(sim_linear_pred2, aes(resid)) +
+  geom_histogram(aes(y = ..density..), binwidth=100) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(sim_linear_pred$resid),
+                            sd = sd(sim_linear_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+```
+
+  The residuals are not randomly distributed. On the contrary, they are correlated with the fitted values, which is against the linear assumption. I need to use non=linear fitting techniques to solve this problem. 
+  
+```{r problem2_3_pred&resid, echo=FALSE}
+# predicted vs. residuals
+ggplot(sim_linear_pred2, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+2.2 Here I use the regression splines technique, since according to the plots above, I believe the relationship between `PhD` and `Outstate` needs the combination of monotonic transformations and piecewise polynomial approach.
+  The table below shows the results of regression splines with 3 knots. We could see that the parameters for the quadratic term and the cubic term are statistically significant on the 0.001 level. This means the relationship between `PhD` and `Outstate` is more than a simple linear relationship. This model provides better fit to the data.
+  
+```{r problem2_4_model, echo=FALSE}
+# estimate model
+outstate_spline <- glm(Outstate ~ bs(PhD, df = 3), data = collegeData)
+summary(outstate_spline)
+```
+
+  The plot below also shows that the regression splines technique is a better approach for this model, compared to the simple linear regression with no transformation.
+  
+```{r problem2_4_plot, echo=FALSE}
+# estimate the predicted values and confidence interval
+outstate_spline_pred <- augment(outstate_spline, newdata = data_grid(collegeData, PhD)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+
+# plot the curve
+ggplot(outstate_spline_pred, aes(PhD)) +
+  geom_point(data = collegeData, aes(PhD, Outstate), alpha = .05) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(collegeData$PhD, df = 3), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Cubic spline regression of Biden feeling thermometer",
+       subtitle = "3 knots, with 95% confidence interval",
+       x = "PhD",
+       y = "Predicted Outstate")
+```
+
+
+### 3. Room and board costs vs. out-of-state tuition
+3.1 No transformation
+  Similar to the previous step, we first build a model using linear regression without transformation. Although the parameter for `Room.Board` is statistically significant on the 0.001 level, the plot shows that there are too many data points that are not captured by the regression line and its 95% confidence interval, especially at the very left hand side and the very right hand side.
+  
+```{r problem2_5_model, echo=FALSE}
+sim_linear_mod3 <- lm(Outstate ~ Room.Board, data = collegeData)
+summary(sim_linear_mod3)
+
+ggplot(collegeData, aes(Room.Board, Outstate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Linear model for a linear relationship")
+```
+  
+  Again, the distribution of residuals are not strictly normal.
+  
+```{r problem2_4_residuals, echo=FALSE}
+sim_linear_pred3 <- collegeData %>%
+  add_predictions(sim_linear_mod3) %>%
+  add_residuals(sim_linear_mod3)
+
+# distribution of residuals
+ggplot(sim_linear_pred3, aes(resid)) +
+  geom_histogram(aes(y = ..density..), binwidth=100) +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(sim_linear_pred$resid),
+                            sd = sd(sim_linear_pred$resid))) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Residuals")
+
+```
+
+  Again, the residuals are somehow correlated with the fitted value.
+  
+```{r problem2_5_pred&resid, echo=FALSE}
+# predicted vs. residuals
+ggplot(sim_linear_pred3, aes(pred, resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = "Linear model for a linear relationship",
+       x = "Predicted values",
+       y = "Residuals")
+```
+
+  We should again use the regression splines technique for this model, since the first plot shows there is a combination of non-linear trend and local characteristics.
+
+3.2 Regression splines
+  The table below shows the results of regression splines with 4 knots. We could see that the parameters for the quadratic term , the cubic term and quartic term are statistically significant on the 0.001 level. This means the relationship between `Room.Board` and `Outstate` is more than a simple linear relationship. This model provides better fit to the data.
+  
+```{r problem2_6_model, echo=FALSE}
+# estimate model
+outstate_spline2 <- glm(Outstate ~ bs(Room.Board, df = 4), data = collegeData)
+summary(outstate_spline2)
+```
+
+  The plot shows that this model does a better job in capturing the relationship than the non-transformation model, espcially at the upper end when `Room.Board` gets above 7,000.
+  
+```{r problem2_6_plot, echo=FALSE}
+# estimate the predicted values and confidence interval
+outstate_spline_pred2 <- augment(outstate_spline2, newdata = data_grid(collegeData, Room.Board)) %>%
+  mutate(pred_low = .fitted - 1.96 * .se.fit,
+         pred_high = .fitted + 1.96 * .se.fit)
+
+# plot the curve
+ggplot(outstate_spline_pred2, aes(Room.Board)) +
+  geom_point(data = collegeData, aes(Room.Board, Outstate), alpha = .05) +
+  geom_line(aes(y = .fitted)) +
+  geom_line(aes(y = pred_low), linetype = 2) +
+  geom_line(aes(y = pred_high), linetype = 2) +
+  geom_vline(xintercept = attr(bs(collegeData$PhD, df = 3), "knots"),
+             linetype = 2, color = "blue") +
+  labs(title = "Cubic spline regression of Biden feeling thermometer",
+       subtitle = "4 knots, with 95% confidence interval",
+       x = "Room.Board",
+       y = "Predicted Outstate")
+```
+
+
+## Part 3: College (GAM)
+
+1. The data is splitted into a training set (70%) and a test set(30%).
+
+```{r problem3_1_split, echo=FALSE}
+set.seed(1234)
+college_split <- resample_partition(collegeData, c(test = 0.3, train = 0.7))
+```
+
+
+2. The table below shows the results of OLS model on the training data. Each one of the predictors is statistically significant on the 0.001 level. According to the p-value, the predictors explain about 72.32% of variance of the response. The train MSE is 4310543, while the test MSE is 3595260.
+
+```{r problem3_2_OLS, echo=FALSE}
+problem3_lm <- lm(Outstate ~ Private+Room.Board+PhD+perc.alumni+Expend+Grad.Rate, data = college_split$train)
+summary(problem3_lm)
+
+mse(problem3_lm, college_split$train)
+mse(problem3_lm, college_split$test)
+```
+
+
+3. The table below shows the results of the GAM model. I use the local regression fitting technique for this part, since there may be localized relationships between the predictors and the response.
+
+```{r problem3_3_GAM, echo=FALSE}
+problem3_gam <- gam(Outstate ~ Private + lo(Room.Board) + lo(PhD) + lo(perc.alumni) + lo(Expend) + lo(Grad.Rate), data = college_split$train)
+summary(problem3_gam)
+```
+
+  The plots below show the relationships between each of the predictors and the response `Outstate`.
+  According to the plot below, there is a positive relationship between `Room.Board` and `Outstate`. When the room and board costs increase, the out-of-state tuition also increases. But before the room and board costs reach 4,000, the slop is increasing when tthe costs are increasing. After it reach 4,000, the slop gets stable.
+  
+```{r problem3_3_plot Room.Board, ehco=FALSE}
+# get graphs of each term
+problem3_gam_terms <- preplot(problem3_gam, se = TRUE, rug = FALSE)
+
+## Room.Board
+data_frame(x = problem3_gam_terms$`lo(Room.Board)`$x,
+           y = problem3_gam_terms$`lo(Room.Board)`$y,
+           se.fit = problem3_gam_terms$`lo(Room.Board)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "Room.Board",
+       y = expression(f[1](Room.Board)))
+```
+
+  According to the plot below, we could see a generally positive relationship between `PhD` and `Outstate`. However, when the percent of falculty with Ph.D.'s is approximately between 30 and 50, the relationship is negative. But this does not influence the overall positive trend.
+  
+```{r problem3_3_plot PhD, ehco=FALSE}
+## PhD
+data_frame(x = problem3_gam_terms$`lo(PhD)`$x,
+           y = problem3_gam_terms$`lo(PhD)`$y,
+           se.fit = problem3_gam_terms$`lo(PhD)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "PhD",
+       y = expression(f[1](PhD)))
+```
+
+  According to the plot below, we could see a positive relationship between `perc.alumni` and `Outstate`. The out-of-state tuition gets increased with the increase of percent of alumni who donate.
+  
+```{r problem3_3_plot perc.alumni, ehco=FALSE}
+## perc.alumni
+data_frame(x = problem3_gam_terms$`lo(perc.alumni)`$x,
+           y = problem3_gam_terms$`lo(perc.alumni)`$y,
+           se.fit = problem3_gam_terms$`lo(perc.alumni)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "perc.alumni",
+       y = expression(f[1](perc.alumni)))
+```
+
+  With `Expend`, we could see that the relationship between `Expend` and `Outstate` is more complex than an OLS relationship. Before `Expend` gets to 30,000, the out-of-state tuition is increased with the increase of instructional expenditure per student. But when `Expend` gets larger than 30,000, the out-of-state tuition gets decreased with the increase of instructional expenditure per student.
+  
+```{r problem3_3_plot Expend, ehco=FALSE}
+## Expend
+data_frame(x = problem3_gam_terms$`lo(Expend)`$x,
+           y = problem3_gam_terms$`lo(Expend)`$y,
+           se.fit = problem3_gam_terms$`lo(Expend)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "perc.alumni",
+       y = expression(f[1](Expend)))
+```
+
+  With `Grad.Rate`, we could see that the relationship between `Grad.Rate` and `Outstate` is more complex than an OLS relationship. Before `Grad.Rate` gets to 80, the out-of-state tuition is increased with the increase of graduation rate. But when `Grad.Rate` gets larger than 80, the out-of-state tuition gets decreased with the increase of graduation rate.
+  
+```{r problem3_3_plot Grad.Rate, ehco=FALSE}
+## Grad.Rate
+data_frame(x = problem3_gam_terms$`lo(Grad.Rate)`$x,
+           y = problem3_gam_terms$`lo(Grad.Rate)`$y,
+           se.fit = problem3_gam_terms$`lo(Grad.Rate)`$se.y) %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit) %>%
+  ggplot(aes(x, y)) +
+  geom_line() +
+  geom_line(aes(y = y_low), linetype = 2) +
+  geom_line(aes(y = y_high), linetype = 2) +
+  labs(title = "GAM of out-of-state tuition",
+       subtitle = "Local regression",
+       x = "Grad.Rate",
+       y = expression(f[1](Grad.Rate)))
+```
+
+  With the plot for `Private`, we could see that being a private university has a substantially positive effect on out-of-state tuition.
+  
+```{r problem3_3_plot Private, echo=FALSE}
+data_frame(x = problem3_gam_terms$Private$x,
+           y = problem3_gam_terms$Private$y,
+           se.fit = problem3_gam_terms$Private$se.y) %>%
+  unique %>%
+  mutate(y_low = y - 1.96 * se.fit,
+         y_high = y + 1.96 * se.fit,
+         x = factor(x, levels = c('No', 'Yes'), labels = c("Public", "Private"))) %>%
+  ggplot(aes(x, y, ymin = y_low, ymax = y_high)) +
+  geom_errorbar() +
+  geom_point() +
+  labs(title = "GAM of out-of-state tuition",
+       x = NULL,
+       y = expression(f[3](Private)))
+```
+
+
+4. The test MSE for OLS model and the test MSE for GAM model are shown as below. We could see that the GAM model produces less errors than the OLS model.
+
+```{r problem3_4_evaluation, echo=FALSE}
+lin_mse <- mse(problem3_lm, college_split$test)
+lin_mse
+
+gam_mse <- mse(problem3_gam, college_split$train)
+gam_mse
+```
+
+
+5. According to the plots in part(3), `Expend` and `Grad.Rate` seem to have long-linear relationship with the response.
+  For `Expend`, approximately below 30,000, the relationship between `Expend` and `Outstate` is positive. But approximately above 30,000, the relationship between `Expend` and `Outstate` is getting negative. This would not be a linear relationship.
+  For `Grad.Rate`, it is similar. Approximately below 80, the relationship between `Grad.Rate` and `Outstate` is positive, but approximately above 80, the relationship between `Grad.Rate` and `Outstate` is negative. This would not be a linear relationship.
+ 
