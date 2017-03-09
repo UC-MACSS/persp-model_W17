@@ -1,0 +1,119 @@
+---
+title: "Problem Set 8 | MACS 301"
+author: "Julian McClellan"
+date: "Due 3/6/17"
+output:
+  html_document: default
+  pdf_document: 
+    latex_engine: lualatex
+---
+```{r setup, echo = FALSE, include = FALSE, message = FALSE}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(titanic)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(purrr)
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE
+                      )
+options(digits = 3)
+theme_set(theme_minimal())
+```
+
+# Attitudes towards feminists
+
+#### 1. Split the data into a training set (70%) and a validation set (30%). *Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.*
+
+We utilize 70% of the data as training data, and the remaining 30% as testing data.
+
+```{r echo = TRUE}
+fem_df <- read_csv('data/feminist.csv') 
+  # mutate_each(funs(as.factor(.)), income, female, dem, rep)
+  
+set.seed(1234) # For reproducibility
+fem_split <- resample_partition(fem_df, c(test = .3, train = .7))
+
+fem_train <- fem_df[fem_split$train$idx,]
+fem_test <- fem_df[fem_split$test$idx,]
+```
+
+***
+
+#### 2. Calculate the test MSE for KNN models with K = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+```{r}
+data_frame(k_vals = seq(5, 100, by = 5),
+           knn_models = map(k_vals, ~ 
+                              knn.reg(as.data.frame(select(fem_train, -feminist)), 
+                                      y = as.vector(as.data.frame(select(fem_train, feminist))), 
+                                                    test = as.data.frame(select(fem_test, -feminist)),
+                                                    k = .)
+                            ),
+           mse = map_dbl(knn_models, ~ mean((fem_test$feminist - .$pred) ^ 2))
+) %>% 
+{.} -> df
+
+min_mse_num_neighbors <- df$k_vals[which.min(df$mse)]
+best_knn_model <- df$knn_models[min_mse_num_neighbors]
+
+df %>%
+  ggplot(aes(k_vals, mse)) +
+    geom_line() +
+    scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_mse_num_neighbors)) +
+    geom_vline(aes(color = 'Min MSE', xintercept = min_mse_num_neighbors), linetype = 'dashed', show.legend = TRUE) +
+    annotate('text', x = 44, y = 500, label = sprintf('Minimum MSE at %d neighbors in KNN Regression', min_mse_num_neighbors)) + 
+     labs(title = 'Test MSE of KNN Regression on Feminist Warmth Score',
+         subtitle = 'All Predictors Used | Values of k: 5, 10, 15, . . . 100',
+         y = 'Test MSE',
+         x = 'Number of Neighbors (k)',
+         color = '')
+```
+
+***
+
+#### 3. Calculate the test MSE for weighted KNN models with K = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
+
+```{r}
+data_frame(k_vals = seq(5, 100, by = 5),
+           knn_models = map(k_vals, ~ 
+                              kknn(feminist ~ ., train = fem_train, 
+                                   test = fem_test, k = .)
+                            ),
+           mse = map_dbl(knn_models, ~ mean((fem_test$feminist - .$fitted.values) ^ 2))
+) %>% 
+{.} -> df
+
+min_mse_num_neighbors <- df$k_vals[which.min(df$mse)]
+best_wknn_model <- df$knn_models[min_mse_num_neighbors]
+
+df %>%
+  ggplot(aes(k_vals, mse)) +
+    geom_line() +
+    labs(title = 'Test MSE of Weighted KNN Regression on Feminist Warmth Score',
+         subtitle = 'All Predictors Used | Values of k: 5, 10, 15, . . . 100',
+         y = 'Test MSE',
+         x = 'Number of Neighbors (k)', 
+         color = '') +
+    scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_mse_num_neighbors)) +
+    geom_vline(aes(color = 'Min MSE', xintercept = min_mse_num_neighbors), linetype = 'dashed', show.legend = TRUE) +
+    annotate('text', x = 60, y = 500, label = sprintf('Minimum MSE at %d neighbors in KNN Regression', min_mse_num_neighbors))
+```
+
+***
+
+#### 4. Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r}
+df <- data_frame(model_labs = c('Best KNN', 'Best wKNN', 'Linear Regression', 'Decision Tree', 'Boosting', 'Random Forest'))
+```
