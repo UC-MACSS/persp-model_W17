@@ -36,4 +36,14 @@ Demonstration scripts for MACS 30100
 # Support vector machines
 
 * [Statistical learning: support vector machines](http://cfss.uchicago.edu/persp009_svm.html)
-* [Slides for tree-based methods](http://cfss.uchicago.edu/extras/persp_svm_slides.html)
+* [Slides for support vector machines](http://cfss.uchicago.edu/extras/persp_svm_slides.html)
+
+# Non-parametric methods
+
+* [Statistical learning: non-parametric methods](http://cfss.uchicago.edu/persp010_nonparametric.html)
+* [Slides for non-parametric methods](http://cfss.uchicago.edu/extras/persp_nonparametric_slides.html)
+
+# Unsupervised learning
+
+* [Statistical learning: unsupervised learning](http://cfss.uchicago.edu/persp011_unsupervised.html)
+* [Slides for unsupervised learning](http://cfss.uchicago.edu/extras/persp_unsupervised_slides.html)
