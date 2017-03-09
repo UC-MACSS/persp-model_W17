@@ -53,10 +53,12 @@ Attitudes towards feminists \[3 points\]
         24. AA. $135,000-$149,999
         25. BB. $150,000 and over
 
+Estimate a series of models explaining/predicting attitudes towards feminists.
+
 1.  Split the data into a training and test set (70/30%).
 2.  Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
 3.  Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
-4.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+4.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 Voter turnout and depression \[2 points\]
 =========================================
@@ -72,10 +74,12 @@ The 1998 General Social Survey included several questions about the respondent's
 -   `married` - 1 if the respondent is currently married, 0 otherwise
 -   `inc10` - Family income, in $10,000s
 
+Estimate a series of models explaining/predicting voter turnout.
+
 1.  Split the data into a training and test set (70/30).
-2.  Calculate the test MSE for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
-3.  Calculate the test MSE for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test MSE?
-4.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+2.  Calculate the test error rate for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+3.  Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?
+4.  Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 Colleges \[2 points\]
 =====================
