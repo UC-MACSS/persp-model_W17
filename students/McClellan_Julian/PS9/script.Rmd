@@ -1,5 +1,5 @@
 ---
-title: "Problem Set 8 | MACS 301"
+title: "Problem Set 9 | MACS 301"
 author: "Julian McClellan"
 date: "Due 3/6/17"
 output:
@@ -22,6 +22,11 @@ library(gridExtra)
 library(FNN)
 library(kknn)
 library(purrr)
+library(tree)
+library(gbm)
+library(randomForest)
+library(caret)
+
 knitr::opts_chunk$set(cache = TRUE,
                       message = FALSE,
                       warning = FALSE,
@@ -44,8 +49,8 @@ fem_df <- read_csv('data/feminist.csv')
 set.seed(1234) # For reproducibility
 fem_split <- resample_partition(fem_df, c(test = .3, train = .7))
 
-fem_train <- fem_df[fem_split$train$idx,]
-fem_test <- fem_df[fem_split$test$idx,]
+fem_train <- fem_df[fem_split$train$idx, ]
+fem_test <- fem_df[fem_split$test$idx, ]
 ```
 
 ***
@@ -53,6 +58,33 @@ fem_test <- fem_df[fem_split$test$idx,]
 #### 2. Calculate the test MSE for KNN models with K = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
 
 ```{r}
+# Based off of resampling class ntoes
+calc_mse <- function(model, data, response = 'feminist'){
+  model_type <- class(model)
+  
+  if (length(model_type) == 2) {
+    model_type <- model_type[2]
+}
+  if (model_type %in% c('lm', 'tree','randomForest')) {
+      x <- modelr:::residuals(model, data)
+      mean(x ^ 2, na.rm = TRUE)
+  } else if (model_type == 'knnReg') {
+                             # Need to access response vector directly.
+    mse <- mean((model$pred - data$data[data$idx, ][[response]]) ^ 2)
+    return(mse)
+  } else if (model_type == 'kknn') {# Weighted KNN
+    mse <- mean((model$fitted.values - data$data[data$idx, ][[response]]) ^ 2)
+      # mean((model$fitted.values - data$data[data$idx, ][[response]]) ^ 2)
+    return(mse)
+  } else if(model_type == 'gbm') {
+    mse <- mean((data$data[data$idx, ][[response]] - 
+                     predict(biden.boost, newdata = biden.split$test, n.trees = pred_trees)) ^ 2)
+    return(mse)
+  }
+  
+}
+
+
 data_frame(k_vals = seq(5, 100, by = 5),
            knn_models = map(k_vals, ~ 
                               knn.reg(as.data.frame(select(fem_train, -feminist)), 
@@ -65,7 +97,7 @@ data_frame(k_vals = seq(5, 100, by = 5),
 {.} -> df
 
 min_mse_num_neighbors <- df$k_vals[which.min(df$mse)]
-best_knn_model <- df$knn_models[min_mse_num_neighbors]
+best_knn_model <- df$knn_models[[which.min(df$mse)]]
 
 df %>%
   ggplot(aes(k_vals, mse)) +
@@ -85,6 +117,8 @@ df %>%
 #### 3. Calculate the test MSE for weighted KNN models with K = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
 
 ```{r}
+
+
 data_frame(k_vals = seq(5, 100, by = 5),
            knn_models = map(k_vals, ~ 
                               kknn(feminist ~ ., train = fem_train, 
@@ -95,7 +129,7 @@ data_frame(k_vals = seq(5, 100, by = 5),
 {.} -> df
 
 min_mse_num_neighbors <- df$k_vals[which.min(df$mse)]
-best_wknn_model <- df$knn_models[min_mse_num_neighbors]
+best_wknn_model <- df$knn_models[[which.min(df$mse)]]
 
 df %>%
   ggplot(aes(k_vals, mse)) +
@@ -107,7 +141,8 @@ df %>%
          color = '') +
     scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_mse_num_neighbors)) +
     geom_vline(aes(color = 'Min MSE', xintercept = min_mse_num_neighbors), linetype = 'dashed', show.legend = TRUE) +
-    annotate('text', x = 60, y = 500, label = sprintf('Minimum MSE at %d neighbors in KNN Regression', min_mse_num_neighbors))
+    annotate('text', x = 60, y = 500, label = sprintf('Minimum MSE at %d neighbors in KNN Regression', min_mse_num_neighbors)) +
+    annotate('text', x = 61, y = 480, label = 'Test MSE appears to be monotonically decreasing with k')
 ```
 
 ***
@@ -115,5 +150,28 @@ df %>%
 #### 4. Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 ```{r}
-df <- data_frame(model_labs = c('Best KNN', 'Best wKNN', 'Linear Regression', 'Decision Tree', 'Boosting', 'Random Forest'))
+
+
+df <- data_frame(model = list('Best KNN (knn)' = best_knn_model, 'Best wKNN (kknn)' = best_wknn_model,
+                              'Linear Regression (lm) ' = lm(feminist ~ ., data = fem_split$train),
+                              'Decision Tree (tree)' = tree(feminist ~ ., data = fem_split$train),
+                              'Boosting (2000 Trees)' = gbm(feminist ~ ., data = fem_split$train, distribution = 'gaussian',
+                                                n.trees = 2000, interaction.depth = 2), 
+                              'Random Forest (500 Trees)' = randomForest(feminist ~ ., data = fem_split$train,
+                                                                         importance = TRUE, ntree = 500)),
+                 mse = map_dbl(model, ~ calc_mse(., data = fem_split$test))
+)
+
+stats = list('min_mse' = min(df$mse), 'min_mse_model_name' = names(df$model[which.min(df$mse)]))
+tdf <- data_frame(model = list('Best KNN' = best_knn_model, 'best wKNN' = best_wknn_model),
+                  vals = c(5, 4))
+
+df %>%
+  ggplot(aes(names(model), mse)) +
+    geom_col(aes(fill = names(model)), width = 1, show.legend = FALSE) +
+    coord_flip() + 
+    labs(title = 'Test MSE for Feminist Warmth Score for Various Methods (All Predictors)',
+         subtitle = sprintf('Best Method: %s (%i Test MSE)', stats$min_mse_model_name, as.integer(stats$min_mse)),
+      fill = 'Method') +
+    theme(plot.title = element_text(hjust = 2))
 ```
