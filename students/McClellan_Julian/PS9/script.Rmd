@@ -78,7 +78,7 @@ calc_mse <- function(model, data, response = 'feminist'){
     return(mse)
   } else if(model_type == 'gbm') {
     mse <- mean((data$data[data$idx, ][[response]] - 
-                     predict(biden.boost, newdata = biden.split$test, n.trees = pred_trees)) ^ 2)
+                     predict(model, newdata = data, n.trees = model$n.trees)) ^ 2)
     return(mse)
   }
   
@@ -172,6 +172,8 @@ df %>%
     coord_flip() + 
     labs(title = 'Test MSE for Feminist Warmth Score for Various Methods (All Predictors)',
          subtitle = sprintf('Best Method: %s (%i Test MSE)', stats$min_mse_model_name, as.integer(stats$min_mse)),
+         x = '',
+         y = 'Test MSE',
       fill = 'Method') +
     theme(plot.title = element_text(hjust = 2))
 ```
