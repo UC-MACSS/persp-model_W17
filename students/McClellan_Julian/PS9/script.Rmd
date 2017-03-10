@@ -60,23 +60,18 @@ fem_test <- fem_df[fem_split$test$idx, ]
 ```{r}
 # Based off of resampling class ntoes
 calc_mse <- function(model, data, response = 'feminist'){
-  model_type <- class(model)
-  
-  if (length(model_type) == 2) {
-    model_type <- model_type[2]
-}
-  if (model_type %in% c('lm', 'tree','randomForest')) {
+  if (any(class(model) %in% c('lm', 'tree','randomForest'))) {
       x <- modelr:::residuals(model, data)
       mean(x ^ 2, na.rm = TRUE)
-  } else if (model_type == 'knnReg') {
+  } else if (any(class(model) == 'knnReg')) {
                              # Need to access response vector directly.
     mse <- mean((model$pred - data$data[data$idx, ][[response]]) ^ 2)
     return(mse)
-  } else if (model_type == 'kknn') {# Weighted KNN
+  } else if (any(class(model) == 'kknn')) {# Weighted KNN
     mse <- mean((model$fitted.values - data$data[data$idx, ][[response]]) ^ 2)
       # mean((model$fitted.values - data$data[data$idx, ][[response]]) ^ 2)
     return(mse)
-  } else if(model_type == 'gbm') {
+  } else if(any(class(model) == 'gbm')) {
     mse <- mean((data$data[data$idx, ][[response]] - 
                      predict(model, newdata = data, n.trees = model$n.trees)) ^ 2)
     return(mse)
@@ -150,8 +145,6 @@ df %>%
 #### 4. Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 ```{r}
-
-
 df <- data_frame(model = list('Best KNN (knn)' = best_knn_model, 'Best wKNN (kknn)' = best_wknn_model,
                               'Linear Regression (lm) ' = lm(feminist ~ ., data = fem_split$train),
                               'Decision Tree (tree)' = tree(feminist ~ ., data = fem_split$train),
