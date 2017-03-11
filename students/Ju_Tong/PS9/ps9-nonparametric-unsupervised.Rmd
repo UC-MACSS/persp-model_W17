@@ -1,0 +1,304 @@
+---
+title: "Problem set #9: nonparametric methods and unsupervised learning"
+author: "Tong Ju"
+date: "**2017.3.11**"
+output:
+  github_document:
+    toc: true
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', warning = FALSE)
+# getwd()
+# setwd("/Users/tongju/Desktop/MAC-Surface/CSS-HW/MACS_2017_Winter/persp-model/students/Ju_Tong/PS9")
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+# install packages FNN and kknn
+# install.packages("FNN")
+# install.packages("kknn")
+library(FNN)
+library(kknn)
+library(tree)
+library(e1071)
+library(ggdendro)
+library(randomForest)
+library(gbm)
+library(pander)
+
+# set parameters
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+
+#import the dataset
+fem = read_csv('data/feminist.csv')
+mh = read_csv('data/mental_health.csv')
+college = read_csv('data/College.csv')
+usar = read_csv('data/USArrests.csv')
+
+
+
+```
+
+# 1. Attitudes towards feminists 
+
+###1) Split the data into a training and test set (70/30%).
+
+```{r 1-split-data}
+set.seed(1234)
+# Factorize some string variables in the dataset
+fem1<-fem %>%
+  mutate (dem = factor (dem, levels =0:1, labels = c("non-dem","dem")),
+          rep = factor (rep, levels =0:1, labels = c("non-rep", "redp")),
+          inc = factor (income, levels = 1: 25, labels = c("0","3","5","7.5","10","11","12.5","15","17","20","22","25","30","35","40","45","50","60","75","90","100","110","120","135","150"))) %>%
+  mutate (inc=as.numeric(as.character(inc)))%>%
+  # romove any missing values
+  na.omit()
+
+#split the data set to training/test set (70%:30%) as required:
+fem_split <- resample_partition(fem1, c(test = 0.3, train = 0.7))
+fem_train <- as_tibble(fem_split$train)
+fem_test <- as_tibble(fem_split$test)
+```
+In this section, I mutate the string variable of income to the continuous variable `inc` (the number of `inc` is viewed as the starting value of `income` range, divided by 1000), and also separate the data set to test and training data set.  
+
+###2) Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+First, I choose the `inc`, `educ`,and `female` as my independent variables. (Below is the plot of the conditional feminist attitude score vs. income, indicating there is some relation between the income or age and the feminist score.) In addition, I suppose the gender (`female`) should has some relationship with the feminist score, since this attitude is highly associated with the gender identity. 
+
+In the KNN plots, we find as the K increases, the MSE increses, indicating 1) our model is rather non-linear, otherwise the KNN plot will show the converse trends; 2) the larger the K, more likely the generated model overfitting acorss the training data, leading to the higher MSE. 
+```{r 1-KNN-2}
+# Plot of the conditional feminist attitude vs. the income and education level. 
+fem1 %>%
+  group_by(inc) %>%
+  summarize(mean = mean(feminist),
+            sd = sd(feminist)) %>%
+  ggplot(aes(inc, mean, ymin = mean - sd, ymax = mean + sd)) +
+  geom_errorbar() +
+  geom_point() +
+  geom_smooth(se=FALSE)+
+  labs(title = "Conditional feminist attitude score, by income",
+       subtitle = "Plus/minus SD with regression curve",
+       x = "Income (in 1000 dolloars)",
+       y = "Feminist Score")
+
+fem1 %>%
+  group_by(educ) %>%
+  summarize(mean = mean(feminist),
+            sd = sd(feminist)) %>%
+  ggplot(aes(educ, mean, ymin = mean - sd, ymax = mean + sd)) +
+  geom_errorbar() +
+  geom_point() +
+  geom_smooth(se=FALSE)+
+  labs(title = "Conditional feminist attitude score, by education level",
+       subtitle = "Plus/minus SD with regression curve",
+       x = "Education years",
+       y = "Feminist Score")
+
+## estimate the MSE for LM and KNN models:
+
+# define the MSE() function:
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+# estimate the MSE for LM
+mse_lm <- lm(feminist ~ educ + female + inc, data = fem_train) %>%
+  mse(.,fem_test)
+
+# estimate the MSE for KNN K=5, 10, 15, 20, 25,..., 100
+mse_knn <- data_frame(k = seq(5, 100, by = 5), 
+                      knn = map(k, ~ knn.reg(select(fem_train, -age, -income, -dem, -rep), y = fem_train$feminist, test = select(fem_test, -age, -income, -dem, -rep), k = .)), 
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2))) 
+
+# plot the MSE vs. k value
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "KNN on Feminist Score data",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+
+```
+
+
+###3) Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
+
+```{r 1-KNN-3}
+
+## estimate the MSE for weighted KNN models (K=5, 10, 15, 20, 25,..., 100): 
+mse_knn_w <- data_frame(k = seq(5, 100, by = 5), 
+                      wknn = map(k, ~ kknn(feminist ~ educ + female + inc, train = fem_train, test = fem_test, k = .)), 
+                      mse_wknn = map_dbl(wknn, ~ mean((fem_test$feminist - .$fitted.values)^2))) %>%
+  left_join(mse_knn, by = "k") %>%
+  mutate(mse_knn = mse)%>%
+  select (k, mse_knn, mse_wknn) %>%
+  gather(method,mse, -k) %>%
+  mutate(method = str_replace(method, "mse_", ""))%>%
+  mutate(method = factor (method, levels = c("knn","wknn"), labels = c("KNN","Weighted KNN"))) 
+
+
+mse_knn_w %>%
+  ggplot(aes(k, mse, color = method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(title = "Test MSE for linear regression vs. KNN",
+       subtitle = "Traditional and weighted KNN",
+       x = "K",
+       y = "Test mean squared error",
+       method = NULL) +
+  expand_limits(y = 0) +
+  theme(legend.position = "bottom")
+```
+
+As shown above, the green curve stands for the MSE for the weighted KNN method, the red curve stands fot the KNN method, and the dashed line is for the OLS. It is obvious that traditional KNN has much lower test MSE than the weighted KNN or the OLS. This result indicates that given only 3 independent variables, the traditional KNN method works much better than both of the weighted KNN and OLS. It is perhaps because the weighted KNN would overfit the data, and the OLS cannot reflect the non-linearality of the data. 
+
+###4) Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+In the above section, I have compared the test MSE for KNN, weighted KNN and simple OLS model.I will test the other methods like decision tree and random forest methods using the same combination of variables, as follows:
+
+```{r 1-KNN-and-other-models}
+
+set.seed(1234)
+# Single tree model:
+tree <- tree(feminist ~ educ + female +inc, data = fem_train)
+
+#Plot tree
+tree_data <- dendro_data(tree)
+
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
+  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Feminist Attitude Score Tree",
+       subtitle = "Feminist warmth ~ education + gender + income")
+
+mse_tree <- mse(tree, fem_test)
+
+# Random Forests:
+rf<- randomForest(feminist ~ educ + female +inc, data = fem_train, ntree = 500)
+
+data_frame(var = rownames(importance(rf)),
+           MeanDecreaseRSS = importance(rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseRSS)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Feminist Attitude Score",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+
+mse_rf <- mse(rf, fem_test)
+
+```
+
+From the Random Forest model, it is obvious that there is strong correlation between the income wiht the feminist attitude. 
+
+For Boosting method, I have set the depth = 1, and optimize the iteration step 1308, and the shrinkage as 0.006, leading to the minimal MSE = 441 
+
+```{r 1-KNN-and-boosting}
+
+set.seed(1234)
+# Define a function to calculate the MSE for each bossting model
+mse_boost <-function(model, test, tree_number) {
+  yhat.boost <- predict (model, newdata = test, n.trees=tree_number)
+  mse <- mean((yhat.boost - (as_tibble(test))$feminist)^2)
+  return (mse)
+}
+
+boost <- gbm(feminist ~ educ + female +inc, data = fem_train, n.trees = 5000, interaction.depth = 1)
+
+# Optimize the iteration steps
+opt_it = gbm.perf(boost, plot.it = FALSE)
+
+# optimize the shrinkage parameter
+s <- c(0.00025, 0.0005, 0.001, 0.002, 0.004, 0.006, 0.008, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.2, 0.4)
+
+MSE<-list()
+for (i in s) {
+  boost <- gbm(feminist ~ educ + female +inc, data = fem_train,n.trees = 1308, interaction.depth = 1, shrinkage = i)
+  MSE <- append(MSE, mse_boost(boost,fem_test, 1308))
+}
+
+MSE_lambda<-data_frame (shrinkage = s,
+            MSE = unlist(MSE))
+
+ggplot(MSE_lambda, aes(x=shrinkage, y=MSE)) +
+  geom_line()+
+  labs(x = "Shrinkage parameter",
+       y = "test MSE",
+       title = "MSE vs. Shrinkage parameter (0.00025 ~ 0.4) for Boosting",
+       subtitle ="num. of trees = 1308, interaction depth = 1")
+
+
+sum <- data_frame("model" = c("KNN (k=5)", "Weighted KNN (k=100)", "Single Tree", "Random Forest", "Optimized Boosting","OLS"),
+                  "test MSE" = c(5.73, 445.32, mse_tree, mse_rf, 441, mse_lm))
+pander(sum)
+
+```
+ 
+According to the table above, it is the traditional KNN that gives the minimal test MSE. On the other hand, all the other five models have very similar test MSE, ranging from 441 to 446. As a non-parametric mehtod, KNN, works much better than the OLS model, this is because the non-parametric mehtod relaxes the linear assumption and thus can better reflect the real structural features of the data. 
+
+In our case, it appears the traditional KNN also performs better than all the other non-parametric mehtods. In my opinion, this is because the traditional KNN is able to avoid some overfitting problems, which might influece the test MSE in other 4 mehtods. In addition, in our case, since there are only 3 independent variables, the drawback of traditional KNN in the higher dimension data space is not so obvious. This could be the second reason why traditional KNN overbeats other methods. In the demo sample of Dr Soltoff, we have also observed that in different kinds of data, KNN and weighted KNN can give rather different results. In some data set, like `Biden`, traditional KNN also works much better than the weighted KNN. However, in other cases, it does not. This indicates which non-parametric method can better fit the data is highly dependent on the data set itself, its linearality, the number of parameters, and so on.
+
+
+
+
+
+
+
+
+#2. Voter turnout and depression 
+
+###1) Split the data into a training and test set (70/30).
+
+
+###2) Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+
+###3) Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
+
+
+###4) Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+#3. Colleges 
+Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+
+
+
+
+#4. Clustering states
+
+###1) Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+###2) Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+###3) Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+###4) Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+###5) Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+
+###6) Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+###7) Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+###8) Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+
+
