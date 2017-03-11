@@ -1,0 +1,390 @@
+---
+title: "PS7"
+author: "William L. Guzman"
+date: "February 24, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+####PS7: Resample Nonlinear 
+
+####Part 1: Joe Biden (redux) [4 points]
+
+#####1. Estimate the training MSE of the model using the traditional approach. Fit the linear regression model using the entire dataset and calculate the mean squared error for the training set.
+
+```{r}
+#Get Libraries
+library (dplyr)
+library(ggplot2)
+library(readr)
+library(modelr)
+library(broom)
+library(tidyr)
+library(caret)
+library(pROC)
+library(purrr)
+library(splines)
+library(gam)
+
+theme_set(theme_minimal())
+
+#Get the Data 
+filePath <- ("C:/Users/Walle/Desktop/Winter Quarter (2016-2017)/MACS 30100/persp-model/students/GuzmanDaughertyW/PS7/Data")
+
+bidenDat <-read.csv(file=paste(filePath,"biden.csv",sep="/"))
+
+#Part 1: 
+bidenLM <- lm(biden ~. , data = bidenDat)
+
+#Get the MSE of the linear model.
+mseModel <- function(sm)
+  mean(sm$residuals^2)
+
+(bidenLMMSE <- mseModel(bidenLM))
+
+```
+
+####2. Estimate the test MSE of the model using the validation set approach.
+####How does this value compare to the training MSE from step 1?
+The MSE value from the complete data set is 395. After using only the training data set, the MSE is 393. We had a difference of 2 unit. 
+
+```{r}
+
+#Split the sample in 2 (Validation Set): training set (70%) and a validation set (30%)
+sampleSize <- floor(nrow(bidenDat)*0.70)
+
+set.seed(1234)
+
+datIndex <- sample(seq_len(nrow(bidenDat)), size = sampleSize)
+
+bidenDataTrain <-  bidenDat[datIndex, ]
+bidenDataTest  <-  bidenDat[-datIndex, ]
+
+#Fit the linear regression model using only the training observations.
+bidenLMTrain <- lm(biden ~. , data = bidenDataTrain)
+bidenLMTest  <- lm(biden~., data = bidenDataTest)
+
+#Calculate the MSE using only the test set observations.
+(mseModel(bidenLM))
+(mseModel(bidenLMTest))
+
+```
+
+####3. Repeat the validation set approach 100 times, using 100 different splits of the observations into a training set and a validation set. Comment on the results obtained.
+After doing repeating the setps 100 times, we can see that the MSE for the train data goes from 370 to 422 and the MSE of the Test data goes from 328 to 446. Compare to the MSE of the whole data set (395), we can see that the Test data has more variability on the results.  
+
+
+```{r}
+#Making the 100 validation test 
+n <- 100 
+
+mseMatrix <- matrix(data=NA,nrow=100,ncol=2)
+
+colnames(mseMatrix) <- c("TrainMSE", "TestMSE")
+
+set.seed(1234)
+
+for(n in 1:100)
+{
+  datIndex <- sample(seq_len(nrow(bidenDat)), size = sampleSize)
+
+  bidenDataTrain <-  bidenDat[datIndex, ]
+  bidenDataTest  <-  bidenDat[-datIndex, ]
+  
+  bidenLMTrain <- lm(biden ~. , data = bidenDataTrain)
+  bidenLMTest  <- lm(biden~.,   data = bidenDataTest)
+  
+  mseMatrix[n,1] <- (mseModel(bidenLMTrain))
+  mseMatrix[n,2] <- (mseModel(bidenLMTest))
+  
+}
+
+head(mseMatrix)
+
+summary(mseMatrix)
+
+```
+
+####4. Estimate the test MSE of the model using the leave-one-out cross-validation (LOOCV) approach. Comment on the results obtained.
+
+```{r}
+#LOOCV Approach 
+#loocv_data <- crossv_kfold(bidenDat, k = nrow(bidenDat))
+#loocv_models <- map(loocv_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+#loocv_mse <- map2_dbl(loocv_models, loocv_data$test, mse)
+#loocv_mean_mse <- mean(loocv_mse)
+
+```
+
+####5. Estimate the test MSE of the model using the $10$-fold cross-validation approach. Comment on the results obtained.
+
+```{r}
+
+#cv10Data   <- crossv_kfold(bidenDat, k = 10)
+#cv10Models <- map(cv10Data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+#cv10MSE    <- map2_dbl(cv10Models, cv10Data$test, mse)
+#tenFold_mean_mse <- mean(tenFold_mse)
+ 
+# mseFoldCal <- function(i) {
+#   tenFold_data <- crossv_kfold(data, k = 10)
+#   tenFold_models <- map(tenFold_data$train, ~ lm(biden ~ age + female + educ + dem + rep, data = .))
+#   tenFold_mse <- map2_dbl(tenFold_models, tenFold_data$test, mse)
+#   tenFold_mean_mse <- mean(tenFold_mse)
+# }
+
+```
+
+####6. Repeat the $10$-fold cross-validation approach 100 times, using 100 different splits of the observations into $10$-folds. Comment on the results obtained.
+
+```{r}
+#
+#set.seed(1234)
+#cv10df <- data.frame(index = 1:100)
+#cv10df$mse <- unlist(lapply(cv10df$index, mseFoldCal))
+
+```
+
+####7. Compare the estimated parameters and standard errors from the original model in step 1 (the model estimated using all of the available data) to parameters and standard errors estimated using the bootstrap ($n = 1000$).
+
+```{r}
+#biden_boot <- biden %>%
+#  modelr::bootstrap(1000) %>%
+#  mutate(model = map(bidenDat, ~ lm(biden ~ age + female + educ + dem + rep, data = bidenDat)),
+#         coef = map(model, tidy))
+
+#biden_boot %>%
+#  unnest(coef) %>%
+#  group_by(term) %>%
+#  summarize(est.boot = mean(estimate),
+#            se.boot = sd(estimate, na.rm = TRUE))
+
+```
+
+####Part 2: College (bivariate) [3 points]
+
+####1. Explore the bivariate relationships between some of the available predictors and Outstate. 
+
+####Model 1: Outstate ~ Grad.Rate  
+First we will create a linear model of the Oustate variable with the predictor variable, Grad.Rate. The purpose is to see if there exist a linear regression between these two variables. We can plot the data do have a visual idea of our model. After creating the model, we can see that our p-value is only .326. We can tell that Grad.Rate is not a good predictor variable.  
+After seeing the cross validation model, we have that the MSE of the model is 1,0888,407. We now perform a log transformation to see if our model can be improve. We can see that the Log transformation make the model worse, lowering the p-value to 0.284. The MSE for the model is now 11,567,662. We can see is off from our initial MSE. If we see our plot, we can see there is some kind of linear regression, but after doing the model, we can see that there is no relationship between Grad.Rate and Outstate. 
+
+
+```{r}
+#Create 3 simplear model Regression 
+
+#Get the Data 
+collegeDat <-read.csv(file=paste(filePath,"college.csv",sep="/"))
+
+#Create the linear model: Oustate ~ Grad.Rate 
+collegeLM1 <- lm(Outstate~Grad.Rate,data = collegeDat)
+
+summary(collegeLM1)
+
+#Create the residuals and predictors of the linear model 
+collegeDat %>%
+  add_predictions(collegeLM1) %>%
+  add_residuals(collegeLM1) %>%
+  {.} -> mod1grid
+
+#Plot the data 
+collegeLM1Plot <- ggplot(aes(Grad.Rate, Outstate), data = collegeDat) +
+  geom_point() + 
+  geom_line(aes(y=pred), data = mod1grid, color = 'red', size = 1) +
+  labs(title = "Model 1: Graduation Rate vs. Out of State Tuition",
+       subtitle = "Standard linear regression model",
+       x = "Gradudation Rate ",
+       y = "Out of state Tuition")
+
+#plot the Data for the residual 
+collegeLM1RESPlot <- ggplot(mod1grid, aes(x = pred)) +
+  geom_point(aes(y = resid)) +
+  geom_hline(yintercept = 0, color = 'orange', size = 1, linetype = 'dashed') +
+  labs(title = "Model: Pre Values and Residuals",
+       subtitle = "(Out vs. Grad.Rate)",
+        x = "Predicted Out-of-state Tuition",
+        y = "Residuals")
+
+collegeLM1Plot
+collegeLM1RESPlot
+
+#Using the cross validation for a simple linear model 
+
+# Calculate 10-fold cV for the standard linear regression
+(gradRateMSE <- mseModel(collegeLM1))
+
+#Log transformation 
+collegeLM1LOG <- lm(Outstate ~ log(Grad.Rate), data = collegeDat)
+
+summary(collegeLM1LOG)
+
+#Create the residuals and predictors of the linear model 
+collegeDat %>%
+  add_predictions(collegeLM1LOG) %>%
+  add_residuals(collegeLM1LOG) %>%
+  {.} -> mod1gridLOG
+
+#Plot the data 
+collegeLM1LOGPlotLOG <- ggplot(aes(log(Grad.Rate), Outstate), data = collegeDat) +
+  geom_point() + 
+  geom_line(aes(y=pred), data = mod1gridLOG, color = 'red', size = 1) +
+  labs(title = "Model 1: Log Graduation Rate vs. Out of State Tuition",
+       subtitle = "Standard linear regression model",
+       x = "Log Gradudation Rate ",
+       y = "Out of state Tuition")
+
+#plot the Data for the residual 
+collegeLM1RESPlotLOG <- ggplot(mod1gridLOG, aes(x = pred)) +
+  geom_point(aes(y = resid)) +
+  geom_hline(yintercept = 0, color = 'orange', size = 1, linetype = 'dashed') +
+  labs(title = "Model Log: Pre Values and Residuals",
+       subtitle = "(Out vs. Grad.Rate)",
+        x = "Predicted Out-of-state Tuition",
+        y = "Residuals")
+
+collegeLM1LOGPlotLOG
+collegeLM1RESPlotLOG
+
+#Find the MSE of the model Log 
+(gradRateMSELOG <- mseModel(collegeLM1LOG))
+
+
+```
+
+####Model 2: Outstate ~ Expend
+In this example, we have Oustate vs Expend and also Outstate vs Log(Expend). This time, we can see that our model improve after transforming the Expend variable with log. We can say that the variable has a no-linear relationship with Outstate, by improving the RSquared by more than 10%. 
+
+
+```{r}
+#The normal Regression 
+expendLM <- lm(Outstate ~ Expend, data = collegeDat)
+
+summary(expendLM)
+
+(mseModel(expendLM))
+
+#Use the log transformation 
+expendLMLOG <- lm(Outstate ~ log(Expend), data = collegeDat)
+
+summary(expendLMLOG)
+
+(mseModel(expendLMLOG))
+
+
+```
+
+####Model 3: Outstate ~ Room.Board 
+After doing a linear regresion, we have that Room.board has a significance in the model with a p-value less than 0.05. Still, our R-Squared is not good with only 0.428 in both cases. 
+
+```{r}
+#The normal Regression 
+roomLM <- lm(Outstate ~ Room.Board, data = collegeDat)
+
+summary(roomLM)
+
+(mseModel(roomLM))
+
+#Use the log transformation 
+roomLMLOG <- lm(Outstate ~ log(Room.Board), data = collegeDat)
+
+summary(roomLMLOG)
+
+(mseModel(roomLMLOG))
+
+```
+
+####Part 3: College (GAM) [3 points]
+
+####1. Split the data into a training set and a test set.
+
+```{r}
+#Set the random generator 
+set.seed(1234)
+
+#Split the data in 70% to 30% ration  
+collegeSplit <- resample_partition(collegeDat, c(test = 0.3, train = 0.7))
+
+```
+
+####2. Estimate an OLS model on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors.
+
+```{r}
+# Create the Linear model using only the Train Data
+collegeTrainLM <- lm(Outstate ~ Private + Room.Board + PhD + perc.alumni + Expend + Grad.Rate, data = collegeSplit$train)
+
+college_70 <- collegeSplit$train %>%
+  tbl_df()
+
+college_30 <- collegeSplit$test %>%
+  tbl_df()
+
+summary(collegeTrainLM)
+
+#Add pre and res. 
+collegeDat %>%
+  add_predictions(collegeTrainLM) %>%
+  add_residuals(collegeTrainLM) %>%
+  {.} -> Q3grid
+
+#Plot the residuals 
+ggplot(Q3grid, mapping = aes(pred, resid)) +
+       geom_point(alpha = .15, size = 1.5, aes(color=Private)) +
+       geom_smooth(method = 'loess', color = 'grey40') + 
+       labs(title = "Residuals vs. Predicted Values (Training Set)",
+            subtitle = "Outstate ~Private + Room.Board + Terminal + perc.alumni + Expend + Grad.Rate",
+            x = "Predicted Out-of-state tuition",
+            y = "Residual") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), panel.border = element_rect(linetype = "solid",         color = "grey70", fill=NA, size=1.2))
+
+
+```
+
+####3. Estimate a GAM on the training data, using out-of-state tuition (Outstate) as the response variable and the other six variables as the predictors.  
+Adter creating the GAM model, we can see that the variables of Expend and PhD had a better outcome when we put them trought a log transformation. Leaving Private, Perc.Alumni and Grad.Rate linear, we can see that the two log variables (Room.Board and PhD) have a significance variance in the model. Also, we foun that all the estimator where statistically significance to the model having a p-value below 0.05. 
+
+```{r}
+#Create the GAM model with the train data
+collegeGAM <- gam(Outstate ~ Private + lo(Room.Board) + lo(PhD) + perc.alumni + log(Expend) + Grad.Rate, 
+                       data = collegeSplit$train)
+summary(collegeGAM)
+
+```
+
+####4. Use the test set to evaluate the model fit of the estimated OLS and GAM models, and explain the results obtained.  
+We can see that the MSE for the linear test model is lower (3,031,241) than the GAM Model of the test data (3,282,077).
+
+```{r}
+#Test MSE for College Data 
+#Create the Linear model with the test data 
+collegeLMTEST <- lm(Outstate ~ ., data = collegeSplit$test)
+
+(collegeOLSMSE <- mseModel(collegeLMTEST))
+
+#Gam Test Model 
+collegeGAMTEST <- gam(Outstate ~ Private + lo(Room.Board) + lo(PhD) + perc.alumni + log(Expend) + Grad.Rate, 
+                       data = collegeSplit$test)
+
+(collegeGAMTEST <- mseModel(collegeGAMTEST))
+```
+
+####5. For which variables, if any, is there evidence of a non-linear relationship with the response?
+After doing the Anova test, we can see that the are two variables that have a non-linear relationship with the response variable. Log(Room.Board) and Log(Ph.D)
+
+```{r}
+#See the Gam model 
+summary(collegeGAM)
+
+#Get the Anova for the Predictors Variables. 
+
+# Room and Board
+anova(collegeGAM)
+
+```
+
+
+
+
+
+
