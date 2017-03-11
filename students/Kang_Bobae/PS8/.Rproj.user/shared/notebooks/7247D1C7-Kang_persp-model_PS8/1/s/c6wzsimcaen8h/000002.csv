@@ -1,0 +1,27 @@
+"0","# Re-Prepare the data"
+"0","mhealth_train2 <- mhealth_train"
+"0","mhealth_test2 <- mhealth_test"
+"0","mhealth_train2$vote96 <- (mhealth_train2$vote96 == 'Yes')*1"
+"0","mhealth_test2$vote96 <- (mhealth_test2$vote96 == 'Yes')*1"
+"0","mhealth_bst.001 <- gbm(vote96 ~ ., data = mhealth_train2, n.trees = 5000, shrinkage = 0.001)"
+"1","Distribution not specified, assuming bernoulli ...
+"
+"0","mhealth_bst.001"
+"1","gbm(formula = vote96 ~ ., data = mhealth_train2, n.trees = 5000, 
+"
+"1","    shrinkage = 0.001)
+"
+"1","A gradient boosted model with bernoulli loss function.
+"
+"1","5000 iterations were performed.
+"
+"1","There were"
+"1"," "
+"1","7"
+"1"," "
+"1","predictors of which"
+"1"," "
+"1","7"
+"1"," "
+"1","had non-zero influence.
+"

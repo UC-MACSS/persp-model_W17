@@ -1,0 +1,15 @@
+base
+modelr
+broom
+purrr
+readr
+pander
+xtable
+stargazer
+lattice
+MASS
+memisc
+dplyr
+ggplot2
+tidyr
+pROC

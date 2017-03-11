@@ -1,0 +1,22 @@
+"0","mhealth_bst.1 <- gbm(vote96 ~ ., data = mhealth_train2, n.trees = 5000, shrinkage = 0.1)"
+"1","Distribution not specified, assuming bernoulli ...
+"
+"0","mhealth_bst.1"
+"1","gbm(formula = vote96 ~ ., data = mhealth_train2, n.trees = 5000, 
+"
+"1","    shrinkage = 0.1)
+"
+"1","A gradient boosted model with bernoulli loss function.
+"
+"1","5000 iterations were performed.
+"
+"1","There were"
+"1"," "
+"1","7"
+"1"," "
+"1","predictors of which"
+"1"," "
+"1","7"
+"1"," "
+"1","had non-zero influence.
+"
