@@ -116,7 +116,7 @@ If you use Python
 
 Either:
 
-1.  Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a $\\LaTeX$ generated PDF document with your results and substantive analysis.
+1.  Submit your assignment following the same procedures as required by Dr. Evans. Submit a Python script containing all your code, plus a generated PDF document with your results and substantive analysis.
 2.  Submit your assignment as a single Jupyter Notebook with your code, output, and written analysis compiled there.
 
 [1] Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.
