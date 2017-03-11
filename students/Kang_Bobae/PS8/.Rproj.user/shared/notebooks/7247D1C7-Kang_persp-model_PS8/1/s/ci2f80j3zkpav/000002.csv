@@ -1,0 +1,3 @@
+"0","mhealth_svm_lin <- svm(vote96 ~., data = mhealth_train, kernel = ""linear"", scale = FALSE, cost = 1)"
+"2","Error in eval(expr, envir, enclos) : object 'mhealth_train' not found
+"
