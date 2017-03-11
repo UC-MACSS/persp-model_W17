@@ -1,0 +1,1020 @@
+---
+title: 'Perspectives on Computational Modeling: Problem Set #8'
+author: "Xingyun Wu"
+date: "2017/3/5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(titanic)
+library(rcfss)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(dplyr)
+library(e1071)
+
+options(digits = 4)
+set.seed(1234)
+theme_set(theme_minimal())
+```
+
+
+```{r read-in data, include=FALSE}
+#bidenData <- read.csv("biden.csv")
+bidenData <- read.csv("biden.csv") %>%
+  mutate_each(funs(as.factor(.)), female, dem, rep) %>%
+  na.omit
+```
+
+```{r read-in_voterturnout_data, include=FALSE}
+mhlthData <- na.omit(read.csv("mental_health.csv"))
+mh <- read_csv("mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit
+set.seed(1234)
+mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
+```
+
+```{r read-in_simpson_data, include=FALSE}
+simpsonData <- read.csv("simpson.csv") %>%
+  mutate_each(funs(as.factor(.)), guilt, dem, rep, female, black, hispanic) %>%
+  na.omit
+set.seed(1234)
+simpson_split <- resample_partition(simpsonData, p = c("test" = .3, "train" = .7))
+```
+
+
+```{r MSE_function, echo=FALSE, include=FALSE}
+# MSE function
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+```{r problem1_segment, echo = FALSE, include = FALSE}
+# hackish function to get line segment coordinates for ggplot
+partition.tree.data <- function (tree, label = "yval", add = FALSE, ordvars, ...) 
+{
+  ptXlines <- function(x, v, xrange, xcoord = NULL, ycoord = NULL, 
+                       tvar, i = 1L) {
+    if (v[i] == "<leaf>") {
+      y1 <- (xrange[1L] + xrange[3L])/2
+      y2 <- (xrange[2L] + xrange[4L])/2
+      return(list(xcoord = xcoord, ycoord = c(ycoord, y1, 
+                                              y2), i = i))
+    }
+    if (v[i] == tvar[1L]) {
+      xcoord <- c(xcoord, x[i], xrange[2L], x[i], xrange[4L])
+      xr <- xrange
+      xr[3L] <- x[i]
+      ll2 <- Recall(x, v, xr, xcoord, ycoord, tvar, i + 
+                      1L)
+      xr <- xrange
+      xr[1L] <- x[i]
+      return(Recall(x, v, xr, ll2$xcoord, ll2$ycoord, tvar, 
+                    ll2$i + 1L))
+    }
+    else if (v[i] == tvar[2L]) {
+      xcoord <- c(xcoord, xrange[1L], x[i], xrange[3L], 
+                  x[i])
+      xr <- xrange
+      xr[4L] <- x[i]
+      ll2 <- Recall(x, v, xr, xcoord, ycoord, tvar, i + 
+                      1L)
+      xr <- xrange
+      xr[2L] <- x[i]
+      return(Recall(x, v, xr, ll2$xcoord, ll2$ycoord, tvar, 
+                    ll2$i + 1L))
+    }
+    else stop("wrong variable numbers in tree.")
+  }
+  if (inherits(tree, "singlenode")) 
+    stop("cannot plot singlenode tree")
+  if (!inherits(tree, "tree")) 
+    stop("not legitimate tree")
+  frame <- tree$frame
+  leaves <- frame$var == "<leaf>"
+  var <- unique(as.character(frame$var[!leaves]))
+  if (length(var) > 2L || length(var) < 1L) 
+    stop("tree can only have one or two predictors")
+  nlevels <- sapply(attr(tree, "xlevels"), length)
+  if (any(nlevels[var] > 0L)) 
+    stop("tree can only have continuous predictors")
+  x <- rep(NA, length(leaves))
+  x[!leaves] <- as.double(substring(frame$splits[!leaves, "cutleft"], 
+                                    2L, 100L))
+  m <- model.frame(tree)
+  if (length(var) == 1L) {
+    x <- sort(c(range(m[[var]]), x[!leaves]))
+    if (is.null(attr(tree, "ylevels"))) 
+      y <- frame$yval[leaves]
+    else y <- frame$yprob[, 1L]
+    y <- c(y, y[length(y)])
+    if (add) {
+      # lines(x, y, type = "s", ...)
+    }
+    else {
+      a <- attributes(attr(m, "terms"))
+      yvar <- as.character(a$variables[1 + a$response])
+      xo <- m[[yvar]]
+      if (is.factor(xo)) 
+        ylim <- c(0, 1)
+      else ylim <- range(xo)
+      # plot(x, y, ylab = yvar, xlab = var, type = "s", ylim = ylim,
+      #      xaxs = "i", ...)
+    }
+    data_frame(x = x, y = y)
+  }
+  else {
+    if (!missing(ordvars)) {
+      ind <- match(var, ordvars)
+      if (any(is.na(ind))) 
+        stop("unmatched names in vars")
+      var <- ordvars[sort(ind)]
+    }
+    lab <- frame$yval[leaves]
+    if (is.null(frame$yprob)) 
+      lab <- format(signif(lab, 3L))
+    else if (match(label, attr(tree, "ylevels"), nomatch = 0L)) 
+      lab <- format(signif(frame$yprob[leaves, label], 
+                           3L))
+    rx <- range(m[[var[1L]]])
+    rx <- rx + c(-0.025, 0.025) * diff(rx)
+    rz <- range(m[[var[2L]]])
+    rz <- rz + c(-0.025, 0.025) * diff(rz)
+    xrange <- c(rx, rz)[c(1, 3, 2, 4)]
+    xcoord <- NULL
+    ycoord <- NULL
+    xy <- ptXlines(x, frame$var, xrange, xcoord, ycoord, 
+                   var)
+    xx <- matrix(xy$xcoord, nrow = 4L)
+    yy <- matrix(xy$ycoord, nrow = 2L)
+
+    return(list(data_frame(xmin = xx[1L,],
+                           ymin = xx[2L,],
+                           xmax = xx[3L,],
+                           ymax = xx[4L,]),
+                data_frame(x = yy[1L,],
+                           y = yy[2L,],
+                           label = lab)))
+    if (!add) 
+      plot(rx, rz, xlab = var[1L], ylab = var[2L], type = "n", 
+          xaxs = "i", yaxs = "i", ...)
+    segments(xx[1L, ], xx[2L, ], xx[3L, ], xx[4L, ])
+    text(yy[1L, ], yy[2L, ], as.character(lab), ...)
+  }
+}
+```
+
+
+## Part 1: Sexy Joe Biden
+
+### 1. 
+  The `biden` data is splitted as required.
+```{r problem1_1, echo=FALSE}
+set.seed(1234)
+biden_split <- resample_partition(bidenData, c(test = 0.3, train = 0.7))
+```
+
+### 2. 
+  `biden` is the response variable, and all the other variables are predictors. Contents below show the results and plot of the tree with default setting.
+  According to the summary table, only two predictors are actually used in tree construction: `dem` and `rep`.
+  According to the tree plot, we get the following results:
+(1) When the observation is a Democrat (`dem` = 1, indicating 'True'), the average biden thermometer would be 74.51.
+(2) When the observation is not a Democrat (`dem` = 0, indicating 'False'):
+  - when the observation is a Republican (`rep` = 1, indicating 'True'), the average biden thermometer would be 43.23;
+  - when the observation is not a Republican (`rea` = 0, indicating 'False'), the average biden thermometer would be 57.60.
+
+```{r problem1_2, echo=FALSE}
+biden_tree1_2 <- tree(biden ~ female + age + dem + rep + educ, data = biden_split$train)
+#summary(biden_tree1_2)
+
+# use the unpruned tree
+mod1_2 <- biden_tree1_2
+summary(mod1_2)
+```
+
+```{r problem1_2_plot, echo = FALSE}
+# plot tree
+tree_data <- dendro_data(mod1_2)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = "Biden thermometer tree (by default)",
+       subtitle = "female + age + dem + rep + educ")
+
+```
+
+  The test MSE is 406.4.
+```{r problem1_2_testMSE, echo=FALSE}
+mse(mod1_2, biden_split$test)
+```
+
+
+### 3. 
+  According to the 10-fold cross-validation approach, the optimal level of tree complexity is 3 or 4. The test MSE would keep increasing after adding more complexity.
+
+```{r problem2_3_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+biden_cv <- crossv_kfold(biden_split$train$data, k = 10) %>%
+  mutate(tree = map(train, ~ tree(biden ~ female + age + dem + rep + educ, data = .,
+     control = tree.control(nobs = nrow(biden_split$train$data),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+biden_cv <- expand.grid(biden_cv$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(biden_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+biden_cv %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
+  According to the table, among the predictors put into the model, only `dem`, `rep` and `age` are actually used by the tree. Since the tree plot of 3 nodes would not actually include the variable `age`, I would use the tree with 4 nodes to include more information.
+  According to the tree plot, the results are:
+(1) When the observation is non-Democrat (`dem` = 0):
+  - when the observation is non-Republican (`rep` = 0), the predicted biden thermometer would be 58.41;
+  - when the observation is Republican (`rep` = 1), the predicted biden thermometer would be 42.71.
+(2) When the observation is Democrat (`dem` = 1):
+  - when the observation is less than 53.5 years old, the predicted biden thermometer would be 72.39???
+  - when the observation is more than 53.5 years old, the predicted biden thermometer would be 77.93.
+
+```{r problem1_3_model, echo = FALSE}
+# estimate model
+biden_tree1_3 <- tree(biden ~ female+age+dem+rep+educ, data = biden_split$train,
+     control = tree.control(nobs = nrow(biden_split$train),
+                            mindev = 0))
+
+mod1_3 <- prune.tree(biden_tree1_3, best = 4)
+#mod1_3 <- biden_tree1_3
+summary(mod1_3)
+
+tree_data2 <- dendro_data(mod1_3)
+ggplot(segment(tree_data2)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data2), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data2), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Biden theremometer tree",
+       subtitle = "female + age + dem + rep + educ")
+```
+
+  The test MSE of this model is 407.2, which is a little bit higher than the test MSE of the previous model. In this case, pruning the tree does not improve the test MSE.
+```{r problem1_3_testMSE, echo=FALSE}
+mse(mod1_3, biden_split$test)
+```
+
+
+### 4. 
+  Since there are 5 predictors, I set mtry = 5 for this Out-of-Bag estimate. The test MSE is 483.9. And among all the predictors, `age` is the most important, `dem` is the second important, and `educ` is the third important. `req` and `female` is relatively unimportant.
+  The test MSE is higher than previous models, and the results of important variables are also different from previous models.
+  
+```{r problem1_4_model, echo = FALSE}
+#biden_rf_data <- biden_split$train$data %>%
+#    select(-age, -educ) %>%
+#    mutate_each(funs(as.factor(.)), female, dem, rep) %>%
+#    na.omit
+
+biden_bag <- randomForest(biden ~ ., data = biden_split$train,
+                             mtry = 5, ntree = 500)
+biden_bag
+```
+
+```{r problem1_4_importance, echo = FALSE}
+importance(biden_bag)
+```
+  And the test MSE of this model is 396.2, which is lower than the previous two models.
+```{r problem1_4_testMSE, echo=FALSE}
+mse(biden_bag, biden_split$test)
+```
+
+5. The test MSE is 409.7, which is larger than the tree generated with the Out-of-Bag bagging approach. In this sense, this is a better model than the previous one in Question 4.
+  According to the importance measures, among all predictors, `dem`, `rep` and `age` are the three most important predictors, which is consistent with the results of Question 2 and Question 3. And `educ` and `female` is relatively unimportant.
+  According to the obtained test MSE of this question and the obtained test MSE of the previous question, the error rate would increase with the increase of m, the number of variable considered at each split. So when m is too large, it may cause over-fitting problem.
+```{r problem1_5_model, echo=FALSE}
+biden_rf <- randomForest(biden ~ ., data = biden_split$train,
+                            ntree = 500)
+biden_rf
+```
+
+```{r problem1_5_importance, echo=FALSE}
+importance(biden_rf)
+```
+
+```{r problem1_5_testMSE, echo = FALSE}
+mse(biden_rf, biden_split$test)
+```
+
+
+### 6. 
+ I would start with `intercept.depth = 1`. With number of trees `B = 10000`, the test MSE I obtain is 399.5. However, for different values of lambda, the test MSE is different.
+```{r problem1_6, echo = FALSE}
+set.seed (1234)
+biden_boost=gbm(biden~.,data=biden_split$train, distribution="gaussian",  n.trees=10000, interaction.depth=1)
+#summary(biden_boost)
+```
+
+```{r problem1_6_testMSE, echo=FALSE}
+boost_predicted = predict(biden_boost, newdata = biden_split$test, n.trees = 10000)
+
+mean((boost_predicted - bidenData[biden_split$test[2]$idx, ]$biden)^2)
+```
+
+  According to the plot below, when the shrinkage parameter lambda increases, the test MSE changes. When `lambda = 2`, the test MSE decreases dramatically and reaches its lowest point. However, when `lambda` gets greater than 2, the test MSEs increases. Thus among the four models, the model with `lambda = 2` may provide best fit to the testing data.
+
+```{r problem1_6_lambda, echo=FALSE}
+mses <- numeric(4)
+shrinkages <- numeric(4)
+for (s in 1:4){
+  shrinkages[s] <- 10^(-s)
+  biden_boost <- gbm(biden ~ ., data = biden_split$train, distribution="gaussian", n.trees = 10000, interaction.depth = 1, shrinkage = shrinkages[s])
+  yhat.boost = predict(biden_boost, newdata = biden_split$test, n.trees = 10000)
+  mses[s] <- mean((yhat.boost - bidenData[biden_split$test[2]$idx, ]$biden)^2)
+}
+
+#plot
+data_frame(mse = mses, shrinkage = shrinkages) %>% 
+  ggplot(aes(shrinkage, mse)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Predicting Biden thermometer",
+       subtitle = "female + age + dem + rep + educ",
+       x = "Shrinkage",
+       y = "Test MSE")
+```
+
+
+## Part 2: Modeling voter turnout
+
+Models description:
+  In this part, the response variable would be `vote96`, and the predictors would be all the other variables: `mhealth_sum`, `age`, `educ`, `black`, `female`, `married` and `inc10`.
+
+### Preparation
+
+  The data is splitted into a training set (70%) and a validation set (30%) as required.
+
+### 1. Five tree-based models of voter turnout
+
+#### 1.1 classification tree with optimal level of complexity
+
+  Using a 10-fold CV with random seed = 1234, I decide that the optimal tree size is 7. When the complexity reaches 7, the test MSE obtains nearly its lowest point among the attempts. In addition, since simply increasing the complexity could cause over-fitting problem, I would not increase the tree size to numbers that would not contribute much to further lower the test MSE.
+  
+```{r problem2_1_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+mhlth_cv <- crossv_kfold(mhlthData, k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = .,
+     control = tree.control(nobs = nrow(mhlthData),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+mhlth_cv <- expand.grid(mhlth_cv$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhlth_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+mhlth_cv %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
+
+```{r problem2_1_model, echo=FALSE}
+mhlth <- mh_split$train %>%
+  as_tibble() %>%
+  mutate(vote96 = factor(vote96, levels = 0:1, labels = c("not-voted", "voted")),
+         black = factor(black, levels = 0:1, labels = c("non-black", "black")),
+         female = factor(female, levels = 0:1, labels = c("male", "female")),
+         married = factor(married, levels = 0:1, labels = c("not-married", "married")))
+
+# estimate model
+mhlth_tree <- tree(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = mhlth,
+                     control = tree.control(nobs = nrow(mhlth),
+                            mindev = .001))
+
+# plot pruned tree
+mod2_1 <- prune.tree(mhlth_tree, best=7)
+summary(mod2_1)
+
+tree_data2_1 <- dendro_data(mod2_1)
+mhlth_tree_data <- dendro_data(mod2_1)
+ggplot(segment(mhlth_tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data2_1), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data2_1), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health + age + educ + black + female + married + inc10")
+```
+  The RPC curve is shown as below.
+```{r problem2_1_fit, echo=FALSE}
+set.seed(1234)
+fitted1 <- predict(mhlth_tree, as_tibble(mh_split$test), type = "class")
+
+roc_tree1 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted1))
+plot(roc_tree1)
+```
+
+```{r problem2_1_roc, echo=FALSE}
+auc(roc_tree1)
+```
+
+
+#### 1.2: Bagging approach
+
+  `mtry` = 5.
+
+```{r problem2_2_model, echo=FALSE}
+mhlth_bag <- randomForest(as.factor(vote96) ~ ., data = mh_split$train,
+                             mtry = 5, ntree = 500)
+```
+
+```{r problem2_2_fit, echo=FALSE}
+set.seed(1234)
+fitted2 <- predict(mhlth_bag, as_tibble(mh_split$test), type = "class")
+
+roc_tree2 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted2))
+plot(roc_tree2)
+```
+
+```{r problem2_2_auc, echo=FALSE}
+auc(roc_tree2)
+```
+
+
+#### 1.3 Random forest approach
+
+```{r problem2_3_model, echo=FALSE}
+mhlth_rf <- randomForest(as.factor(vote96) ~ ., data = mh_split$train,
+                            ntree = 500)
+```
+
+```{r problem2_3_fit, echo=FALSE}
+set.seed(1234)
+fitted3 <- predict(mhlth_rf, as_tibble(mh_split$test), type = "class")
+
+roc_tree3 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted3))
+plot(roc_tree3)
+```
+
+```{r problem2_3_auc, echo=FALSE}
+auc(roc_tree3)
+```
+
+
+#### 1.4 single-predictor classification tree with optimal level of complexity
+
+  The single predictor is `mhealth_sum`. According to the 10-fold cross-validation, the optimal level of complexity is 4.
+
+```{r problem2_4_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+mhlth_cv2 <- crossv_kfold(mhlthData, k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ mhealth_sum, data = .,
+     control = tree.control(nobs = nrow(mhlthData),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+mhlth_cv2 <- expand.grid(mhlth_cv2$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhlth_cv2) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+mhlth_cv2 %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
+
+```{r problem2_4_model, echo=FALSE}
+
+# estimate model
+mhlth_tree2 <- tree(vote96 ~ mhealth_sum, data = mhlth,
+                     control = tree.control(nobs = nrow(mhlth),
+                            mindev = .001))
+
+# plot pruned tree
+mod2_4 <- prune.tree(mhlth_tree2, best=4)
+summary(mod2_4)
+
+tree_data2_4 <- dendro_data(mod2_4)
+mhlth_tree_data4 <- dendro_data(mod2_4)
+ggplot(segment(mhlth_tree_data4)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data2_4), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data2_4), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health")
+```
+
+```{r problem2_4_fit, echo=FALSE}
+set.seed(1234)
+fitted4 <- predict(mhlth_tree2, as_tibble(mh_split$test), type = "class")
+
+roc_tree4 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted4))
+plot(roc_tree4)
+```
+
+```{r problem2_4_auc, echo=FALSE}
+auc(roc_tree4)
+```
+
+
+#### 1.5 classification regression tree with optimal level of complexity: 3 variables
+
+  The predictors are: `mhealth_sum`, `age`, and `educ`. According to the 10-fold cross-validation, the optimal level of complexity would be 10. Since simply increase the level of complexity may cause over-fitting problem, I would not increase the level of complexity greater than 10.
+
+```{r problem2_5_complexity, echo=FALSE}
+set.seed(1234)
+# generate 10-fold CV trees
+mhlth_cv3 <- crossv_kfold(mhlthData, k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ mhealth_sum + age + educ, data = .,
+     control = tree.control(nobs = nrow(mhlthData),
+                            mindev = 0))))
+
+# calculate each possible prune result for each fold
+mhlth_cv3 <- expand.grid(mhlth_cv3$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhlth_cv3) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+mhlth_cv3 %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+```
+
+```{r problem2_5_model, echo=FALSE}
+
+# estimate model
+mhlth_tree3 <- tree(vote96 ~ mhealth_sum + age + educ, data = mhlth,
+                     control = tree.control(nobs = nrow(mhlth),
+                            mindev = .001))
+
+# plot pruned tree
+mod2_5 <- prune.tree(mhlth_tree3, best=10)
+summary(mod2_5)
+
+tree_data2_5 <- dendro_data(mod2_5)
+mhlth_tree_data5 <- dendro_data(mod2_5)
+ggplot(segment(mhlth_tree_data5)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data2_5), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data2_5), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health + age + educ + black + female + married + inc10")
+```
+
+```{r problem2_5_fit, echo=FALSE}
+set.seed(1234)
+fitted5 <- predict(mhlth_tree3, as_tibble(mh_split$test), type = "class")
+
+roc_tree5 <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted5))
+plot(roc_tree5)
+```
+
+```{r problem2_5_auc, echo=FALSE}
+auc(roc_tree5)
+```
+
+
+#### 1.6 model comparison
+
+  According to the AUC values and the plot below, the best tree-based model would be the one using bagging approach, with AUC value as 0.630. Due to some unfound problem, the AUC of the first model is not printed, but we could infer its performance with its value 0.600, which is not the best model.
+
+```{r problem2_comparison1, echo=FALSE}
+plot(roc_tree1, print.auc = TRUE, col = "gray", print.auc.x = .2)
+plot(roc_tree2, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_tree3, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_tree4, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_tree5, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+
+### 2. Five SVM models
+
+#### Preparation
+  Read-in the voter turnout data and split it into a training set (70%) and a validation set(30%). We would use 10-fold CV on the training set to determine the optimal cost parameter.
+```{r preparation2, echo=FALSE, include=FALSE}
+(mh <- read_csv("mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit)
+set.seed(1234)
+mh_split <- resample_partition(mh, p = c("test" = .3, "train" = .7))
+```
+
+#### 2.1 Linear kernel
+
+  The SVM model of voter turnout with linear kernel is shown as below. The AUC is 0.742.
+
+```{r problem2_6_model, echo=FALSE}
+mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(mh_lin_tune)
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_line)
+```
+
+```{r problem2_6_evaluation, echo=FALSE}
+auc(roc_line)
+```
+
+#### 2.2 Polynomial kernel
+
+  The SVM model of voter turnout with polynomicl dernel is shown as below. The AUC is 0.749.
+
+```{r problem2_7, echo=FALSE}
+mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(mh_poly_tune)
+mh_poly <- mh_poly_tune$best.model
+#summary(mh_poly)
+
+fitted <- predict(mh_poly, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+plot(roc_poly)
+```
+
+```{r problem2_7_evaluation, echo=FALSE}
+auc(roc_poly)
+```
+
+
+#### 2.3 Logistic regression
+
+  The SVM model using logistic regression is shown as below. The AUC is 0.754.
+
+```{r problem2_8_model, echo=FALSE}
+mh_logit <- glm(vote96 ~ ., data = as_tibble(mh_split$train), family = binomial)
+#summary(mh_logit)
+fitted <- predict(mh_logit, as_tibble(mh_split$test), type = "response")
+logit_err <- mean(as_tibble(mh_split$test)$vote96 != round(fitted))
+
+roc_logit <- roc(as_tibble(mh_split$test)$vote96, fitted)
+plot(roc_logit)
+```
+
+```{r problem2_8_evaluation, echo=FALSE}
+auc(roc_logit)
+```
+
+#### 2.4 Desicion tree
+
+  The SVM model using decision tree is shown as below. The AUC is 0.56.
+
+```{r problem2_9_model, echo=FALSE}
+mh_tree <- tree(vote96 ~ ., data = as_tibble(mh_split$train))
+
+fitted <- predict(mh_tree, as_tibble(mh_split$test), type = "class")
+tree_err <- mean(as_tibble(mh_split$test)$vote96 != fitted)
+
+roc_tree <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted))
+plot(roc_tree)
+```
+
+```{r problem2_9_evaluation, echo=FALSE}
+auc(roc_tree)
+```
+
+
+#### 2.5 Random forest
+
+The SVM model using random forest is shown as below. The AUC is 0.715.
+
+```{r problem2_10_model, echo=FALSE}
+mh_rf <- randomForest(vote96 ~ ., data = as_tibble(mh_split$train))
+
+fitted <- predict(mh_rf, as_tibble(mh_split$test), type = "prob")[,2]
+
+roc_rf <- roc(as_tibble(mh_split$test)$vote96, fitted)
+plot(roc_rf)
+```
+
+```{r problem2_10_evaluation, echo=FALSE}
+auc(roc_rf)
+```
+
+#### Comparison
+
+  According to the AUC values and the plot below, the best SVM model is the one using logistic regression, with the highest AUV value among the five models as 0.754. The AUC value of SVM model using random forest is also very close, which reaches 0.749. And the worst SVM model is the one using decision tree. This makes sense, since decision trees basically provide predictions instead
+of probabilities.
+
+```{r problem2_comparison2, echo=FALSE}
+plot(roc_line, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_poly, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_logit, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_tree, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_rf, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+
+## Part 3: OJ Simpson
+
+### 1. The relationship between race and belief of OJ Simpson's guilt
+
+  Since this question already has required resopnse variable `guilt` and predictor `black`, I would use logistic regression and classification tree for analysis in this part.
+  To grow the tree, two-predictor is a more resonable choice. So I would use two predictors `black` and `hispanic`. To make the models comparible, I apply this approach in all models of this part, including the logistic regression model.
+
+#### Preparation
+
+  Set the random seed as `1234`. Read-in the `Simpson` data and split it into a training set (70%) and a validation set (30%).
+
+#### 1.1 single-predictor logistic regression
+
+  The only predictor: `black`.
+
+```{r problem3_1_model, echo=FALSE}
+simpson_logit1 <- glm(guilt ~ black + hispanic, data = as_tibble(simpson_split$train), family = binomial)
+# summary(simpson_logit1)
+fitted <- predict(simpson_logit1, as_tibble(simpson_split$test), type = "response")
+logit_err1 <- mean(as_tibble(simpson_split$test)$guilt != round(fitted))
+
+roc_logit3_1 <- roc(as_tibble(simpson_split$test)$guilt, fitted)
+plot(roc_logit3_1)
+```
+
+```{r problem3_1_evaluation, echo=FALSE}
+auc(roc_logit3_1)
+```
+
+#### 1.2 multiple-variable logistic regression
+
+  This model uses all the possible predictors. According to the AUC value, the multivariate model does not improve the previous single-predictor model.
+
+```{r problem3_2_model, echo=FALSE}
+set.seed(1234)
+
+simpson_rf <- randomForest(guilt ~ black + hispanic, data = na.omit(as_tibble(simpson_split$train)), ntree = 500)
+simpson_rf
+```
+
+```{r problem 3_2_fit, echo=FALSE}
+fitted <- predict(simpson_rf, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
+
+roc_rf <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted)
+plot(roc_rf)
+```
+
+```{r problem3_2_evaluation, echo=FALSE}
+auc(roc_rf)
+```
+
+
+#### 1.3 single_predictor desicion tree
+
+```{r problem3_3_model, echo=FALSE}
+simpson_tree <- tree(guilt ~ black + hispanic, data = as_tibble(simpson_split$train))
+summary(simpson_tree)
+```
+
+```{r problem3_3_plot, echo=FALSE}
+# plot pruned tree
+mod3_3 <- simpson_tree
+summary(mod3_3)
+
+tree_data3_3 <- dendro_data(mod3_3)
+mhlth_tree_data3_3 <- dendro_data(mod3_3)
+ggplot(segment(mhlth_tree_data3_3)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data3_3), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data3_3), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter Turnout",
+       subtitle = "mental health + age + educ + black + female + married + inc10")
+```
+
+```{r problem3_3_fit, echo=FALSE}
+set.seed(1234)
+fitted <- predict(simpson_tree, as_tibble(simpson_split$test), type = "class")
+
+roc_tree <- roc(as.numeric(as_tibble(simpson_split$test)$guilt), as.numeric(fitted))
+plot(roc_tree)
+```
+
+```{r problem3_3_roc, echo=FALSE}
+auc(roc_tree)
+```
+
+
+#### Comparison
+
+  According to the plot below and the AUC values, the fitness of values are actially very close. The logistic regression gets the same AUC value as the classification decision tree, and the random forest provides a slightly lower AUC value. So the tree-based model using random forest would be the best model.
+  Wholly constructed by dummy variables, the performace of the three method in this context are very close.
+
+```{r problem3_comparison1, echo=FALSE}
+plot(roc_logit3_1, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .4)
+plot(roc_rf, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_tree, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+```
+
+
+### 2. Predict whether individuals believe OJ Simpson to be guity
+
+  Since this question does not have specific predictors, I would use SVM models with all possible predictors for this part.
+
+#### 2.1. linear kernel
+
+```{r problem3_6, echo=FALSE}
+set.seed(1234)
+
+simpson_lin_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(simpson_lin_tune)
+
+simpson_lin <- simpson_lin_tune$best.model
+summary(simpson_lin)
+```
+
+```{r problem3_6_fit, echo=FALSE}
+fitted3_6 <- predict(simpson_lin, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line3 <- roc(as_tibble(simpson_split$test)$guilt, fitted3_6$decision.values)
+
+plot(roc_line3)
+```
+
+```{r problem3_6_auc, echo=FALSE}
+auc(roc_line3)
+```
+
+
+#### 2.2 polynomial kernel
+
+```{r problem3_7_model, echo=FALSE}
+set.seed(1234)
+
+simpson_poly_tune <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100), degree = c(3, 4, 5)))
+#summary(simpson_poly_tune)
+
+simpson_poly <- simpson_poly_tune$best.model
+summary(simpson_poly)
+```
+
+```{r problem3_7_fit, echo=FALSE}
+fitted3_7 <- predict(simpson_poly, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly3 <- roc(as_tibble(simpson_split$test)$guilt, fitted3_7$decision.values)
+
+plot(roc_poly3)
+```
+
+```{r problem3_7_auc, echo=FALSE}
+auc(roc_poly3)
+```
+
+
+#### 2.3: radial kernel
+
+```{r problem3_8_model, echo = FALSE}
+set.seed(1234)
+
+simpson_lin_tune3 <- tune(svm, guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+#summary(simpson_lin_tune3)
+
+simpson_lin3 <- simpson_lin_tune3$best.model
+summary(simpson_lin3)
+```
+
+```{r problem3_8_fit, echo=FALSE}
+fitted3_8 <- predict(simpson_lin3, as_tibble(simpson_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad3 <- roc(as_tibble(simpson_split$test)$guilt, fitted3_8$decision.values)
+
+plot(roc_rad3)
+```
+
+```{r problem3_8_auc, echo=FALSE}
+auc(roc_rad3)
+```
+
+
+#### 2.4 random forest
+
+```{r problem3_9_model, echo=FALSE}
+set.seed(1234)
+
+simpson_rf3 <- randomForest(guilt ~ dem + rep + age + educ + female + black + hispanic + income, data = na.omit(as_tibble(simpson_split$train)))
+simpson_rf3
+```
+
+```{r problem3_9_fit, echo=FALSE}
+fitted3_9 <- predict(simpson_rf3, na.omit(as_tibble(simpson_split$test)), type = "prob")[,2]
+
+#ROC
+roc_rf3 <- roc(na.omit(as_tibble(simpson_split$test))$guilt, fitted3_9)
+plot(roc_rf3)
+```
+
+```{r problem3_9_auc, echo=FALSE}
+auc(roc_rf3)
+```
+
+#### Comparison
+
+  According to the plot below wit AUC values, among the four models above, the best model would be the SVM model with linear kernel. The SVM mocel using random forest also provides a very close AUC value, 0.806.
+
+```{r problem3_comparison2, echo=FALSE}
+plot(roc_line3, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_poly3, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_rad3, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_rf3, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+```
+
