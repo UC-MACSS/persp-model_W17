@@ -51,7 +51,7 @@ If you need any special accommodations, please provide us with a copy of your Ac
 | Mar.  1 | W | Support vector machines | ISL Ch 9 |  |
 | Mar.  6 | M | Non-parametric methods | TBD | Trees & SVM PS due |
 | Mar.  8 | W | Unsupervised learning | ISL Ch 10 |  |
-| Mar. 13 | M |  |  | Nonparametric/unsupervised PS due |
+| Mar. 15 | W |  |  | Nonparametric/unsupervised PS due |
 
 ## References and Readings ##
 
