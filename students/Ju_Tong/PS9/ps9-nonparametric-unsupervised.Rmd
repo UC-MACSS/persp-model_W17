@@ -314,7 +314,7 @@ In order to see which independent variable has strong association with the repon
 
 ###2) Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
 
-```{r 1-KNN-2, warning=FALSE}
+```{r 2-KNN-2, warning=FALSE}
 
 ## estimate the MSE for GLM and KNN models:
 # Define logit2prob():
@@ -359,7 +359,7 @@ According to the test error rate plot for the GLM (dashed line) and KNN (black l
 
 ###3) Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
 
-```{r 2-KNN-2, warning=FALSE}
+```{r 2-KNN-3, warning=FALSE}
 
 ## estimate the MSE for weighted KNN models:
 
@@ -614,7 +614,7 @@ In this case, all 50 states are classified into 4 distinct subgroups. According 
 
 ###4) Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
-```{r 4-clustering-k4}
+```{r 4-clustering-k3}
 set.seed(1234)
 
 
@@ -622,7 +622,7 @@ set.seed(1234)
 autoplot(kmeans(usar[, 2:5], 3), data = usar) +
   geom_text(vjust=-1, label=usar$State, size = 1.8) +
   labs(title = 'K-means Clustering over PCA',
-       subtitle = 'k=4')
+       subtitle = 'k=3')
 
 ```
 
@@ -632,11 +632,178 @@ In this case, all 50 states are classified into 3 distinct subgroups. According 
 
 ###5) Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
 
+```{r 4-PCA-and-raw-clustering }
+set.seed(1234)
+
+# k-means clustering
+autoplot(kmeans(usar[, 2:5], 3), data = usar, loadings = TRUE, loadings.colour = 'black') +
+  geom_text(vjust=-1, label=usar$State, size = 1.8) +
+  labs(title = 'K-means Clustering over PCA',
+       subtitle = 'k=3')
+
+# k-means clustering over each two variables for raw data:
+
+p1<-data_frame(x1= usar$Murder, x2=usar$Assault)
+p2<-data_frame(x1= usar$Murder, x2=usar$UrbanPop) 
+p3<-data_frame(x1= usar$Murder, x2=usar$Rape)
+p4<-data_frame(x1= usar$Assault, x2=usar$UrbanPop)
+p5<-data_frame(x1= usar$Assault, x2=usar$Rape)
+p6<-data_frame(x1= usar$UrbanPop, x2=usar$Rape)
+
+
+p1.out<-p1 %>%
+  mutate(k3 = kmeans (p1, 3, nstart = 20)[[1]]) %>%
+  mutate(k3 = as.character(k3)) %>%
+  ggplot (aes (x1, x2, color = k3))+
+  geom_point()+
+  theme_bw()+
+  labs (x="Murder", y ="Assault")
+
+
+p2.out<-p2 %>%
+  mutate(k3 = kmeans (p2, 3, nstart = 20)[[1]]) %>%
+  mutate(k3 = as.character(k3)) %>%
+  ggplot (aes (x1, x2, color = k3))+
+  geom_point()+
+  theme_bw()+
+  labs (x="Murder", y ="UrbanPop")
+
+
+p3.out<-p3 %>%
+  mutate(k3 = kmeans (p3, 3, nstart = 20)[[1]]) %>%
+  mutate(k3 = as.character(k3)) %>%
+  ggplot (aes (x1, x2, color = k3))+
+  geom_point()+
+  theme_bw()+
+  labs (x="Murder", y ="Rape")
+
+p4.out<-p4 %>%
+  mutate(k3 = kmeans (p4, 3, nstart = 20)[[1]]) %>%
+  mutate(k3 = as.character(k3)) %>%
+  ggplot (aes (x1, x2, color = k3))+
+  geom_point()+
+  theme_bw()+
+  labs (x="Assault", y ="UrbanPop")
+
+p5.out<-p5 %>%
+  mutate(k3 = kmeans (p5, 3, nstart = 20)[[1]])  %>%
+  mutate(k3 = as.character(k3)) %>%
+  ggplot (aes (x1, x2, color = k3))+
+  geom_point()+
+  theme_bw()+
+  labs (x="Assault", y ="Rape")
+
+p6.out<-p6 %>%
+  mutate(k3 = kmeans (p6, 3, nstart = 20)[[1]])  %>%
+  mutate(k3 = as.character(k3)) %>%
+  ggplot (aes (x1, x2, color = k3))+
+  geom_point()+
+  theme_bw()+
+  labs (x="UrbanPop", y ="Rape")
+
+
+grid.arrange(p1.out,p2.out,p3.out,p4.out,p5.out,p6.out, ncol = 3, nrow = 2 )
+
+```
+
+As shown above, if plotting the k-means clustering on the raw data, we need 6 combinations of each two variables from total 4 variables. Compred to the PCA approach, it is rather difficult to interpret the clusterings on 6 sub-plots. In addition, we do not know which combinations are really statistically significant, and therefore we do not know which clustering represents the major feature of this data structure. On the other hand, by performing the PCA, the dimension of the data has been reduced. It is rather easy and convient to interpret the data in the first two principle component vectors. As what we have done in the above analysis, we find the Assualt, Rape and Murder cand be viewd together as in the same component vector, while the UrbanPop as the second principle component, representing the unbarnization. This dimension reduction make our intepretation for the clustering much easier than that on the raw data. 
+
 ###6) Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+```{r 4-hier}
+set.seed(1234)
+# estimate hierarchical cluster
+
+dd <- dist(usar[, 2:5], method = "euclidean")
+hc <- hclust(dd, method = "complete")
+hcdata <- dendro_data (hc)
+hclabs <- label(hcdata) %>%
+  left_join (data_frame (label = as.factor (seq.int(nrow(usar))),
+                         cl = as.factor (usar$State)))
+
+ggdendrogram(hc, labels =FALSE) +
+  geom_text(data = hclabs,
+            aes(label = cl, x = x, y = 0),
+            hjust = 0.5, vjust=-0.1, angle = 90, size = 2.0) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none") +
+  labs(title = "Hierarchical clustering",
+       subtitle = "With complete linkage and Euclidean distance")
+```
+
+By using hierarchical clustering with complete linkage and Euclidean distance, the 50 states have been clustered as above. Each leaf of the dendrogram represents one of the 50 observations of states. However, as we move up the tree, some leaves begin to fuse into branches. These correspond to observations that are similar to each other. As we move higher up the tree, branches themselves fuse, either with leaves or other branches. The earlier (lower in the tree) fusions occur, the more similar the groups of observations are to each other. On the other hand, observations that fuse later (near the top of the tree) can be quite different. The height of this fusion, as measured on the vertical axis, indicates how different the two observations are. Thus, observations that fuse at the very bottom of the tree are quite similar to each other, whereas observations that fuse close to the top of the tree will tend to be quite different.
 
 ###7) Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
 
+```{r 4-hier-cut}
+set.seed(1234)
+# estimate hierarchical cluster with cutting at height =3
+
+
+hclabs <- label(hcdata) %>%
+  left_join (data_frame (label = as.factor (seq.int(nrow(usar))),
+                         state = as.factor (usar$State),
+                         cl = as.factor(cutree(hc, h = 150))))
+
+ggdendrogram(hc, labels =FALSE) +
+  geom_text(data = hclabs,
+            aes(label = state, x = x, y = 0, color = cl),
+            hjust = 0.5, vjust=-0.1, angle = 90, size = 2.0) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none") +
+  geom_hline(yintercept = 150, linetype = 2) +
+  labs(title = "Hierarchical clustering",
+       subtitle = "With complete linkage and Euclidean distance")
+
+
+sum<- data_frame ( "group "= c("red","green","blue"),
+            "States" = c(paste ((hclabs %>% select (state, cl) %>% filter (cl == 1))$state, collapse=', '),
+                         paste ((hclabs %>% select (state, cl) %>% filter (cl == 2))$state, collapse=', '),
+                         paste ((hclabs %>% select (state, cl) %>% filter (cl == 3))$state, collapse=', ')))
+
+pander (sum)
+```
+
+In this section, I found that the cut height at 150 can divide the data into three distinct subforups.Each  subgroup is summaried in the above table. Indeed, we can find this classification result is very similar to that of the PCA/k-means clustering approach (k=3).Florida, Carolina, Nevad in the red group are those states with higher criminal rates, while the states, like North Dakota, Vermont, in the blue group are those states with lower criminal rates by the PCA/k-means clustering approah. 
+
 ###8) Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
 
+```{r 4-hier-2}
+set.seed(1234)
+# estimate hierarchical cluster
 
+dd_scale <- dist(scale(usar[, 2:5]), method = "euclidean") 
+hc_scale <- hclust(dd_scale, method = "complete")
+hcdata2 <- dendro_data (hc_scale)
+
+hclabs2 <- label(hcdata2) %>%
+  left_join (data_frame (label = as.factor (seq.int(nrow(usar))),
+                         state = as.factor (usar$State),
+                         cl = as.factor(cutree(hc_scale , h = 4.41))))
+
+g2<-ggdendrogram(hc_scale, labels =FALSE) +
+  geom_text(data = hclabs2,
+            aes(label = state, x = x, y = 0, color = cl),
+            hjust = 0.5, vjust=-0.1, angle = 90, size = 2.0) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none") +
+  geom_hline(yintercept = 4.41, linetype = 2) +
+  labs(title = "Hierarchical clustering After Scaling",
+       subtitle = "With complete linkage and Euclidean distance")
+
+g1<-ggdendrogram(hc, labels =FALSE) +
+  geom_text(data = hclabs,
+            aes(label = state, x = x, y = 0, color = cl),
+            hjust = 0.5, vjust=-0.1, angle = 90, size = 2.0) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none") +
+  geom_hline(yintercept = 150, linetype = 2) +
+  labs(title = "Hierarchical clustering",
+       subtitle = "With complete linkage and Euclidean distance")
+
+grid.arrange(g1,g2, ncol = 2, nrow = 1 )
+```
+
+By performing the scaling of the varaibles before the inter-observation dissimilarity computed, we can see how different the plot will be (shown in the above panel, left: without scaling; right: with scaling). Yes, there is very strong effect on the computation of dissimilarity after scaling. In hierarchical clustering after scaling, I also cluster states into 3 distinct subgroups, by the height of cut as 4.41, much smaller than that in the clustering without scaling (cut = 150). There are several key influences on the clustering after scaling: 1) the height of tree is shorteed after scaling; and 2) appearingly, the inner structure of the scaled data is much more complicated (more branches than that without scaling). 
+
+Theoretically, if the variables are scaled to have standard deviation one before the inter-observation dissimilarities are computed, then each variable will in effect be given equal importance in the hierarchical clustering performed. In my opinion, it is not very good to do the scaling before the hierarchical clustering in our case.Because through PCA, we have seen the four variables have different importnace: three variables of criminal rate are viewed as the first principle component, while the urbanization variable is viewed as the second principle component. If performing the scaling, we standardize the importance of all four variables, and that is the reason why in the hierarchical clustering with scaling (shown as above) , the inner strucutre is more complated and it is not easier to distinguish out the subgroups than in the hierarchical clustering without scaling. Also, as I have mentioned that the hierarchical clustering without scaling can provide very similar and compatible divided subgroups as in the PCA/k-means clustering method. Nevertheless, hierarchical clustering with scaling give rather different result from the PCA/k-means clustering method, which also indicates in our case, it is not so good to perform the scaling before the computation of dissimilarity.
 
