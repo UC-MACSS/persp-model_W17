@@ -1,0 +1,459 @@
+---
+title: "Problem Set 8"
+author: "MACS 30100 - Perspectives on Computational Modeling<br> Luxi Han 10449918"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+```
+
+```{r library/data}
+library(memisc)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+library(pander)
+library(xtable)
+library(stargazer)
+library(gam)
+library(ISLR)
+library(rcfss)
+library(stringr)
+library(forcats)
+library(e1071)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(tree)
+library(randomForest)
+library(gbm)
+library(pROC)
+library(tibble)
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+```
+
+#Problem 1
+
+##1.
+```{r p1a}
+set.seed(1234)
+biden_table = read_csv('data/biden.csv')
+biden_split <- resample_partition(biden_table,  c(test = 0.3, train = 0.7))
+mse <- function(model, data){
+  new_data <- data%>%
+  add_residuals(model)
+  return(mean(new_data$resid ^ 2))
+}
+```
+
+##2.
+```{r 1b}
+auto_tree <- tree(biden ~ female + age + dem + rep + educ, data = biden_split$train)
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+ptree
+print('The MSE for tree method is:')
+print(mse(auto_tree, biden_split$test))
+```
+We have the tree having two nodes. When the interviwed person is democrat, then their Biden warmth is about 74.51. If this person is republican then her Biden warmth is about 43.23. If he or she is independent, then their Biden warmth is estimated to be 57.6.
+
+##3.
+```{r 1c}
+auto_tree <- tree(biden ~ female + age + dem + rep + educ, data = biden_split$train, control = tree.control(nobs = nrow(biden_split$train),mindev = 0))
+
+mse_opt = 10000
+order = 0
+for (i in 2:nrow(biden_split$train)){
+  mod <- prune.tree(auto_tree, best = i)
+  mse_temp <- mse(mod, biden_split$test)
+  if (mse_opt >= mse_temp){
+    mse_opt = mse_temp
+    order = i
+  }
+}
+mod <- prune.tree(auto_tree, best = order)
+tree_data <- dendro_data(mod)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+ptree
+print('Best complexity is:')
+print(order)
+print('Best MSE is:')
+print(mse(mod, biden_split$test))
+```
+The best model is a tree that has 11 terminal nodes. We first see whether one is democrat or not. If yes, then we will look at their age with a threshold of 53.5. If age is higher than 53.5, then we can have a prediction value of 78.64. If not then, we will look at their education level. If education year is less than 15.5, wewill have a prediction value of 70.31; if higher then we will have a prediction of about 75.73. 
+
+If the person is not democrat, we will then look at whether he or she is republican or not. If yes, then we will look at their age. We use a threshold of 43.5 years old. If the age is higher than this value, the nwe will further look at whtether their age is below or higher than 46.5. If yes ,then we will look at their education to give a predictino.
+
+For independent people, gender and education matters for their prediciton value.
+
+In general ,we can see than democrat has the highest Biden warmth while republicans have the lowest. Education affects demovrats differently. Democrats with higher education level
+
+##4.
+```{r 1d}
+
+biden_bag <- randomForest(biden ~ ., data = biden_split$train,
+                             mtry = 5, ntree = 500)
+data_frame(var = rownames(importance(biden_bag)),
+           MeanDecreaseRSS = importance(biden_bag)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseRSS)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden Warmth",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Average decrease in the Residual Sum of Squares")
+mse(biden_bag, biden_split$test)
+```
+We conduct bagging approach. We use residual sum of square as our importance measure. Then we can see that education and wage are the two most important varaibles for the model. The MSE for the bagging method is about 482.45.
+
+##5.
+```{r 1e}
+biden_rf <- randomForest(biden ~ ., data = biden_split$train,
+                             ntree = 500)
+data_frame(var = rownames(importance(biden_rf)),
+           MeanDecreaseRSS = importance(biden_rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseRSS)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden Warmth",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Residual Sum of Squares")
+mse(biden_rf, biden_split$test)
+```
+Using random forest method, we can see that whether a person is democrat and whether the person is a republican are the two most important factors. Adding these two variables decrease the residual sum of squares the most. The MSE for the random foest method is 410.33. This is better than the bagging method.
+
+##6.
+```{r 1f}
+set.seed(1234)
+biden_boost <- gbm(biden~., data = biden_split$train, n.tree = 10000, interaction.depth = 4)
+biden_boost_perf <- predict(biden_boost, new_data = as_tibble(biden_split$test), n.trees = 1:10000) 
+mean((biden_boost_perf - as_tibble(biden_split$test)$biden)^2)
+```
+
+#Problem 2
+##1.
+```{r 1a}
+set.seed(1234)
+voter <-read_csv('data/mental_health.csv')
+voter <- voter%>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married)%>%
+  na.omit
+voter_split <- resample_partition(voter, c(test = 0.3, train = 0.7))
+auto_tree <- tree(vote96 ~ mhealth_sum, data = voter_split$train)
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Model 1')
+ptree
+print('The MSE for model 2 is:')
+tree_accuracy<- auto_tree%>%
+  predict(newdata = voter_split$test, type = 'class')
+mean(tree_accuracy != tbl_df(voter_split$test)$vote96, na.rm = TRUE)
+```
+
+```{r 2a b}
+auto_tree <- tree(vote96 ~ mhealth_sum + age, data = voter_split$train)
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Model 2')
+ptree
+print('The MSE for model 2 is:')
+tree_accuracy<- auto_tree%>%
+  predict(newdata = voter_split$test, type = 'class')
+mean(tree_accuracy != tbl_df(voter_split$test)$vote96, na.rm = TRUE)
+```
+
+```{r 2a c}
+auto_tree <- tree(vote96 ~ age + educ, data = voter_split$train)
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Model 2')
+ptree
+print('The MSE for model 2 is:')
+tree_accuracy<- auto_tree%>%
+  predict(newdata = voter_split$test, type = 'class')
+mean(tree_accuracy != tbl_df(voter_split$test)$vote96, na.rm = TRUE)
+```
+
+```{r 2a d}
+auto_tree <- tree(vote96 ~ mhealth_sum + married + inc10, data = voter_split$train)
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Model 2')
+ptree
+print('The MSE for model 2 is:')
+tree_accuracy<- auto_tree%>%
+  predict(newdata = voter_split$test, type = 'class')
+mean(tree_accuracy != tbl_df(voter_split$test)$vote96, na.rm = TRUE)
+```
+
+```{r 2a e}
+auto_tree <- tree(vote96 ~ mhealth_sum + age + educ + black + female + married + inc10, data = voter_split$train)
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Model 5')
+ptree
+print('The MSE for model 2 is:')
+tree_accuracy<- auto_tree%>%
+  predict(newdata = voter_split$test, type = 'class')
+mean(tree_accuracy != tbl_df(voter_split$test)$vote96, na.rm = TRUE)
+```
+
+The above are the models that I estimated. As we can see, there is little variation in the predict power of the models. The full model does perform better than most of the models. But the model with only age and educatoin performs even better than the full model. We plot the decrease in Gini index using random forest method. This is somewhat contrary to our cross validation method. The random forest method does confirm the importance age but it also indicates that the health index is an important factor.
+
+```{r}
+
+voter_rf <- randomForest(vote96 ~ ., data = voter_split$train, ntree = 500)
+data_frame(var = rownames(importance(voter_rf)),
+           MeanDecreaseGINI = importance(voter_rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGINI, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGINI)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Voter Turnout",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+```
+
+
+## 2.
+###Model 1 Linear Kernel 1
+```{r 2b a}
+voter_ker <- tune(svm, vote96 ~ mhealth_sum + age + educ, data = as_tibble(voter_split$train), kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(voter_ker$best.model)
+
+fitted <- predict(voter_ker$best.model, as_tibble(voter_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(voter_split$test)$vote96, fitted$decision.values)
+auc = auc(roc_line)
+print('The AUC value for model 1 is:')
+print(auc)
+```
+I use education, mental health index and age for predictors. We use a linear kernel to fit the model. We can see that we have a large cost parameter. This means that the model allows the support vectors to lie on both the wrong side of the hyperplane and the margin. This may indicate that a proportion of the observatoin is not predicted well.
+
+###Model 2 Linear Kernel 2
+
+```{r 2b b}
+voter_ker <- tune(svm, vote96 ~ mhealth_sum + married + inc10, data = as_tibble(voter_split$train), kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(voter_ker$best.model)
+
+fitted <- predict(voter_ker$best.model, as_tibble(voter_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(voter_split$test)$vote96, fitted$decision.values)
+auc = auc(roc_line)
+print('The AUC for model 2 is:')
+print(auc)
+```
+In this model we fit a linear kernel on mental health index, marriage stauts and income.
+
+###Model 3 Linear Kernel: All
+```{r 2b c}
+voter_ker <- tune(svm, vote96 ~ ., data = as_tibble(voter_split$train), kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(voter_ker$best.model)
+
+fitted <- predict(voter_ker$best.model, as_tibble(voter_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(voter_split$test)$vote96, fitted$decision.values)
+auc = auc(roc_line)
+print('The AUC for model 3 is:')
+print(auc)
+```
+
+###Model 4: Polynomial Kernel
+```{r 2b d}
+voter_ker <- tune(svm, vote96 ~ ., data = as_tibble(voter_split$train), kernel = 'polynomial', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(voter_ker$best.model)
+
+fitted <- predict(voter_ker$best.model, as_tibble(voter_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(voter_split$test)$vote96, fitted$decision.values)
+auc = auc(roc_line)
+print('The AUC for model 4 is:')
+print(auc)
+```
+Now we fit a polynomial kernel on all of the variables
+
+###Model 5: Radial Kernel
+```{r 2b e}
+voter_ker <- tune(svm, vote96 ~ ., data = as_tibble(voter_split$train), kernel = 'radial', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(voter_ker$best.model)
+
+fitted <- predict(voter_ker$best.model, as_tibble(voter_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(voter_split$test)$vote96, fitted$decision.values)
+auc = auc(roc_line)
+print('The AUC for model 5 is:')
+print(auc)
+```
+
+To sum up, we can see that the linear kernel using all of the varaibles generates the most ideal result. On one hand, the area under the curve is the largest for the linear kernel, on the other hand, the cost parameter for lienar kernel is the smallest and thus the model can be imposed under a more restircted constraint. This may indicate a better prediction accuracy.
+
+The following is the ROC curve:
+
+```{r}
+voter_ker <- tune(svm, vote96 ~ ., data = as_tibble(voter_split$train), kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+fitted <- predict(voter_ker$best.model, as_tibble(voter_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(voter_split$test)$vote96, fitted$decision.values)
+plot(roc_line)
+```
+
+#Problem 3
+##1.
+```{r, results = 'asis'}
+set.seed(1234)
+oj_table <- read_csv('data/simpson.csv')
+oj_split <- resample_partition(oj_table, c(test = 0.3, train = 0.7))
+oj_logit <- glm(guilt ~ black + hispanic, data = oj_split$train, family = binomial)
+stargazer(oj_logit, type = 'latex', title = 'Logit Model', header = FALSE, no.space = TRUE)
+```
+
+```{r}
+oj_fac <- oj_split$train%>%
+  tbl_df()%>%
+  mutate_each(funs(as.factor(.)), guilt, black, hispanic, dem, rep, ind, educ)%>%
+  na.omit
+oj_test <-oj_split$test%>%
+  tbl_df()%>%
+  mutate_each(funs(as.factor(.)), guilt, black, hispanic, dem, rep, ind)%>%
+  na.omit
+auto_tree <- tree(guilt ~ black + hispanic, data = oj_fac, control = tree.control(nobs = nrow(biden_split$train),mindev = 0))
+
+tree_data <- dendro_data(auto_tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()+
+  labs(title = 'Tree Method')
+ptree
+print('The test error rate for Tree Based Method is:')
+tree_accuracy<- auto_tree%>%
+  predict(newdata = oj_test, type = 'class')
+mean(tree_accuracy != oj_test$guilt, na.rm = TRUE)
+```
+I used logit and support vector machine method to study the relationship between their preception of the guilty of OJ simpson. As we can see that For a logit model, compared to non black and non hispanic people, black people tend to think OJ simpson is not guilty. They have a 3.053 points lower log odds ratio. The difference between hispanic and the reference group (all other races) are not clear. Then we can examine the tree based method. The tree based method gives us a clearer classfication. The tree method doesn't classify hispanic as different from other non-black people. As long as the person is not black, then the tree based method will classify him or her as thinking OJ Simpson as guilty.
+
+
+##2.
+In this section, we use cross validation method to test the robustness of a logit model and a SVM model
+Below is how I use logit and SVM method to predict the voter turnout. Again, the logit model confirms our hypothesis that race matters for voter turnout. In this case, education also matters in the sense that people with the lowest degree has the lowest turnout rate. The logit model will generate a AUC of 0.8232.
+
+Compared to the logit model, the SVM model performs not as well. Ihas an AUC of 0.770. The test error rate is the same as the test error rate when we are using the tree based method.
+
+Then we know that the logit model performs better and race variable does give a strong prediction power.
+```{r, results = 'asis'}
+set.seed(1234)
+logit2prob<-function(x){
+  exp(x)/(1 + exp(x))
+}
+oj_logit2 <- glm(guilt ~ dem + rep + educ + age + female + black + hispanic + income, data = oj_split$train, family = binomial)
+stargazer(oj_logit2, type = 'latex', title = 'Logit Model', header = FALSE, no.space = TRUE)
+model_accuracy2 <- oj_split$test%>%
+  tbl_df()%>%
+  add_predictions(oj_logit2)%>%
+  mutate(prob = logit2prob(pred),
+         pred = as.numeric(prob >.5))
+print('AUC is:')
+auc(roc_line)
+```
+
+```{r 3bb}
+oj_ker <- tune(svm, guilt ~ dem + rep + educ + age + female + black + hispanic + income , data = oj_fac, kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(oj_ker$best.model)
+fitted <- predict(oj_ker$best.model, oj_test, decision.values = TRUE) %>%
+  attributes
+print('The test error rate for the SVM is')
+mean(round(fitted$decision.values) != oj_test$guilt)
+print('AUC is :')
+roc_line <- roc(oj_test$guilt, fitted$decision.values)
+auc(roc_line)
+```
+
+
+
+
