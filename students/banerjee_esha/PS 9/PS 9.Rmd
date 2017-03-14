@@ -303,49 +303,10 @@ err %>%
 
 #### Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 ```{r}
-set.seed(111)
-# Decision Tree
-tree_mh <- tree(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train)
-tree_data <- dendro_data(tree_mh)
-
-ggplot(segment(tree_data)) +
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
-  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
-  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
-  theme_dendro() +
-  labs(title = "Voter Turnout")
 
 ```
 
-```{r}
-set.seed(111)
 
-# RF
-rf<- randomForest(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, ntree = 500)
-
-data_frame(var = rownames(importance(rf)),
-           MeanDecreaseRSS = importance(rf)[,1]) %>%
-  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
-  ggplot(aes(var, MeanDecreaseRSS)) +
-  geom_point() +
-  coord_flip() +
-  labs(title = "Predicted Voter Turnout",
-       x = NULL,
-       y = "Average decrease in the Gini Index")
-```
-
-```{r}
-set.seed(111)
-# SVM
-
-mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
-                    kernel = "linear",
-                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
-summary(mh_lin_tune)
-mh_lin <- mh_lin_tune$best.model
-summary(mh_lin)
-
-```
 
 
 
