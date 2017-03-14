@@ -340,6 +340,65 @@ mse_4
 
     ## [1] 453
 
+Voter turnout and depression
+============================
+
+#### Split the data into a training and test set (70/30).
+
+``` r
+mh <- mh %>%
+  select(vote96, age, inc10, educ, mhealth_sum)%>%
+  na.omit()
+
+set.seed(111)
+mh_split <- resample_partition(mh, c(test = 0.3, train = 0.7))
+mh_train <- as_tibble(mh_split$train)
+mh_test <- as_tibble(mh_split$test)
+```
+
+#### Calculate the test error rate for KNN models with (K = 1,2,,10), using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+``` r
+set.seed(111)
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+# estimate the MSE for GLM
+mh_glm <- glm(vote96 ~ ., data = mh_train, family = binomial) 
+# estimate the error rate for this model:
+x<- mh_test %>%
+  add_predictions(mh_glm) %>%
+  mutate (pred = logit2prob(pred),
+          prob = pred,
+          pred = as.numeric(pred > 0.5))
+err_rate_glm <-mean(x$vote96 != x$pred)
+
+
+hm_knn_mse<-min(mse_knn$mse_test)
+mse_knn <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_train, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_test, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+ggplot(mse_knn, aes(k, mse_test)) +
+  geom_line() +
+  geom_hline(yintercept = err_rate_glm, linetype = 2) +
+  labs(x = "K",
+       y = "Test error rate",
+       title = "KNN on Vote Turnout") +
+  expand_limits(y = 0)
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-9-1.png)
+
+#### Calculate the test error rate for weighted KNN models with (K = 1,2,,10) using the same combination of variables as before. Which model produces the lowest test error rate?
+
 Colleges
 ========
 
@@ -356,7 +415,7 @@ pr.out <- prcomp(c, scale = TRUE)
 biplot(pr.out, scale = 0, cex = .6)
 ```
 
-![](PS_9_files/figure-markdown_github/unnamed-chunk-7-1.png)
+![](PS_9_files/figure-markdown_github/unnamed-chunk-11-1.png)
 
 ``` r
 pr.out <- prcomp(clg[,2:18], scale = TRUE)
@@ -423,4 +482,4 @@ pr.out$rotation
 biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(clg)))
 ```
 
-![](PS_9_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](PS_9_files/figure-markdown_github/unnamed-chunk-12-1.png)
