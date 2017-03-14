@@ -1,0 +1,439 @@
+---
+title: "ps8"
+output: html_document
+---
+
+```{r setup, include=FALSE, results="hide", warning=FALSE}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(class)
+library(varhandle)
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Attitudes Towards Feminimsts
+
+```{r feminist, results="hide", warning=FALSE}
+feminist <- read_csv("feminist.csv")
+feminist_split <- resample_partition(feminist, p=c(test = 0.3, train = 0.7))
+
+feminist_train <- feminist_split$train %>%
+  tbl_df()
+feminist_test <- feminist_split$test %>%
+  tbl_df()
+
+test_label <- feminist_test$feminist
+train_label <- feminist_train$feminist
+
+train_data <- feminist_train[c("female", "age", "educ", "income", "dem", "rep")]
+test_data <- feminist_test[c("female", "age", "educ", "income", "dem", "rep")]
+
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+summary(prediction)
+
+prediction_int <- unfactor(prediction)
+
+mse(prediction_int, test_label)
+
+ks <- seq(5, 100, 5)
+
+mses <- list()
+for(i in 1:20){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i*5)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of KNN Model",
+     pch=20, cex=2)
+```
+
+
+```{r wknn, results="hide", warning=FALSE}
+library(kknn)
+feminist <- read_csv("feminist.csv")
+feminist_split <- resample_partition(feminist, p=c(test = 0.3, train = 0.7))
+
+feminist_train <- feminist_split$train %>%
+  tbl_df()
+feminist_test <- feminist_split$test %>%
+  tbl_df()
+
+test_label <- feminist_test$feminist
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, 2)
+
+mses <- list()
+for(i in 1:20){
+  model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, k=i*5)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+ks <- seq(5, 100, 5)
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of Weighted KNN Model",
+     pch=20, cex=2)
+mses
+```
+```{r other_models, warning=FALSE}
+library(tree)
+library(randomForest)
+library(gbm)
+feminist <- read_csv("feminist.csv")
+feminist_split <- resample_partition(feminist, p=c(test = 0.3, train = 0.7))
+
+feminist_train <- feminist_split$train %>%
+  tbl_df()
+feminist_test <- feminist_split$test %>%
+  tbl_df()
+test_label <- feminist_test$feminist
+
+lm_fit <- lm(feminist_train$feminist ~ ., data=feminist_train)
+tree_fit <- tree(feminist_train$feminist ~ ., data=feminist_train, control = tree.control(nobs = nrow(feminist_train), mindev = 0))
+rf_fit <- randomForest(feminist_train$feminist ~ ., data=feminist_train, ntree = 500)
+boosting <- gbm(feminist_train$feminist ~ ., data=feminist_train, n.trees = 10000, interaction.depth = 2)
+
+mse(predict(lm_fit, feminist_test), test_label)
+mse(predict(tree_fit, feminist_test), test_label)
+mse(predict(rf_fit, feminist_test), test_label)
+mse(predict(boosting, feminist_test, n.trees=10000), test_label)
+```
+
+1. Above I split my data into 30/70 test/train subsets
+2. I graphed the Average MSE of in KNN model for different numbers of K, as can be seen as K increases the MSE decreases.  The lowest MSE I got was 542 when K = 100
+3. Using a weighted KNN model the lowest MSE I got was 418 at K = 100.
+4. Here are the MSEs I got for alternative models:
+- Linear: 420
+- Decision Tree: 527
+- Random Forest: 425
+- Boosting: 429
+
+I'm not sure that KNN is the best model for this dataset.  Since the outcome variable is continuous (0 - 100) I think a linear model is better suited (or maybe even a logistic regression scaled form 0 - 100).  KNN and Decision trees seem better suited for classification tasks.  I think if I started to add non-linear relationships between the variables in the linear regression model I could probably lower my MSE further.  Right now a simple linear model OLS model produced the lowest MSE.
+
+
+```{r mh, results="hide", warning=FALSE}
+mh <- read_csv("mental_health.csv")
+
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+
+mh <- delete.na(mh)
+
+mh_split <- resample_partition(mh, p=c(test = 0.3, train = 0.7))
+
+mh_train <- mh_split$train %>%
+  tbl_df()
+mh_test <- mh_split$test %>%
+  tbl_df()
+
+test_label <- mh_test$vote96
+train_label <- mh_train$vote96
+
+train_data <- mh_train[c("mhealth_sum", "age", "educ", "black", "female", "married", "inc10")]
+test_data  <- mh_test[c("mhealth_sum", "age", "educ", "black", "female", "married", "inc10")]
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+summary(prediction)
+
+prediction_int <- unfactor(prediction)
+
+mse(prediction_int, test_label)
+
+ks <- seq(1, 10, 1)
+
+mses <- list()
+for(i in 1:10){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of KNN Model",
+     pch=20, cex=2)
+mses
+```
+
+
+```{r mh_wknn, results="hide", warning=FALSE}
+library(kknn)
+mh <- read_csv("mental_health.csv")
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+mh <- delete.na(mh)
+
+mh_split <- resample_partition(mh, p=c(test = 0.3, train = 0.7))
+
+mh_train <- mh_split$train %>%
+  tbl_df()
+mh_test <- mh_split$test %>%
+  tbl_df()
+
+test_label <- mh_test$vote96
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+model <- kknn(mh_train$vote96 ~ ., train=mh_train, test=mh_test, 2)
+
+mses <- list()
+for(i in 1:10){
+  model <- kknn(mh_train$vote96 ~ ., train=mh_train, test=mh_test, k=i)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+ks <- seq(1, 10, 1)
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of Weighted KNN Model",
+     pch=20, cex=2)
+mses
+```
+```{r mh_other_models, warning=FALSE}
+library(tree)
+library(randomForest)
+library(gbm)
+library(e1071)
+mh <- read_csv("mental_health.csv")
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+mh <- delete.na(mh)
+
+mh_split <- resample_partition(mh, p=c(test = 0.3, train = 0.7))
+
+mh_train <- mh_split$train %>%
+  tbl_df()
+mh_test <- mh_split$test %>%
+  tbl_df()
+test_label <- mh_test$vote96
+
+glm_fit      <- glm(mh_train$vote96 ~ ., data=mh_train, family=binomial)
+tree_fit     <- tree(mh_train$vote96 ~ ., data=mh_train, control = tree.control(nobs = nrow(mh_train), mindev = 0))
+rf_fit       <- randomForest(mh_train$vote96 ~ ., data=mh_train, ntree = 500)
+boosting_fit <- gbm(mh_train$vote96 ~ ., data=mh_train, n.trees = 10000, interaction.depth = 2)
+svm_fit      <- svm(mh_train$vote96 ~ ., data=mh_train, kernel = "linear", range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse(predict(glm_fit, mh_test), test_label)
+mse(predict(tree_fit, mh_test), test_label)
+mse(predict(rf_fit, mh_test), test_label)
+mse(predict(svm_fit, mh_test), test_label)
+mse(predict(boosting_fit, mh_test, n.trees=1000), test_label)
+
+```
+
+1. Above I split my data into 30/70 test/train subsets.  Note: for this analysis I removed rows where vote96 was NA.
+2. I graphed the Average MSE of in KNN model for different numbers of K, as can be seen as K increases the MSE decreases.  The lowest MSE I got was .28 when K = 10
+3. Using a weighted KNN model the lowest MSE I got was .22 at K = 10.
+4. Here are the MSEs I got for alternative models
+- Logistic: 1.3
+- Decision Tree: .262
+- Random Forest: .195
+- Boosting: 0.261
+- SVM: 0.276
+
+The best result I achieved with this data was with a random forest at .195 MSE.  The best KNN models got me to around .28 MSE.   I think the random forest is a model well suited for this dataset because it is a classification problem and the random forest is a like a more optimized version of a decision tree which also provided a good fit to the data.  I tree based model is a little better suited than the KNN model becasue there is a hierarcy between the variables ie, this variable is more important (at top of tree) while the KNN there all variables are treated equally in importance.
+
+```{r colleges}
+library(plyr)
+college <- read_csv("college.csv")
+
+college$Private <- mapvalues(college$Private, from = c("Yes", "No"), to = c(1, 0))
+college$Private <- as.numeric(as.character(college$Private))
+pr.out <- prcomp(college, scale = TRUE)
+summary(pr.out)
+pr.out
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+From this analysis we can see that the first two principal compoentns account for 58.4% of the variance of the data.  The variables strongly coorelated to the first principal component are S.F. Ratio, Personal.  The variables strongly coorelated to the second principal component are Private, Outstate, perc.alumni.
+
+```{r states_2}
+library(plyr)
+states <- read_csv("USArrests.csv")
+states_label <-states$State
+states_data <- states[c("Murder", "Assault", "UrbanPop", "Rape")]
+
+pr.out <- prcomp(states_data, scale = TRUE)
+summary(pr.out)
+pr.out
+biplot(pr.out, scale = 0, cex = .6)
+```
+```{r kmeans}
+kmeans_fit <- kmeans(states_data, 2, nstart = 20)
+
+#summary(kmeans_fit)
+#kmeans_fit$cluster
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=states_label)
+
+state_group <- as.factor(kmeans_fit$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA States divided into 2 Groups w K-means")
+  
+```
+
+2.  I divided the states into two groups using a k-means algorithm and plotted them agaisnt PC1 and PC2.  The two groups look roughly South West States vs North East States (with some exceptions) 
+
+```{r states_4}
+library(plyr)
+states <- read_csv("USArrests.csv")
+states_label <-states$State
+states_data <- states[c("Murder", "Assault", "UrbanPop", "Rape")]
+
+pr.out <- prcomp(states_data, scale = TRUE)
+
+kmeans_fit <- kmeans(states_data, 4, nstart = 20)
+
+# kmeans_fit$cluster
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+
+state_group <- as.factor(kmeans_fit$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA States divided into 4 Groups w K-means")
+```
+3.  I plotted above.  There are now four groups clearly indicated by color.  It looks like the groups are mainly divided among PC2 (y).  The groups are all have roughly the same x value.
+
+```{r states_3}
+library(plyr)
+states <- read_csv("USArrests.csv")
+states_label <-states$State
+states_data <- states[c("Murder", "Assault", "UrbanPop", "Rape")]
+
+pr.out <- prcomp(states_data, scale = TRUE)
+
+
+kmeans_fit <- kmeans(states_data, 3, nstart = 20)
+
+kmeans_fit$cluster
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+state_group <- as.factor(kmeans_fit$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA States divided into 3 Groups w K-means")
+```
+4.  Similar to before the states are mostly grouped by PC2 values (y).  All the states in a group have roughly the same PC1 values (x).
+
+
+```{r states_5}
+
+states_data <- states[c("Murder", "Assault", "UrbanPop", "Rape")]
+
+pr.out <- prcomp(states_data, scale = TRUE)
+
+PCS <- data.frame(v1=PC1, v2=PC2)
+kmeans_fit <- kmeans(PCS, 3, nstart = 20)
+state_group <- as.factor(kmeans_fit$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA States divided into 3 Groups (based on PC1, PC2) w K-means")
+```
+
+
+5. Creating a clusters based on PC1 and PC2 look to cluster the groups a little better in the attached graph as there is less overlap than clustering based on state attributes.
+
+
+```{r hierarchica_cluster}
+hc.complete <- hclust(dist(states), method = "complete")
+ggdendrogram(hc.complete)
+
+h <- 125
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(states))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = 20, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+
+7. I cut the data into three groups as can be seen in the dendogram above and the state groups can base seen by color.
+
+
+```{r standardize_variables}
+states <- read_csv("USArrests.csv")
+states_label <-states$State
+states_data <- states[c("Murder", "Assault", "UrbanPop", "Rape")]
+states_standard_data <- scale(states_data)
+
+hc.complete <- hclust(dist(states_standard_data), method = "complete")
+h <- 4
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(states))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = -.5, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+8.  After scaling the data to have standard deviation 1 for all varaibles I created the dendogram above.  It was hard to only get three groups.  I noticed that membership in the three groups did not change much, but if you continue down to the lower levels of the dendogram the shape and groupings of states does change a lot.  I think it makes sense to scale the variables before creating the cluster because this way all variables are treated "evenly", that is one variables doen't have more or less influence than the other based on it's scale.  This could be possibel in the dataset previously as the Assault variable ranged from 45 - 337 while murder ranged form 0.8 to 17.4.
