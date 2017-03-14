@@ -1,0 +1,710 @@
+---
+title: 'MACS 30100: Problem Set 8'
+author: "Dongping Zhang"
+date: "3/3/2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(MASS)
+library(gam)
+library(ISLR)
+library(foreach)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(pROC)
+library(gbm)
+library(e1071)
+library(devtools)
+# to get the tree graphs with the labels and values, use the forked
+# version of ggdendro
+devtools::install_github("bensoltoff/ggdendro")
+library(ggdendro)
+
+
+options(warn=-1)
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+```
+
+# Part 1: Sexy Joe Biden (redux times two)
+__1. Split the data into a training set (70%) and a validation set (30%). Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.__
+
+* Load the `biden.csv` dataset
+```{r biden}
+biden <- read.csv('biden.csv') %>%
+  mutate_each(funs(as.factor(.)), female, dem, rep) %>%
+  na.omit
+```
+
+* Set the seed to ensure reproducibility
+```{r set seed}
+set.seed(1234)
+```
+
+* Split the sample set into a training set (70%) and a testing set (30%)
+```{r biden split}
+biden_split <- resample_partition(biden, c(test = 0.3, train = 0.7))
+```
+  
+__2. Fit a decision tree to the training data, with biden as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?__
+
+* Fit the decision to the training data using `biden` as the response variable and the other variables as predictors
+```{r decision tree using training data}
+biden_tree <- tree(biden ~ ., data = biden_split$train)
+```
+
+* Plot the tree
+```{r plot the tree}
+mod <- biden_tree
+tree_data <- dendro_data(mod)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+```
+
+According to the regression tree constructed using the `biden` dataset, the top split assigns observations having `dem = 1` to the right branch. In that branch, the predicted score is given by the mean response value for the observation in the dataset with `dem = 1`, which is 74.51. 
+
+Observations with `dem = 0` are assigned to the left branch, and then that group is further subdivided by `rep`. Thus, the tree stratifies all observations into three regions of predictor space: dem, rep, or other. These three regions can be written as $R_1 = \{X | dem = 1\}$, $R_2 = \{X | rep = 1\}$, and $R_3 = \{X | dem = 0, rep = 0\}$. The predicted biden score are the mean of the observations falling in those three predictor space, and according to the tree plot presented above $R_1 = \{74.51 | dem = 1\}$, $R_2 = \{43.23 | rep = 1\}$, and $R_3 = \{57.46 | dem = 0, rep = 0\}$.
+
+* Construct a function that computes MSE
+```{r mse func}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+* Compute the test MSE: the test MSE is __406__, which is presented below.
+```{r test MSE}
+mse(biden_tree, biden_split$test)
+```
+
+
+__3. Use cross-validation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?__
+
+* Fit another tree to the training data with the following `control` options
+```{r decision tree2 using training data}
+biden_tree <- tree(biden ~ ., data = biden_split$train, 
+                   control = tree.control(
+                     nobs = nrow(biden),
+                     mindev = 0))
+```
+
+* Use 10-fold CV to select the optimal tree size:
+    + generate 10-fold cv tree
+    ```{r 10-fold}
+    # generate 10-fold CV trees
+    biden_cv <- crossv_kfold(biden, k = 10) %>%
+      mutate(tree = map(train, ~ tree(biden ~. , data = .,
+                                      control = tree.control(
+                                        nobs = nrow(biden),
+                                        mindev = 0))))
+    ```
+
+    + calculate each possible prune result for each fold and to generate the plot
+    ```{r prune result}
+    biden_cv <- expand.grid(biden_cv$.id, 2:10) %>%
+      as_tibble() %>%
+      mutate(Var2 = as.numeric(Var2)) %>%
+      rename(.id = Var1, k = Var2) %>%
+      left_join(biden_cv, by = ".id") %>%
+      mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+             mse = map2_dbl(prune, test, mse))
+    ```
+
+    + plotting optimal mse
+    ```{r plotting optimal MSE}
+    biden_cv %>%
+      dplyr::select(k, mse) %>%
+      group_by(k) %>%
+      summarize(test_mse = mean(mse), sd = sd(mse, na.rm = TRUE)) %>%
+      ggplot(aes(k, test_mse)) +
+      geom_point() +
+      geom_line() +
+      labs(x = "Number of terminal nodes",
+           y = "Test MSE")
+    ```
+    
+    + present detailed stats of MSE and standard deviation: detailed stats are presented below, using 10-fold cv, the optimal level of tree complexity is to have 3 terminal nodes,
+    ```{r detailed mse and se}
+    biden_cv %>%
+      dplyr::select(k, mse) %>%
+      group_by(k) %>%
+      summarize(test_mse = mean(mse), sd = sd(mse, na.rm = TRUE))
+    ```
+    
+    + visualize the tree by setting `k = 3`: we discovered the branches are the same and the internal nodes are also the same. Observations with `dem = 1` are assigned to the right branch while observations with `dem = 0` are assigned to the left branch. The left branch is further subdivided by `rep`. Thus, the tree stratifies all observations into three regions of predictor space: dem, rep, or other. These three regions can be written as $R_1 = \{X | dem = 1\}$, $R_2 = \{X | rep = 1\}$, and $R_3 = \{X | dem = 0, rep = 0\}$. The predicted biden score are the mean of the observations falling in those three predictor spaces, and according to the tree plot presented above $R_1 = \{74.51 | dem = 1\}$, $R_2 = \{43.23 | rep = 1\}$, and $R_3 = \{57.46 | dem = 0, rep = 0\}$. 
+    ```{r optimal tree}
+    mod_prune3 <- prune.tree(biden_tree, best = 3)
+    tree_data <- dendro_data(mod)
+      ggplot(segment(tree_data)) +
+      geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+                   alpha = 0.5) +
+      geom_text(data = label(tree_data), 
+                aes(x = x, y = y, label = label_full), 
+                vjust = -0.5, size = 3) +
+      geom_text(data = leaf_label(tree_data), 
+                aes(x = x, y = y, label = label), 
+                vjust = 0.5, size = 3) +
+      theme_dendro()
+    ```
+
+    + compute the new test mse: as shown below, after prunning the tree to the optimal 3 terminal nodes, the test MSE is the same as the previous value of 406. 
+    ```{r test MSE optimal after prunning}
+    mse(prune.tree(biden_tree, best = 3), biden_split$test)
+    ```
+
+__4. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.__
+
+* implement bagging algorithm
+```{r biden bagging}
+(biden_bag <- randomForest(biden ~ ., type = regression, 
+                           data = biden_split$train,
+                           mse = TRUE, importance = TRUE, mtry = 5, ntree = 500))
+```
+
+* calculate the new mse: __485__, which is greater than 406, the results obtained before. 
+```{r new mse}
+mse(biden_bag, biden_split$test)
+```
+
+* variable importance measure
+```{r biden variable importance measure}
+data_frame(var = rownames(importance(biden_bag)),
+           MeanDecreaseMSE = importance(biden_bag)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseMSE, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseMSE)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden score",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Degree of Importance (%IncMSE)")
+```
+According to the variable importance measurement, `dem` seems to be the most important predictor for the biden score, where as `rep`, `age`, `educ`, `female` are relatively unimportant. The plot implies that assigning other values for `dem` randomly but 'realistically' by permuting this predictor's values over the dataset, would on average increase MSE by 80%.
+
+__5. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of m, the number of variables considered at each split, on the error rate obtained.__
+
+* implement random forest algorithm
+```{r biden random forest}
+(biden_rf <- randomForest(biden ~ ., type = regression, 
+                           data = biden_split$train, importance = TRUE))
+```
+
+* calculate the new mse: __412__, which is lower than the MSE obtained using bagging algorithm. 
+```{r new mse random forest}
+mse(biden_rf, biden_split$test)
+```
+
+* variable importance measurement: 
+```{r variable importance measure random forest}
+data_frame(var = rownames(importance(biden_rf)),
+           MeanDecreaseMSE = importance(biden_rf)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseMSE, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseMSE)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden score",
+       subtitle = "Random forest",
+       x = NULL,
+       y = "Degree of Importance (%IncMSE)")
+```
+
+As shown in the plot above, using the random forest algorithm, I have obtained that `dem` and `rep` are the most important variables to determine biden score while `female`, `age`, and `educ` are relatively unimportant. The plot implies that assigning other values for `dem` and `rep` randomly but 'realistically' by permuting this predictor's values over the dataset, would on average increase MSE by 28% and 26% correspondingly.
+
+* describe the effect of m, the number of variables considered at each split, on the error rate obtained: different from the bagging algorithm that uses all predictors, m = p at each split, in the random forest algorithm, m is the number of predictors randomly selected from the total possible predictors p, which intentionally ignores a random set of variables. Every time a new split is considered, a new random sample m is drawn. The error rate or MSE would likely to decrease because choosing m predictors at each split would exclude single or several dominant predictors in the dataset and thus would likely to reduce the error rate or MSE. 
+
+__6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?__
+
+* implement the boosting algorithm and setting shrinkage parameter $\lambda$ to be different values from 0.0001, to 0.1.
+```{r boosting algorithm}
+biden_boost00001 <- gbm(biden ~ ., distribution = 'gaussian',
+                        data = biden_split$train, shrinkage = 0.0001)
+biden_boost0001 <- gbm(biden ~ ., distribution = 'gaussian',
+                       data = biden_split$train, shrinkage = 0.001)
+biden_boost001 <- gbm(biden ~ ., distribution = 'gaussian',
+                      data = biden_split$train, shrinkage = 0.01)
+biden_boost01 <- gbm(biden ~ ., distribution = 'gaussian',
+                     data = biden_split$train, shrinkage = 0.1)
+```
+
+* construct a function to compute MSE
+```{r mse func boosting}
+boost_mse <- function(model, input_data){
+  pred <- predict(model, input_data, n.trees = 1000)
+  actual_index <- input_data$idx
+  actual <- input_data$data$biden[actual_index]
+  mse <- (mean((pred - actual)^2))
+  return(mse)
+}
+```
+
+* compute mse and create a table to present the result: In conclusion, according to the matrix presented below, test MSE would likely to decrease as the shrinkage parameter, $\lambda$, increases. 
+```{r boosting table}
+mse00001 <- boost_mse(biden_boost00001, biden_split$test)
+mse0001 <- boost_mse(biden_boost0001, biden_split$test)
+mse001 <- boost_mse(biden_boost001, biden_split$test)
+mse01 <- boost_mse(biden_boost01, biden_split$test)
+
+boostmse <- matrix(c(mse00001, mse0001, mse001, mse01), 
+                   ncol=4, byrow=TRUE)
+colnames(boostmse) <- c("0.0001", "0.001", "0.01", "0.1")
+rownames(boostmse) <- c("test MSE")
+boostmse <- as.table(boostmse)
+boostmse
+```
+
+---
+
+# Part 2: Modeling voter turnout
+__1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)__
+
+* load the raw dataset and modify factor variables into specific levels
+```{r load dataset}
+mhealth <- read_csv("mental_health.csv") %>%
+    mutate(vote96 = factor(vote96, levels = 0:1, labels = c("Not Voted", "Voted")),
+           black = factor(black, levels = 0:1, labels = c("Not Black", "Black")),
+           married = factor(married, levels = 0:1, labels = c("Not Married", "Married")),
+           female = factor(female, levels = 0:1, labels = c("Not Female", "Female"))) %>%
+    na.omit
+mhealth_split <- resample_partition(mhealth, c(test = 0.3, train = 0.7))
+```
+
+* construct a function to compute the optimal number of terminal nodes
+```{r function freaking awesome}
+optimal_nodes = function(functional_form, plot = FALSE){
+  # error rate function
+  err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+  }
+  
+  # construct the model
+  vote_mod = tree(functional_form, data = mhealth,
+                  control = tree.control(nobs = nrow(mhealth),
+                                         mindev = 0))
+
+  set.seed(1234)
+  mhealth_cv <- mhealth %>%
+    crossv_kfold(k = 10) %>%
+    mutate(tree = map(train, ~ tree(functional_form, data = .,
+                                    control = tree.control(nobs = nrow(mhealth),
+                                                           mindev = .001))))
+  mhealth_cv <- expand.grid(mhealth_cv$.id,
+                          seq(from = 2, to = ceiling(length(vote_mod$frame$yval) / 2))) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(mhealth_cv, by = ".id") %>%
+  mutate(prune = map2(tree, k, ~ prune.misclass(.x, best = .y)),
+         mse = map2_dbl(prune, test, err.rate.tree))
+  
+  # plotting of test error rate on number of terminal nodes
+  if (plot == TRUE){
+    plot = mhealth_cv %>%
+      group_by(k) %>%
+      summarize(test_mse = mean(mse),
+                sd = sd(mse, na.rm = TRUE)) %>%
+      ggplot(aes(k, test_mse)) +
+      geom_point() +
+      geom_line() +
+      labs(title = "mhealth voting tree",
+           subtitle = strwrap(capture.output(print(functional_form))),
+           x = "Number of terminal nodes",
+           y = "Test error rate")
+    
+    return(plot)
+  } 
+  
+  stats = mhealth_cv %>%
+      group_by(k) %>%
+      summarize(test_mse = mean(mse),
+                sd = sd(mse, na.rm = TRUE))
+    
+    min_k = stats$k[which(stats$test_mse == min(stats$test_mse))]
+    
+    return(min_k)
+}
+  
+
+```
+
+* Construct a function to plot optimal tree
+```{r create a function for the optimal tree plot}
+optimal_tree_plot = function(functional_form, k){
+  vote_mod = tree(functional_form, data = mhealth,
+                  control = tree.control(nobs = nrow(mhealth),
+                                         mindev = 0))
+  mod <- prune.tree(vote_mod, best = k)
+
+  tree_data <- dendro_data(mod)
+  plot = ggplot(segment(tree_data)) +
+    geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+                 alpha = 0.5) +
+    geom_text(data = label(tree_data), 
+              aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+    geom_text(data = leaf_label(tree_data), 
+              aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+    theme_dendro() +
+    labs(title = "Voting 1996 Turnover tree",
+         subtitle = strwrap(capture.output(print(functional_form))))  
+  
+  return(plot)
+}
+```
+
+* Construct Model 1: `vote96 ~ mhealth_sum`
+```{r model1}
+mod1_optimal_num = optimal_nodes(vote96~mhealth_sum, FALSE)
+(mod1 = optimal_nodes(vote96 ~ mhealth_sum, TRUE))
+(mod1_best = optimal_tree_plot(vote96~mhealth_sum, mod1_optimal_num))
+```
+
+* Construct Model 2: `vote96 ~ mhealth_sum + age`
+```{r model2}
+mod2_optimal_num = optimal_nodes(vote96~mhealth_sum + age, FALSE) 
+(mod2 = optimal_nodes(vote96 ~ mhealth_sum + age, TRUE))
+(mod2_best = optimal_tree_plot(vote96~mhealth_sum + age, mod2_optimal_num + 1))
+```
+
+* Construct Model 3: `vote96 ~ mhealth_sum + age + educ`
+```{r model3}
+mod3_optimal_num = optimal_nodes(vote96~mhealth_sum + age + educ, FALSE)
+(mod3 = optimal_nodes(vote96 ~ mhealth_sum + age + educ, TRUE))
+(mod3_best = optimal_tree_plot(vote96~mhealth_sum + age + educ, mod3_optimal_num))
+```
+
+* Construct Model 4: `vote96 ~ mhealth_sum + age + educ + black`
+```{r model4}
+mod4_optimal_num = optimal_nodes(vote96~mhealth_sum + age + educ + black, FALSE)
+(mod4 = optimal_nodes(vote96 ~ mhealth_sum + age + educ + black, TRUE))
+(mod4_best = optimal_tree_plot(vote96~mhealth_sum + age + educ + black, mod4_optimal_num))
+```
+
+* Construct Model 5: `vote96 ~  mhealth_sum + age + educ + black + inc`
+```{r model5}
+mod5_optimal_num = optimal_nodes(vote96~mhealth_sum + age + educ + black + inc10, FALSE)
+(mod5 = optimal_nodes(vote96~mhealth_sum + age + educ + black + inc10, TRUE))
+(mod5_best = optimal_tree_plot(vote96~mhealth_sum + age + educ + black + inc10,
+                              mod5_optimal_num))
+```
+
+* In order to check which model works the best, use randomForest method: in order to assess which model works the best, we used random forest method to assess the OOB estimate of error rate. It turned out the model `vote96 ~ mhealth_sum + age + educ` works the best, and thus would have my preference. 
+```{r check model the best}
+(tree_rf1 <- randomForest(vote96 ~ mhealth_sum, data = mhealth,
+                          ntree = 500))
+(tree_rf2 <- randomForest(vote96 ~ mhealth_sum + age, data = mhealth,
+                          ntree = 500))
+(tree_rf3 <- randomForest(vote96 ~ mhealth_sum + age + educ, data = mhealth,
+                          ntree = 500))
+(tree_rf4 <- randomForest(vote96 ~ mhealth_sum + age + educ + black, data = mhealth,
+                          ntree = 500))
+(tree_rf5 <- randomForest(vote96 ~ mhealth_sum + age + educ + black + inc10, data = mhealth,
+                          ntree = 500))
+```
+
+__2. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)__
+
+* Model 1: Linear Kernal: `vote96 ~ .`
+```{r linear kernal}
+mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mhealth_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_lin_tune)
+```
+
+```{r best linear kernal}
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+```
+
+```{r}
+fitted <- predict(mh_lin, as_tibble(mhealth_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line <- roc(as_tibble(mhealth_split$test)$vote96, fitted$decision.values)
+plot(roc_line)
+
+auc(roc_line)
+```
+
+Looking at the linear kernel, I can observe that all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). The model gets the best cost level at 5 and has a 10-fold CV error rate 0.276. The area under the curve is 0.754. The overall performance of the classifier across all potential thresholds is the area under the (ROC) curve (AUC). The ideal AUC curve hugs the top left corner of the graph, so a larger AUC indicates a better classifier -- an AUC of 1 means perfect prediction for any threshold value. The dashed line represents the null model where we randomly guess whether a person voted or not and would have an AUC of 0.5. With an AUC of 0.754, this model performs decently.
+
+
+* Model 2: Polynomial Kernal: `vote96 ~ .`
+```{r polynomial kernal}
+mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mhealth_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_poly_tune)
+```
+
+```{r best polynomial kernal}
+mh_poly <- mh_poly_tune$best.model
+summary(mh_poly)
+```
+
+```{r}
+fitted <- predict(mh_poly, as_tibble(mhealth_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(mhealth_split$test)$vote96, fitted$decision.values)
+plot(roc_poly)
+
+auc(roc_poly)
+```
+
+Looking at the polynomial kernel, I can observe that all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). The model gets the best cost level at 5 and has a 10-fold CV error rate 0.281 The area under the curve is 0.745. With an AUC of 0.745, this model performs decently.
+
+
+* Model 3: Radial Kernal: `vote96 ~ .`
+```{r}
+mh_rad_tune <- tune(svm, vote96 ~ ., data = as_tibble(mhealth_split$train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_rad_tune)
+```
+
+```{r best radial}
+mh_rad <- mh_rad_tune$best.model
+summary(mh_rad)
+```
+
+```{r}
+fitted <- predict(mh_rad, as_tibble(mhealth_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad <- roc(as_tibble(mhealth_split$test)$vote96, fitted$decision.values)
+plot(roc_rad)
+auc(roc_rad)
+```
+
+Looking at the radial kernel, I can observe that all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). The model gets the best cost level at 1 and has a 10-fold CV error rate 0.283. The area under the curve is 0.752. With an AUC of 0.752, this model performs decently.
+
+
+* Model 4: Linear Kernal: `vote96 ~ mhealth_sum + inc10 + black + age`
+```{r}
+mh_lin2_tune <- tune(svm, vote96 ~ mhealth_sum + inc10 + black + age, 
+                     data = as_tibble(mhealth_split$train),
+                     kernel = "linear",
+                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_lin2_tune)
+```
+
+```{r}
+mh_lin2 <- mh_lin2_tune$best.model
+summary(mh_lin2)
+```
+
+```{r}
+fitted <- predict(mh_lin2, as_tibble(mhealth_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_line2 <- roc(as_tibble(mhealth_split$test)$vote96, fitted$decision.values)
+plot(roc_line2)
+
+auc(roc_line2)
+```
+
+Looking at the linear kernel but using different set of predictors, I can observe that all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). The model gets the best cost level at 0.1 and has a 10-fold CV error rate 0.315. The area under the curve is 0.682 With an AUC of 0.682, this model performs decently.
+
+
+* Model 5: Polynomial kernel with different degrees
+```{r}
+mh_poly2_tune <- tune(svm, vote96 ~ ., 
+                      data = as_tibble(mhealth_split$train),
+                      kernel = "polynomial",
+                      range = list(cost = c(.001, .01, .1, 1, 5, 10, 100), 
+                                   degree = c(2, 3, 4)))
+summary(mh_poly2_tune)
+```
+```{r}
+mh_poly2 <- mh_poly2_tune$best.model
+summary(mh_poly2)
+```
+
+```{r}
+fitted <- predict(mh_poly2, as_tibble(mhealth_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly2 <- roc(as_tibble(mhealth_split$test)$vote96, fitted$decision.values)
+plot(roc_poly2)
+
+auc(roc_poly2)
+```
+
+Looking at the polynomial kernel with varying degrees, I can observe that all predictor variables and tested at different cost levels (0.001, 0.01, 0.1, 1, 5, 10, and 100). The model gets the best cost level at 5 and has a 10-fold CV error rate 0.282 The area under the curve is 0.758. With an AUC of 0.758, this model performs decently.
+
+* to determine the optimal model: plotting all four curves in the same plot, and from observing this plot, I can identify that the blue curve, or model 1 using the linear kernal of all predictors, fit the data the best.
+```{r plot the optimal}
+plot(roc_line, print.auc = TRUE, col = "blue")
+plot(roc_poly, print.auc = TRUE, col = "red", print.auc.y = .4, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.y = .3, add = TRUE)
+plot(roc_line2, print.auc = TRUE, col = "green", print.auc.y = .2, add = TRUE)
+plot(roc_poly2, print.auc = TRUE, col = "gold", print.auc.y = .1, add = TRUE)
+```
+
+---
+
+# Part 3: OJ Simpson
+__1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.__
+
+* load the raw dataset
+```{r load part 3 data}
+simpson <- read_csv("simpson.csv") %>%
+    mutate(dem = factor(dem, levels = 0:1, labels = c("Not Dem", "Dem")),
+           rep = factor(rep, levels = 0:1, labels = c("Not Rep", "Rep")),
+           ind = factor(ind, levels = 0:1, labels = c("Not Ind", "Ind")),
+           female = factor(female, levels = 0:1, labels = c("Male", "Female")),
+           black = factor(black, levels = 0:1, labels = c("Not Black", "Black")),
+           hispanic = factor(hispanic, levels = 0:1, labels = c("Not Hispanic", "Hispanic"))) %>%
+    na.omit
+simpson_split <- resample_partition(simpson, c(test = 0.3, train = 0.7))
+```
+
+* In order to develop a robust statistical learning model, I decide to first construct a logistic regression model
+```{r logistic regression}
+set.seed(1234)
+
+getProb <- function(model, data){
+  data <- data %>% 
+    add_predictions(model) %>% 
+    mutate(prob = exp(pred) / (1 + exp(pred)),
+           pred_bi = as.numeric(prob > .5))
+  return(data)
+}
+
+#Split data
+simpson_split <- resample_partition(simpson, c(test = 0.3, train = 0.7))
+
+simpson_logit <- glm(guilt ~ black + hispanic, data = simpson_split$train, family = binomial)
+summary(simpson_logit)
+```
+According to the summary of regression coefficients presented above, both predictors, `black` and `hispanic` have negative effect to the perception of `guilt`. As seen by the coefficient, if a person is black, then the log-odds of perceiving simpson is guilty would reduce by 3.4564. Similarly, if a person is hispanic, then the log-odds of perceiving simpson is guilty would reduce by 0.3476. 
+
+```{r logistic regression assessment}
+logistic_test <- getProb(simpson_logit, as.data.frame(simpson_split$test))
+
+# ROC
+(auc<- auc(logistic_test$guilt, logistic_test$pred_bi))
+
+# accuracy rate
+(accuracy <- mean(logistic_test$guilt == logistic_test$pred_bi, na.rm = TRUE))
+```
+According to the test creterion, the auc, or area under the curve, is 0.733, and the accuracy rate is 81.6%. Thus, this is a relatively decent model to use. 
+
+
+__2. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.__
+
+* In order to predict whether individuals believe OJ Simpson to be guilty of these murders, the model I can immediately think of is the tree model. As presented below, the using 10-fold cross validation method, the optimal number of terminal nodes is 4. 
+```{r logistic}
+simpson <- read_csv("simpson.csv") %>%
+    mutate(guilt = factor(guilt, levels = 0:1, labels = c("Innocent", "Guilty")),
+           dem = factor(dem, levels = 0:1, labels = c("Not Dem", "Dem")),
+           rep = factor(rep, levels = 0:1, labels = c("Not Rep", "Rep")),
+           ind = factor(ind, levels = 0:1, labels = c("Not Ind", "Ind")),
+           female = factor(female, levels = 0:1, labels = c("Male", "Female")),
+           black = factor(black, levels = 0:1, labels = c("Not Black", "Black")),
+           hispanic = factor(hispanic, levels = 0:1, labels = c("Not Hispanic", "Hispanic"))) %>%
+    na.omit
+
+simpson_split <- resample_partition(simpson, c(test = 0.3, train = 0.7))
+
+# estimate model
+simpson_tree <- tree(guilt ~ ., data = simpson,
+                     control = tree.control(nobs = nrow(simpson),
+                            mindev = .001))
+mod = simpson_tree
+
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+# generate 10-fold CV trees
+simpson_cv <- simpson %>%
+  na.omit() %>%
+  crossv_kfold(k = 10) %>%
+  mutate(tree = map(train, ~ tree(guilt ~ ., data = .,
+     control = tree.control(nobs = nrow(simpson),
+                            mindev = .001))))
+
+# calculate each possible prune result for each fold
+simpson_cv <- expand.grid(simpson_cv$.id,
+                          seq(from = 2, to = ceiling(length(mod$frame$yval) / 2))) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(simpson_cv, by= ".id") %>%
+  mutate(prune = map2(tree, k, ~ prune.misclass(.x, best = .y)),
+         mse = map2_dbl(prune, test, err.rate.tree))
+
+simpson_cv %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Simpson Guilt tree",
+       subtitle = "guilt ~ .",
+       x = "Number of terminal nodes",
+       y = "Test error rate")
+```
+
+* Plot the optimal tree
+```{r plotting optimal tree 3/a}
+mod <- prune.tree(simpson_tree, best = 4)
+
+tree_data <- dendro_data(mod)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Simpson Guilt tree",
+       subtitle = "guilt ~.")
+```
+
+As the tree map presented above, if the person is black then s/he would typically think Simpson to be innocent. If the person is not black and with an age < 19.5, the person would typically think Simpson is innovent. However, nonblacks who are older than 19.5 would typically think that Simpson is guilty regardless party affiliation. 
+
+* Using the variables to do a random forest model to test its effectiveness and we can see that if we used the three variables that we obtained from 10-fold cv, we are able to obtain an OOB estimatin of error rate of 18.4%. It implies, if we use those three variables and construct a tree, the pribability of getting a correct estimate is more than 4/5 of a time. Thus, this is a decent model to use. 
+```{r}
+randomForest(guilt ~ black + age + rep, data = simpson, ntree = 1000)
+```
+```{r}
