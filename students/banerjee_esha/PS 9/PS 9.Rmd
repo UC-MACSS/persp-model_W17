@@ -1,0 +1,133 @@
+---
+title: "PS 9"
+author: "Esha Banerjee"
+date: "12 March 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+options(digits = 3)
+set.seed(111)
+```
+
+```{r Loading packages}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(tree)
+library(e1071)
+library(ggdendro)
+library(randomForest)
+library(gbm)
+library(pander)
+library(ggfortify)
+```
+
+
+
+```{r Loading Data}
+fm = read_csv('feminist.csv')
+mh = read_csv('mental_health.csv')
+clg = read_csv('College.csv')
+usa = read_csv('USArrests.csv')
+```
+
+
+# Attitudes towards feminists
+
+#### Split the data into a training and test set (70/30%).
+```{r}
+fm<-fm %>%
+  na.omit()
+fm_split <- resample_partition(fm, c(test = 0.3, train = 0.7))
+fm_train <- as_tibble(fm_split$train)
+fm_test <- as_tibble(fm_split$test)
+```
+
+```{r}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse_lm <- lm(feminist ~ female + inc + age + dem + rep, data = fm_train) %>%
+  mse(.,fm_test)
+
+
+mse_knn <- data_frame(k = seq(5, 100, by = 5), 
+                      knn = map(k, ~ knn.reg(select(fm_train, -age, -female, -dem, -rep), y = fm_train$feminist, test = select(fm_test, -age, -female, -dem, -rep), k = .)), 
+                      mse = map_dbl(knn, ~ mean((fm_test$feminist - .$pred)^2))) 
+
+
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "KNN: Attitude toward feminists",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+
+knn_mse_fem<-min(mse_knn$mse)
+```
+
+MSE is lowest for the model with all the variables, K = 5. 
+#### Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
+```{r}
+ 
+mse_knn_w <- data_frame(k = seq(5, 100, by = 5), 
+                      wknn = map(k, ~ kknn(feminist ~ age + educ + female + income + dem + rep, train = fm_train, test = fm_test, k = .)), 
+                      mse_wknn = map_dbl(wknn, ~ mean((fm_test$feminist - .$fitted.values)^2))) %>%
+  left_join(mse_knn, by = "k") %>%
+  mutate(mse_knn = mse)%>%
+  select (k, mse_knn, mse_wknn) %>%
+  gather(method,mse, -k) %>%
+  mutate(method = str_replace(method, "mse_", ""))%>%
+  mutate(method = factor (method, levels = c("knn","wknn"), labels = c("KNN","Weighted KNN"))) 
+
+
+mse_knn_w %>%
+  ggplot(aes(k, mse, color = method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(title = "Test MSE for linear regression vs. KNN",
+       subtitle = "Traditional and weighted KNN",
+       x = "K",
+       y = "Test mean squared error",
+       method = NULL) +
+  expand_limits(y = 0) +
+  theme(legend.position = "bottom")
+
+```
+
+# Colleges
+#### Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+```{r}
+# convert the private to a numeric variable
+c <- clg %>%
+  mutate(Private = ifelse (Private =="Yes",1,0 ) )
+# However, it seems the vector of Private does associate any major clusters, I ignore it. 
+
+
+pr.out <- prcomp(c, scale = TRUE)
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+```{r}
+pr.out <- prcomp(clg[,2:18], scale = TRUE)
+
+pr.out$rotation
+biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(clg)))
+```
+
