@@ -89,7 +89,7 @@ MSE is lowest for the model with the variables age, female, dem, rep & K = 5.
 
 ``` r
 mse_knn_w <- data_frame(k = seq(5, 100, by = 5), 
-                      wknn = map(k, ~ kknn(feminist ~ age + educ + female + income + dem + rep, train = fm_train, test = fm_test, k = .)), 
+                      wknn = map(k, ~ kknn(feminist ~ age + female  + dem + rep, train = fm_train, test = fm_test, k = .)), 
                       mse_wknn = map_dbl(wknn, ~ mean((fm_test$feminist - .$fitted.values)^2))) %>%
   left_join(mse_knn, by = "k") %>%
   mutate(mse_knn = mse)%>%
@@ -167,6 +167,7 @@ mse_rf
 
 ``` r
 set.seed(111)
+# Boosting
 feminist_models <- list("boosting_depth1" = gbm(as.numeric(feminist) - 1 ~ female + age + dem + rep,
                                                data = fm_train,
                                                n.trees = 10000, interaction.depth = 1),
@@ -217,7 +218,127 @@ predict.gbm <- function (object, newdata, n.trees, type = "link", single.tree = 
     gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
   }
 }
+
+fm_boost_1 = gbm(as.numeric(feminist) - 1 ~ .,
+                                               data = fm_train,
+                                               n.trees = 2352, interaction.depth = 1)
 ```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+fm_boost_2 = gbm(as.numeric(feminist) - 1 ~ .,
+                                               data = fm_train,
+                                               n.trees = 1693, interaction.depth = 2)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+fm_boost_4 = gbm(as.numeric(feminist) - 1 ~ .,
+                                               data = fm_train,
+                                               n.trees = 1308, interaction.depth = 4)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+mse_1 = mse(fm_boost_1,fm_test)
+```
+
+    ## Using 2352 trees...
+
+``` r
+mse_1
+```
+
+    ## [1] 446
+
+``` r
+mse_2 = mse(fm_boost_2,fm_test)
+```
+
+    ## Using 1693 trees...
+
+``` r
+mse_2
+```
+
+    ## [1] 446
+
+``` r
+mse_4 = mse(fm_boost_4,fm_test)
+```
+
+    ## Using 1308 trees...
+
+``` r
+mse_4
+```
+
+    ## [1] 445
+
+``` r
+set.seed(111)
+
+fm_boost_1 = gbm(as.numeric(feminist) - 1 ~ .,
+                                               data = fm_train,
+                                               n.trees = 2352, interaction.depth = 1, shrinkage = 0.005)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+fm_boost_2 = gbm(as.numeric(feminist) - 1 ~ .,
+                                               data = fm_train,
+                                               n.trees = 1693, interaction.depth = 2, shrinkage = 0.005)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+fm_boost_4 = gbm(as.numeric(feminist) - 1 ~ .,
+                                               data = fm_train,
+                                               n.trees = 1308, interaction.depth = 4, shrinkage = 0.005)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+mse_1 = mse(fm_boost_1,fm_test)
+```
+
+    ## Using 2352 trees...
+
+``` r
+mse_1
+```
+
+    ## [1] 451
+
+``` r
+mse_2 = mse(fm_boost_2,fm_test)
+```
+
+    ## Using 1693 trees...
+
+``` r
+mse_2
+```
+
+    ## [1] 450
+
+``` r
+mse_4 = mse(fm_boost_4,fm_test)
+```
+
+    ## Using 1308 trees...
+
+``` r
+mse_4
+```
+
+    ## [1] 453
 
 Colleges
 ========
