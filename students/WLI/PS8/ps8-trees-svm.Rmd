@@ -1,0 +1,658 @@
+---
+title: "Problem set #8: tree-based methods and support vector machines"
+author: "Weijia Li"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE, echo = FALSE)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stargazer)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(devtools)
+library(rcfss)
+devtools::install_github("uc-cfss/rcfss")
+devtools::install_github("bensoltoff/ggdendro")
+library(e1071)
+library(grid)
+library(gridExtra)
+
+biden <- read_csv('data/biden.csv')
+options(digits = 3)
+theme_set(theme_minimal())
+```
+
+# Part 1: Sexy Joe Biden (redux times two) [3 points]
+
+1. Split the data into a training set (70%) and a testation set (30%). 
+
+```{r}
+set.seed(1234)
+biden_split <- resample_partition(biden, c(test = .3, train = .7))
+```
+
+70% of the data as training data, and 30% as testing data.  
+
+
+1. Fit a decision tree to the training data, with `biden` as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?
+    * Leave the control options for `tree()` at their default values
+    
+```{r}
+tree_biden <- tree(biden ~ ., data = biden_split$train)
+
+# plot
+tree_data <- dendro_data(tree_biden)
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data),
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data),
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Decision Tree for Biden Score')
+
+mse <- function(model, data){
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+leaf_vals <- leaf_label(tree_data)$yval
+test_mse <- mse(tree_biden, biden_split$test)
+```
+
+If someone is a democrat (dem = 1), then the tree predicts a biden score of 74.5. Otherwise, if someone is not a democrat, then we go to the next branch. If someone is not republican (i.e an independent in this case), then the tree predicts a biden score of 43.2, otherwise (if they are a republican), the tree predicts a biden score of 57.6.
+
+The test MSE is 406.
+
+    
+1. Now fit another tree to the training data with the following `control` options. Use cross-testation to determine the optimal level of tree complexity, plot the optimal tree, and interpret the results. Does pruning the tree improve the test MSE?
+
+```{r}
+tree.base <- tree(biden ~ . , data = biden_split$train, 
+                     control = tree.control(nobs = nrow(biden_split$train),
+                              mindev = 0))
+base_test_mse <- mse(tree.base, biden_split$test)
+
+num_nodes <- 2:25
+pruned_trees <- map(num_nodes, prune.tree, tree = tree.base, k = NULL)
+test_mses <- map_dbl(pruned_trees, mse, data = biden_split$test)
+
+tree_opt <- pruned_trees[[which.min(test_mses)]]
+opt_test_mse <- mse(tree_opt, biden_split$test)
+
+tibble(num_nodes = num_nodes, test_mse = test_mses) %>%
+  ggplot(aes(x = num_nodes, y = test_mse)) +
+  geom_line() + 
+  labs(title = 'Test MSE for Different Numbers of Terminal Nodes',
+       x = 'Number of Terminal Nodes',
+       y = 'Test MSE') + 
+  scale_x_discrete(breaks = seq(2,25,1), limits = seq(2,25,1))
+
+size_base <- summary(tree.base)$size
+size_opt <- summary(tree_opt)$size
+
+```
+    
+    
+Looking at the graph, the minimum cross-testated test MSE occurs for `r size_opt` terminal nodes.
+
+Pruning the tree helps a dramatic reduce of the test MSE. The original tree had `r size_base` terminal nodes with a test MSE of 481, while the optimal tree only has `r size_opt` terminal nodes with a test MSE of 401.    
+
+Ploting optimal tree
+```{r}
+# plot tree
+tree_data <- dendro_data(pruned_trees[[which.min(test_mses)]], type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend),
+               alpha = 0.5) +
+  geom_text(data = label(tree_data),
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data),
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Optimal Decision Tree for Biden Score')
+
+```
+
+1. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+
+```{r}
+set.seed(1234)
+biden_bag <- randomForest(biden ~ ., data = biden_split$train, mtry = 5, importance = TRUE)
+
+# variable importance
+data_frame(var = rownames(importance(biden_bag)),
+           MeanDecreaseError = importance(biden_bag)[,1]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseError, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseError)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden Score",
+       subtitle = "Bagging",
+       x = NULL,
+       y = "Average % decrease in the out-of-bag MSE")
+
+mse(biden_bag, biden_split$test)
+```
+
+Bagging returns a higher MSE of 484 (when setting seed to 1234). From the above plot of variable importance, we can see that Dem and Rep are the top two important predictors, and on the contrary, age is the most trivial that almost have no influence on out-of-bag MSE. In particular, education and gender will increase the MSE.
+
+
+1. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of $m$, the number of variables considered at each split, on the error rate obtained.
+
+```{r}
+(biden_rf <- randomForest(biden ~ ., data = biden_split$train, importance = TRUE))
+
+data_frame(var = rownames(importance(biden_rf)),
+           MeanDecreaseError = importance(biden_rf)[,1]) %>%
+  left_join(data_frame(var = rownames(importance(biden_bag)),
+           Bagging = importance(biden_bag)[,1])) %>%
+  mutate(var = fct_reorder(var, Bagging, fun = median)) %>%
+  gather(model, rss, -var) %>%
+  ggplot(aes(var, rss, color = model)) +
+  geom_col(aes(fill=model), position='dodge') +
+  # geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Biden Score",
+       x = NULL,
+       y = "% decrease in out-of-bag MSE")
+
+mse(biden_rf, biden_split$test)
+
+```
+
+MSE is now 409, which is much smaller than using bagging method(484). Thus we conclude that random forests indeed improves upon bagging by avoiding using single dominant predictor in the dataset. 
+
+Dem and Rep are still the most important variables, but there sees a significant drop in the importance of 'dem'.
+
+
+```{r, comparing m}
+biden_results <- data_frame(terms = 1:5,
+           model = map(terms, ~ randomForest(biden ~ .,
+                         data = biden_split$train, ntree=500,
+                         mtry = ., importance=TRUE)), 
+           MSE = map_dbl(model, mse, data = biden_split$test))
+
+ggplot(biden_results, aes(terms, MSE)) +
+  geom_line(color = 'red') +
+  labs(title = "The effect of m",
+       x = "m - number of variables considered at each split",
+       y = "MSE")
+```
+
+From the plot above, when number of variables considered at each split equals to 2 the test MSE is the lowest. The higher the m, the more trees tend to be correlated thus the higher the MSE, as the result, averaging across the trees will not substantially reduce variance.
+
+
+
+1. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
+
+```{r}
+set.seed(1234)
+biden.boost <- gbm(biden ~ ., 
+                   data = biden_split$train, distribution = 'gaussian',
+                   n.trees = 10000, interaction.depth = 4)
+
+mse_boost <- mean((biden_split$test$data$biden - 
+                     predict(biden.boost, newdata = biden_split$test, n.trees = 100)) ^ 2)
+
+num_trees_df <- data_frame(num_trees = seq(100, 10000, by = 100),
+                           test_mse = map_dbl(num_trees, ~ mean((biden_split$test$data$biden - 
+                                                             predict(biden.boost, 
+                                                                     newdata = biden_split$test, 
+                                                                     n.trees = .)) ^ 2)))
+num_trees_df %>%
+  ggplot(aes(num_trees, test_mse)) +
+    geom_line() +
+    labs(title = 'Number of trees used vs. Test MSE',
+         x = 'Number of Trees used in Boosting',
+         y = 'Test MSE')
+```
+
+
+MSE is now 551, which is much higher than any of the previous test MSEs. test MSE as a function of the number of trees used in Boosting. And surprisingly, according to my plot, the more number of trees used in boosting, the larger the test MSE.
+
+
+```{r}
+shrink_df <- data_frame(shrinkage = seq(0.001, .1, length.out = 100),
+           boosts = map(shrinkage, ~ gbm(biden ~ .,
+                                         data = biden_split$train, distribution = 'gaussian',
+                                         n.trees = 1000, interaction.depth = 3, shrinkage = .)),
+           mse_boost = map_dbl(boosts, 
+                           ~ mean((biden_split$test$data$biden - predict(., 
+                                                                         n.trees = 100,
+                                                                  newdata = biden_split$test)) ^ 2)))
+shrink_df %>%
+  ggplot(aes(shrinkage, mse_boost)) +
+    geom_line() + 
+    labs(title = 'Test MSE for Boosting with different Shrinkage Values',
+         x = paste('Shrinkage Value: ', expression(lambda)),
+         y = 'Test MSE')
+```
+
+
+From the graph above, the lower the shrinkage value $\lambda$, the lower the test MSE.
+
+
+# Part 2: Modeling voter turnout [3 points]
+
+1. Use cross-testation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+
+I chose 1) decision tree with no control value, 2) pruned decision tree with optimal number of terminal nodes, 3) bagging approach, 4) normal random forest, and and 5) random forest with optimal m. I here list the error rate for each of these models and plot their ROC curves to compare AUC. 
+
+
+```{r}
+data2 <- read_csv('data/mental_health.csv') %>%
+        na.omit(data2)
+
+data2 %>%
+  mutate(vote96 = factor(vote96), black = factor(black),
+         female = factor(female), married = factor(married)) %>%
+         {.} -> data2
+
+set.seed(1234)
+# Resampling
+mh_split <- resample_partition(data2, c(test = 0.3, train = 0.7))
+
+# Define error rate function
+err.rate <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+# Normal tree
+mh_normaltree <- tree(vote96 ~.,
+                      data = mh_split$train)
+mh_normaltree_err <- err.rate(mh_normaltree, mh_split$test)
+
+mh_tree <- tree(vote96 ~ ., 
+                data = mh_split$train,
+                control = tree.control(nrow(mh_split$train),
+                                       mindev = 0))
+
+mh_tree_results_normal <- data_frame(terms = 2:25,
+           model = map(terms, ~ prune.tree(mh_tree, k = NULL, best = .)), error = map_dbl(model, ~ err.rate(., data = mh_split$test)))
+
+ggplot(mh_tree_results_normal, aes(terms, error)) +
+  geom_line() +
+  labs(title = "Test MSE for Different Numbers of Terminal Nodes",
+       x = "Terminal Nodes",
+       y = "Test MSE") + 
+  scale_x_discrete(breaks = seq(2,25,1), limits = seq(2,25,1))
+
+
+# Pruned tree with optimal number of terminal nodes
+mh_prunetree <- prune.tree(mh_tree, best = 17)
+mh_pt_err <- err.rate(mh_prunetree, mh_split$test)
+
+# Bagging
+mh_bag <- randomForest(vote96 ~., 
+                       data = mh_split$train,
+                       mtry = 7,
+                       importance = TRUE)
+mh_bag_err <- err.rate(mh_bag, mh_split$test)
+
+# Normal random forest with default value
+mh_normalrf <- randomForest(vote96 ~.,
+                            data = mh_split$train,
+                            importance = TRUE)
+mh_normalrf_err <- err.rate(mh_normalrf, mh_split$test)
+
+# Finding the optimal m
+mh_tree_results_normalrf <- data_frame(terms = 2:7,
+           model = map(terms, ~ randomForest(vote96 ~ .,
+                         data = mh_split$train, ntree=500,
+                         mtry = ., importance=TRUE)), 
+           error = map_dbl(model, ~ err.rate(., data = mh_split$test)))
+
+ggplot(mh_tree_results_normalrf, aes(terms, error)) +
+  geom_line() +
+  labs(title = "Comparing the effect of m",
+       x = "m - number of variables considered at each split",
+       y = "Test Error Rate")
+
+# Random forest with optimal m
+mh_rf <- randomForest(vote96 ~.,
+                       data = mh_split$train,
+                       mtry = 3,
+                       importance = TRUE)
+mh_rf_err <- err.rate(mh_rf, mh_split$test)
+
+
+mh_1_result <- data_frame(
+  'objects' = c('err'),
+  'normaltree' = c(mh_normaltree_err),
+  'prunedtree' = c(mh_pt_err),
+  'bagging' = c(mh_bag_err),
+  'normalrf' = c(mh_normalrf_err),
+  'optrf' = c(mh_rf_err)
+)
+knitr::kable(mh_1_result, digits = 3, align = 'c')
+
+# ROC curve
+fitted_nt <- predict(mh_normaltree, as_tibble(mh_split$test), type = 'class')
+roc_nt <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted_nt))
+
+fitted_pt <- predict(mh_prunetree, as_tibble(mh_split$test), type = 'class')
+roc_pt <- roc(as.numeric(as_tibble(mh_split$test)$vote96), as.numeric(fitted_pt))
+
+fitted_bg <- predict(mh_bag, as_tibble(mh_split$test), type = 'prob')[,2]
+roc_bg <- roc(as_tibble(mh_split$test)$vote96, fitted_bg)
+
+fitted_nrf <- predict(mh_normalrf, as_tibble(mh_split$test), type = 'prob')[,2]
+roc_nrf <- roc(as_tibble(mh_split$test)$vote96, fitted_nrf)
+
+fitted_rf <- predict(mh_rf, as_tibble(mh_split$test), type = 'prob')[,2]
+roc_rf <- roc(as_tibble(mh_split$test)$vote96, fitted_rf)
+
+plot(roc_nt, print.auc = TRUE, col = "blue", print.auc.x = .2)
+plot(roc_pt, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .4, add = TRUE)
+plot(roc_bg, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(roc_nrf, print.auc = TRUE, col = "green", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(roc_rf, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+
+The Optimal Random forest appears to have the lowest test MSE and the second highest AUC so I use this to predict test data.
+
+
+```{r}
+data_frame(var = rownames(importance(mh_rf)),
+           MeanDecreaseGini = importance(mh_rf)[,4]) %>%
+  mutate(var = fct_reorder(var, MeanDecreaseGini, fun = median)) %>%
+  ggplot(aes(var, MeanDecreaseGini)) +
+  geom_point() +
+  coord_flip() +
+  labs(title = "Predicting Voter Turnout",
+       subtitle = "Random Forest",
+       x = NULL,
+       y = "Average decrease in the Gini Index")
+
+```
+
+
+By plotting variable importance we can see age is the most important predictor for voter turnout; subsequently, family income, respondent's mental health and number of years of education also have significant effect on Gini index. On the contrary, gender, marriage and race have relatively small influence on voting pattern.
+
+
+1. Use cross-testation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+I chose 1)linear kernel 2) 1-degree polynomial, 3) 2-degree polynomial, 4) 3-degree polynomial, and 5) radial kernel as my five SVM models. The table below illustrates the cost and error for each model.
+
+```{r}
+set.seed(1234)
+
+#linear kernel
+mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_lin <- mh_lin_tune$best.model
+
+fitted <- predict(mh_lin, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+roc_line <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+
+#polynomial kernel
+mh_poly_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_poly <- mh_poly_tune$best.model
+
+fitted <- predict(mh_poly, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+
+# 2-degree polynomial kernel
+mh_poly2_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    degree = 2,
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_poly2 <- mh_poly2_tune$best.model
+
+fitted <- predict(mh_poly2, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly2 <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+# 1-degree polynomial kernel
+mh_poly4_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "polynomial",
+                    degree = 4,
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_poly4 <- mh_poly4_tune$best.model
+
+fitted <- predict(mh_poly4, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_poly4 <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+#Radial kernel
+mh_rad_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_rad <- mh_rad_tune$best.model
+
+fitted <- predict(mh_rad, as_tibble(mh_split$test), decision.values = TRUE) %>%
+  attributes
+
+roc_rad <- roc(as_tibble(mh_split$test)$vote96, fitted$decision.values)
+
+
+mh_2_result <- data_frame(
+  'objects' = c('cost', 'error rate'),
+  'linear' = c(mh_lin_tune$best.parameters$cost, mh_lin_tune$best.performance),
+  '2-degree poly' = c(mh_poly2_tune$best.parameters$cost, mh_poly2_tune$best.performance),
+  '3-degree poly' = c(mh_poly_tune$best.parameters$cost, mh_poly_tune$best.performance),
+  '4-degree poly' = c(mh_poly4_tune$best.parameters$cost, mh_poly4_tune$best.performance),
+  'radial' = c(mh_rad_tune$best.parameters$cost, mh_rad_tune$best.performance))
+knitr::kable(mh_2_result, digits = 3, align = 'c')
+
+plot(roc_line, print.auc = TRUE, col = "blue")
+plot(roc_poly4, print.auc = TRUE, col = "green", print.auc.y = .1, add = TRUE)
+plot(roc_poly2, print.auc = TRUE, col = "purple", print.auc.y = .4, add = TRUE)
+plot(roc_poly, print.auc = TRUE, col = "red", print.auc.y = .3, add = TRUE)
+plot(roc_rad, print.auc = TRUE, col = "orange", print.auc.y = .2, add = TRUE)
+```
+
+
+By plotting ROC curves for each model, we can see the third degree polynomial kernel has the largest AUC yet its corresponding error rate is also the highest. Thus I go to the next largest AUC owner - the linear kernel - who has a relatively small error rate according to the table above to fit the test data:
+
+```{r}
+mh_lin
+plot(roc_line, print.auc = TRUE)
+```
+
+# Part 3: OJ Simpson [4 points]
+
+1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
+
+```{r}
+oj <- read_csv('data/simpson.csv') %>%
+  na.omit() %>%
+  mutate(guilt = factor(guilt),
+         dem = factor(dem),
+         rep = factor(rep),
+         ind = factor(ind),
+         female = factor(female),
+         black = factor(black),
+         hispanic = factor(hispanic),
+         educ = factor(educ))
+
+set.seed(1234)
+oj.split <- resample_partition(oj, c(test = .3, train = .7))
+
+
+# Optimally Pruned Decision Tree
+opttree_oj <- tree(guilt ~ black + hispanic, data = oj.split$train, control = 
+                        tree.control(nobs = nrow(oj.split$train), mindev = 0))
+
+data_frame(nodes = 2:4,
+           err_rates = map_dbl(nodes, ~ 
+                               err.rate.tree(prune.tree(opttree_oj, best = .), oj.split$test))) %>%
+  {.$nodes[which.min(.$err_rates)]} %>%
+  prune.tree(opttree_oj, best = .) %>%
+  {.} -> ptree_oj
+
+
+# plot tree
+tree_data <- dendro_data(ptree_oj, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = 'Pruned Decision Tree for OJ Guilt Belief Depending on Race',
+       subtitle = '1 = Probably Guilty, 0 = Probably Not Guilty')
+
+```
+
+
+From the above decision tree, non-black are likely to think OJ is guilty (1), and blacks tend to think he is not guilty (0).
+
+1. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? 
+
+
+I here evaluate logistic regression, optimal tree, linear SVM, polynomial SVM and radial SVM using cross-validation. Below are the error rates table and ROC curves of the models.
+
+```{r}
+oj <-
+  select(oj, -ind)
+
+set.seed(1234)
+oj_split <- resample_partition(oj, c(test = 0.3, train = 0.7))
+
+# Logistic
+oj_logit <- glm(guilt ~ ., data = as_tibble(oj_split$train), family = binomial)
+fitted1 <- predict(oj_logit, as_tibble(oj_split$test), type = "response")
+oj_logit_err <- mean(as_tibble(oj_split$test)$guilt != round(fitted1))
+oj_roc_logit <- roc(as_tibble(oj_split$test)$guilt, fitted1)
+
+# Decision tree
+oj_tree <- tree(guilt ~ ., 
+                data = oj_split$train,
+                control = tree.control(nrow(oj_split$train),
+                                       mindev = 0))
+oj_tree_results <- data_frame(terms = 2:50,
+           model = map(terms, ~ prune.tree(oj_tree, k = NULL, best = .)), error = map_dbl(model, ~ err.rate(., data = oj_split$test)))
+
+# Find best number of nodes
+ggplot(oj_tree_results, aes(terms, error)) +
+  geom_line() +
+  labs(title = "Comparing Tree Complexity",
+       x = "Terminal Nodes",
+       y = "Test Error Rate")
+
+
+auc_best <- function(model) {
+  fitted <- predict(model, as_tibble(oj_split$test), type = 'class')
+  roc1 <- roc(as.numeric(as_tibble(oj_split$test)$guilt), as.numeric(fitted))
+  auc(roc1)
+}
+
+# Pruned tree
+oj_tree_results2 <- data_frame(terms = 2:50,
+           model = map(terms, ~ prune.tree(oj_tree, k = NULL, best = .)),
+           AUC = map_dbl(model, ~ auc_best(.)))
+
+ggplot(oj_tree_results2, aes(terms, AUC)) +
+  geom_line() +
+  labs(title = "Comparing Tree Complexity",
+       subtitle = "Using validation set",
+       x = "Terminal Nodes",
+       y = "AUC")
+
+oj_tree_p <- prune.tree(oj_tree, best = 10)
+fitted2 <- predict(oj_tree_p, as_tibble(oj_split$test), type = "class")
+oj_tree_err <- min(oj_tree_results$error)
+oj_roc_tree <- roc(as.numeric(as_tibble(oj_split$test)$guilt), as.numeric(fitted2))
+
+
+# Linear kernel
+oj_lin_tune <- tune(svm, guilt ~ ., data = as_tibble(oj_split$train), kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+oj_lin <- oj_lin_tune$best.model
+oj_lin_err <- oj_lin_tune$best.performance
+fitted4 <- predict(oj_lin, as_tibble(oj_split$test), decision.values = TRUE) %>%
+  attributes
+oj_roc_line <- roc(as.numeric(as_tibble(oj_split$test)$guilt), as.numeric(fitted4$decision.values))
+
+# Poly kernel
+oj_poly_tune <- tune(svm, guilt ~ ., data = as_tibble(oj_split$train), kernel = "polynomial", range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+oj_poly <- oj_poly_tune$best.model
+oj_poly_err <- oj_poly_tune$best.performance
+fitted5 <- predict(oj_poly, as_tibble(oj_split$test), decision.values = TRUE) %>%
+  attributes
+oj_roc_poly <- roc(as.numeric(as_tibble(oj_split$test)$guilt), as.numeric(fitted5$decision.values))
+
+# Radial kernel
+oj_rad_tune <- tune(svm, guilt ~ ., data = as_tibble(oj_split$train), kernel = "radial", range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+oj_rad <- oj_rad_tune$best.model
+oj_rad_err <- oj_rad_tune$best.performance
+fitted6 <- predict(oj_rad, as_tibble(oj_split$test), decision.values = TRUE) %>%
+  attributes
+oj_roc_rad <- roc(as.numeric(as_tibble(oj_split$test)$guilt), as.numeric(fitted6$decision.values))
+
+
+oj_result <- data_frame(
+  'objects' = c('error rate'),
+  'logisitic' = c(oj_logit_err),
+  'decision tree' = c(oj_tree_err),
+  'linear-SVM' = c(oj_lin_err),
+  'poly-SVM' = c(oj_poly_err),
+  'radial-SVM' = c(oj_rad_err))
+knitr::kable(oj_result, digits = 5, align = 'c')
+
+plot(oj_roc_logit, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .6)
+plot(oj_roc_tree, print.auc = TRUE, col = "red", print.auc.x = .2, print.auc.y = .5, add = TRUE)
+plot(oj_roc_line, print.auc = TRUE, col = "orange", print.auc.x = .2, print.auc.y = .3, add = TRUE)
+plot(oj_roc_poly, print.auc = TRUE, col = "purple", print.auc.x = .2, print.auc.y = .2, add = TRUE)
+plot(oj_roc_rad, print.auc = TRUE, col = "pink", print.auc.x = .2, print.auc.y = .1, add = TRUE)
+```
+
+
+
+Decision tree and logistic regression both appear to have lowe error rate and larger AUC. I will use both of them to do prediction.
+
+```{r all variable guilty tree}
+summary(oj_logit)
+
+tree_data <- dendro_data(oj_tree_p, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Belief of Simpson's guilt")
+```
+
+From logistic regression, age and race are the most significant predictors. In particular, age has a positive relationship in believing OJ is guilty whereas blackness has a negative impact on it, meaning, the older the responser is, the more likely he/she believes OJ is guilty; on the other hand, if the responser is black, he/she tend not to believe so.
+
+Unsurprisingly, the decision tree, confirms that race is the most important predictor. African-americans, however old or educated, would tend to believe OJ. While most of over 37.5 years old non-blacks will tend to think OJ is guilty (guilt = 1), over 78.5 years old non-republicans tend to believe OJ is not guilty.
+
+
+
+

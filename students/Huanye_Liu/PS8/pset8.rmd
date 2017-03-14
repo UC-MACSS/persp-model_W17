@@ -1,0 +1,330 @@
+---
+title: "tree-based methods and support vector machines"
+author: "Huanye Liu"
+output: md_document
+---
+```{r library, include=FALSE}
+#install.packages("tree")
+library(tree)
+#install.packages("randomForest")
+library(randomForest)
+#install.packages('gbm')
+library(gbm)
+library(boot)
+#install.packages('e1071')
+library(e1071)
+```
+```{r readfile, include=FALSE}
+bd = read.csv("biden.csv",header=TRUE)
+mh = read.csv("mental_health.csv",header=TRUE)
+simpson = read.csv("simpson.csv",header=T)
+```
+
+#Sexy Joe Biden
+
+1.  
+```{r part1_1,echo=TRUE}
+set.seed(1)
+n = dim(bd)[1]
+train_index = sample(n,n*0.7)
+```
+   
+2. From the tree as shown below, we can see only two predictors dem and rep are used in the tree which implies the party identity is the most important determinant of Biden warmth in the tree model with default setting, and the average Biden warmth prediction among democrats is 74.65, which is higher than the average Biden warmth among independents, and the lowest score 43.32 is the average Biden warmth among republicans, no surprise. The test MSE is 471.6565.  
+```{r part1_2, echo=FALSE}
+tree_bd = tree(biden~.,data=bd,subset = train_index)
+plot(tree_bd)
+text(tree_bd,pretty=0)
+# prediction on the test set
+biden_pred = predict(tree_bd,newdata = bd[-train_index,])
+biden_test = bd[-train_index,"biden"]
+mean((biden_pred-biden_test)^2)
+```
+3. Now using the cross validation, we find the best number of leaf nodes is 3. Because the tree in 2 has three terminal nodes, the optimal pruned tree is the same as the tree shown in 2, and the MSE is still 471.6565.  
+
+```{r part1_3, echo=FALSE}
+tree2_bd = tree(biden~.,data=bd,subset = train_index,
+                control=tree.control(nobs=n*0.7,mindev=0))
+cv_bd = cv.tree(tree2_bd)
+cv_bd$dev
+cv_bd$size
+prune_bd = prune.tree(tree2_bd,best=3)
+plot(prune_bd)
+text(prune_bd,pretty=0)
+# prediction on the test set
+biden_pred1 = predict(prune_bd,newdata = bd[-train_index,])
+biden_test = bd[-train_index,"biden"]
+mean((biden_pred1-biden_test)^2)
+```
+4. Using the bagging the approach, the test MSE is 533.6648, which is bigger than the MSE in question 3 and 2. Here the number of variables considered at each split is 5, which is the number of all predictors. The variable importance measures show that the two most important variables are dem, and rep which is consistent with the result in question 2 and 3. 
+```{r part1_4,echo=TRUE}
+set.seed(1)
+bag_bd = randomForest(biden~.,data=bd,subset = train_index,mtry=5,importance=T)
+importance(bag_bd)
+biden_pred2 = predict(bag_bd,newdata = bd[-train_index,])
+biden_test = bd[-train_index,"biden"]
+mean((biden_pred2-biden_test)^2)
+```
+5. Using the random forest approach, the test MSE shrinks to 467.6914. Again, from the variable importance measures, we can see the two most important predictors are dem and rep. The decrease in MSE is due to setting the number of variables considered at each split to be 2, compared with all predictors used in the bagging approach. By using only 2 predictors at each split, each tree is less likely to be correlated with each other, so the average result of all trees is more predictive of the test data.
+```{r part1_5,echo=TRUE}
+set.seed(1)
+bag_bd = randomForest(biden~.,data=bd,subset = train_index,mtry=2,importance=T)
+importance(bag_bd)
+biden_pred2 = predict(bag_bd,newdata = bd[-train_index,])
+biden_test = bd[-train_index,"biden"]
+mean((biden_pred2-biden_test)^2)
+```
+
+6. Using the boosting approach and setting the shrinkage parameter to be 0.004, the MSE is 466.7437, which is lower than all previous MSEs. The shrinkage parameter controls the so called learning speech, the small shrinkage parameter means a slow learning process which tries more different shaped trees for residual reduction and hence perform better. 
+  
+```{r part1_6,echo=TRUE}
+set.seed(1)
+boost_bd = gbm(biden~.,data=bd[train_index,],distribution = 'gaussian',shrinkage = 0.004, n.trees = 5000)
+biden_pred3 = predict(boost_bd,newdata = bd[-train_index,],n.trees = 5000)
+biden_test = bd[-train_index,"biden"]
+mean((biden_pred3-biden_test)^2)
+```
+     
+# Modeling voter turnout
+
+1 First, we fit a decision tree with default setting to the training data, and we can see from the tree graph that predictor mhealth_sum, age and educ are included in the tree. Then using 10-fold cross validation to change the training/test data splits, we find the average test error rate is 0.2717857.
+```{r preprocessing,echo=TRUE}
+mh$vote96=factor(mh$vote96)
+```
+```{r part2_1_1,echo=TRUE}
+
+set.seed(1)
+n = dim(mh)[1]
+train_index = sample(n,n*0.7)
+tree_mh = tree(vote96~.,data=mh,subset=train_index)
+plot(tree_mh)
+text(tree_mh,pretty=0)
+
+
+# perform 10 fold cross validation and calculate the average test error rate
+k=10
+n_test = n %/% k
+sum_err = 0
+for (i in c(1:k)){
+    test_index = logical(length=n)
+    test_index[((i-1)*n_test+1):i*n_test]=TRUE
+    train_index = !test_index
+    tree_mh = tree(vote96~.,data=mh,subset=train_index)
+    mh_pred = predict(tree_mh,newdata=mh[test_index,],type='class')
+    tab=table(mh$vote96[test_index],mh_pred)
+    err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+    sum_err=sum_err+err_rate
+  }
+  mean_err = sum_err/k
+  mean_err
+```
+    
+Now use cv.tree() to perform cross validation to determine the optimal level of tree complexity. From the result of running crossing validation we can see when the number of terminal nodes is 3, the number of misclassification is 260 which is the lowest level. So then we use prune.misclass() function to prune the tree to obtain the 3-node tree, and the test error rate using the 3-node tree is 0.2879177, which is slightly higher than the error rate using the tree with default setting
+```{r part2_1_2,echo=TRUE}
+
+set.seed(1)
+n = dim(mh)[1]
+train_index = sample(n,n*0.7)
+tree1_mh = tree(vote96~.,data=mh,subset=train_index,
+                control = tree.control(nobs = 0.7*n,mindev=0))
+cv_mh = cv.tree(tree1_mh,FUN=prune.misclass)
+
+prune_mh = prune.misclass(tree1_mh,best =3)
+summary(prune_mh)
+mh_pred = predict(prune_mh,newdata=mh[-train_index,],type='class')
+tab=table(mh$vote96[-train_index],mh_pred)
+
+# calculate the test error rate
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+Then we apply bagging to the voter turnout data, and the average test error rate using 10 fold cross validation is 0.2366667, which is lower that the previous two results using tree with default setting and the pruned tree. 
+```{r part2_1_3,echo=TRUE}
+
+set.seed(1)
+n = dim(mh)[1]
+train_index = sample(n,n*0.7)
+k=10
+n_test = n %/% k
+sum_err = 0
+for (i in c(1:k)){
+    test_index = logical(length=n)
+    test_index[((i-1)*n_test+1):i*n_test]=TRUE
+    train_index = !test_index
+    bag_mh = randomForest(vote96~.,data=mh,subset=train_index,mtry=7,
+                           importance=TRUE,na.action = na.omit)
+    mh_pred = predict(bag_mh,newdata=mh[test_index,],type='class')
+    tab=table(mh$vote96[test_index],mh_pred)
+    err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+    sum_err=sum_err+err_rate
+  }
+  mean_err = sum_err/k
+  mean_err
+
+```
+Next, we try the random forest and find the average test error rate using 10 fold cross validation is 0.3033333 when the number of variables considered at each split is 3.
+```{r part2_1_4,echo=TRUE}
+
+set.seed(1)
+n = dim(mh)[1]
+k=10
+n_test = n %/% k
+sum_err = 0
+for (i in c(1:k)){
+    test_index = logical(length=n)
+    test_index[((i-1)*n_test+1):i*n_test]=TRUE
+    train_index = !test_index
+    rf_mh = randomForest(vote96~.,data=mh,subset=train_index,mtry=3,
+                           importance=TRUE,na.action = na.omit)
+    mh_pred = predict(rf_mh,newdata=mh[test_index,],type='class')
+    tab=table(mh$vote96[test_index],mh_pred)
+    err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+    sum_err=sum_err+err_rate
+  }
+  mean_err = sum_err/k
+  mean_err
+
+```
+Finally we use the random forest again but this time set the number of variables considered at each split to be 2, and find the average test error rate using 10 fold cross validation is 0.1783333.
+```{r part2_1_5,echo=TRUE}
+
+set.seed(1)
+n = dim(mh)[1]
+k=10
+n_test = n %/% k
+sum_err = 0
+for (i in c(1:k)){
+    test_index = logical(length=n)
+    test_index[((i-1)*n_test+1):i*n_test]=TRUE
+    train_index = !test_index
+    rf_mh = randomForest(vote96~.,data=mh,subset=train_index,mtry=2,
+                           importance=TRUE,na.action = na.omit)
+    mh_pred = predict(rf_mh,newdata=mh[test_index,],type='class')
+    tab=table(mh$vote96[test_index],mh_pred)
+    err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+    sum_err=sum_err+err_rate
+  }
+  mean_err = sum_err/k
+  mean_err
+
+```
+Therefore we can see the random forest with the number of variables considered at each split being 2 is the best tree-base model based on the average error rate using 10-fold cross-validation. Now use the whole dataset as the training data, we can see the importance of each variable as follows by using function importance() and function varImpPlot(). From results of these two functions we find that strong predictors of voter turnout may be the voter's age, education level, income level and mental health, and age is the most important predictor. 
+```{r part2_1_6,echo=TRUE}
+set.seed(1)
+rf_mh = randomForest(vote96~.,data=mh,mtry=2,importance=TRUE,na.action = na.omit)
+summary(rf_mh)
+importance(rf_mh)
+varImpPlot(rf_mh)
+```
+2. Now we try to use svm models to predict voter turnout. Using the cross-validation,  first we compare SVMs using linear kernels with a range of values of the cost parameter which allow different widths of margin. We find that when cost=5, the error is the smallest, and use this model on the test data, the test error rate is 0.2690058.
+```{r svm1, echo=TRUE}
+set.seed(1)
+n = dim(mh)[1]
+# preprocessing mh by removing all rows with NA
+mh = mh[complete.cases(mh),]
+train_index = sample(n,n*0.7)
+tune_mh = tune(svm,vote96~.,data=mh[train_index,],kernel='linear',ranges=list(cost=c(0.001,0.01,0.1,1,5,10,100)))
+summary(tune_mh)
+bestmod = tune_mh$best.model
+mh_pred = predict(bestmod,mh[-train_index,])
+tab=table(predict=mh_pred,truth = mh[-train_index,]$vote96)
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+
+Next we compare SVMs using quadratic kernels with a range of costs. We find that when cost=0.001, the error is the smallest, and use this model on the test data, the test error rate is 0.3245614.
+```{r svm2,echo=TRUE}
+tune_mh = tune(svm,vote96~.,data=mh[train_index,],kernel='polynomial',degree=2,ranges=list(cost=c(0.001,0.01,0.1,1,5,10,100)))
+bestmod = tune_mh$best.model
+mh_pred = predict(bestmod,mh[-train_index,])
+tab=table(predict=mh_pred,truth = mh[-train_index,]$vote96)
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+
+Then we fit the SVM model with cubic kernal and with a range of costs. Using the cross validataion, we find that when cost = 100, the error is the smallest, and use this model on the test data, the test error rate is 0.3128655.
+```{r svm3,echo=TRUE}
+tune_mh = tune(svm,vote96~.,data=mh[train_index,],kernel='polynomial',degree=3,ranges=list(cost=c(0.001,0.01,0.1,1,5,10,100)))
+summary(tune_mh)
+bestmod = tune_mh$best.model
+mh_pred = predict(bestmod,mh[-train_index,])
+tab=table(predict=mh_pred,truth = mh[-train_index,]$vote96)
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+
+Next we try the SVM model with quartic kernal and with a range of costs. Using the cross validataion, we find that when cost = 5, the error is the smallest, and use this model on the test data, the test error rate is 0.2982456.
+```{r svm4,echo=TRUE}
+tune_mh = tune(svm,vote96~.,data=mh[train_index,],kernel='polynomial',degree=4,ranges=list(cost=c(0.01,0.1,1,5,10,100)))
+summary(tune_mh)
+bestmod = tune_mh$best.model
+mh_pred = predict(bestmod,mh[-train_index,])
+tab=table(predict=mh_pred,truth = mh[-train_index,]$vote96)
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+
+Finally we try the SVM model with radial basis kernal with a range of gamma values and also a range of cost values. Using the cross validataion, we find that when cost = 1 and gamma =2, the error is the smallest, and use this model on the test data, the test error rate now becomes 0.3274854.
+```{r svm5,echo=TRUE}
+tune_mh = tune(svm,vote96~.,data=mh[train_index,],kernel='radial',
+               ranges=list(cost=c(0.1,1,10,100,1000),gamma=c(0.5,1,2,3,4)))
+summary(tune_mh)
+bestmod = tune_mh$best.model
+mh_pred = predict(bestmod,mh[-train_index,])
+tab=table(predict=mh_pred,truth = mh[-train_index,]$vote96)
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+
+Therefore we can see the best model according to the test error rate is the linear model when cost = 0.1. The test error rate using the given test data is 0.2914286, and the total number of support vectors is 728.  
+```{r svm6,echo=TRUE}
+svmfit = svm(formula=vote96~.,data=mh,kernel='linear',cost=0.1,scale=FALSE)
+summary(svmfit)
+```
+
+#OJ simpson
+1 First we use a simple tree model to explore the relationship between response variable guilt and predictor black, from the tree graph below, we can see that black respondents are predicted to think OJ innocent while the white repondents tend to think OJ simpson guilty.The tree graph here gives a straighforward illustration of the relationship. Applying the tree model to the test data gives a test error rate of 0.2180095. This error rate is completely attributed to the exception in the test data that white respondents think OJ innocent and black respondents think OJ guilty.
+```{r part3_1,echo=TRUE}
+set.seed(1)
+n = dim(simpson)[1]
+train_index = sample(n,n*0.7)
+tree_OJ = tree(factor(guilt)~black,data=simpson,subset=train_index)
+plot(tree_OJ)
+text(tree_OJ,pretty=0)
+OJ_pred = predict(tree_OJ,newdata=simpson[-train_index,],type='class')
+dim(OJ_pred)
+tab=table(factor(simpson$guilt[-train_index]),OJ_pred)
+err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+err_rate
+```
+2. I decide to use the tree-based models, random forest in particular, for predicting whether indivisuals believe OJ simpson to be either probably guilty or not. The relationship between reponse variable and mutiple predictors here are not necessarily linear nor GLM nor polynomial, and other non-linear models and SVM are less straighforward to interpret than tree-based models, and random forest models normally can achieve higher test error rates by adjusting the mtry value than other tree-based model, which is the reason I choose the random forest model here. Using the 10-fold cross validation the average test error rate using this random forest model with mtry = 3 is 0.2884524.
+```{r part3_2,echo=TRUE}
+
+set.seed(1)
+n = dim(simpson)[1]
+simpson$guilt=factor(simpson$guilt)
+k=10
+n_test = n %/% k
+sum_err = 0
+for (i in c(1:k)){
+    test_index = logical(length=n)
+    test_index[((i-1)*n_test+1):i*n_test]=TRUE
+    train_index = !test_index
+    rf_OJ = randomForest(guilt~.,data=simpson,subset=train_index,mtry=3,
+                           importance=TRUE,na.action = na.omit)
+    OJ_pred = predict(rf_OJ,newdata=simpson[test_index,],type='class')
+    tab=table(simpson$guilt[test_index],OJ_pred)
+    err_rate=(tab[1,2]+tab[2,1])/(tab[1,1]+tab[2,2]+tab[1,2]+tab[2,1])
+    sum_err=sum_err+err_rate
+  }
+  mean_err = sum_err/k
+  mean_err
+
+```
+Now use the whole dataset as the training data, we can see the importance of each variable as follows after running function importance() and function varImpPlot(). From results of these two functions we find that strong predictors of variable guilt are the respondent's race(black or not), age, income, and race is the most important predictor, which is no surprise.  
+```{r part3_2_2,echo=TRUE}
+set.seed(1)
+rf_OJ = randomForest(guilt~.,data=simpson,mtry=3,importance=TRUE,na.action = na.omit)
+summary(rf_OJ)
+importance(rf_OJ)
+varImpPlot(rf_OJ)
+```
