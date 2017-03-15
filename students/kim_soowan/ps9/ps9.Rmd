@@ -1,0 +1,16 @@
+---
+title: 'Problem set #9: nonparametric methods and unsupervised learning'
+author: "Soo Wan Kim"
+date: "March 15, 2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
+```
+
+```{r session_info, include=FALSE}
+devtools::session_info()
+```
