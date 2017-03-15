@@ -1,0 +1,145 @@
+---
+title: "Unsupervised Learning"
+author: "Haylee Ham"
+date: '2017-03-15'
+output: github_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(FNN)
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+
+college <- read_csv("data/college.csv")
+feminist <- read_csv("data/feminist.csv")
+arrests <- read_csv("data/USArrests.csv")
+health <- read_csv("data/mental_health.csv")
+
+```
+
+
+##Question 4
+
+###Part 1
+```{r}
+# Principal Component Analysis 
+states_label <-arrests$State
+arrests_df <- arrests[c("Murder", "Assault", "UrbanPop", "Rape")]
+pr.out <- prcomp(arrests_df, scale = TRUE)
+pr.out$rotation 
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+###Part 2
+```{r}
+kmeans_fit2 <- kmeans(arrests_df, 2, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+plot(PC1, PC2, label=arrests_label)
+state_group <- as.factor(kmeans_fit2$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
+
+```
+
+###Part 3
+```{r}
+kmeans_fit4 <- kmeans(arrests_df, 4, nstart = 20)
+
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=states_label)
+
+state_group <- as.factor(kmeans_fit4$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
+```
+
+###Part 4
+
+```{r}
+kmeans_fit3 <- kmeans(arrests_df, 3, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=arrests_label)
+
+state_group <- as.factor(kmeans_fit3$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
+```
+
+###Part 5
+```{r}
+pr.out <- prcomp(arrests_df, scale = TRUE)
+PCS <- data.frame(v1=PC1, v2=PC2)
+kmeans_fit3_pca <- kmeans(PCS, 3, nstart = 20)
+state_group <- as.factor(kmeans_fit3_pca$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
+
+```
+
+###Part 6 
+```{r}
+hc.complete <- hclust(dist(arrests_df), method = "complete")
+
+# plot
+ggdendrogram(hc.complete) + labs(title = 'US Arrests Heirarchical Clustering')
+```
+
+```{r}
+h <- 150
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(arrests_df))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+
+```
+
+
+###Part 8
+```{r}
+hc.standard <- hclust(dist(scale(arrests_df)), method = "complete")
+
+#plot
+ggdendrogram(hc.standard) + labs(title = 'US Arrests Standardized Heirarchical Clustering')
+```
+
+
+
