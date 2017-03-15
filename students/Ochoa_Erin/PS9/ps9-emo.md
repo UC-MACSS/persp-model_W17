@@ -7,7 +7,6 @@ Erin M. Ochoa
 -   [Attitudes towards feminists](#attitudes-towards-feminists)
     -   [Split the data into a training and test set (70/30%)](#split-the-data-into-a-training-and-test-set-7030)
     -   [Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?](#calculate-the-test-mse-for-knn-models-with-k-5-10-15-dots-100-using-whatever-combination-of-variables-you-see-fit.-which-model-produces-the-lowest-test-mse)
-    -   [Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?](#calculate-the-test-mse-for-weighted-knn-models-with-k-5-10-15-dots-100-using-the-same-combination-of-variables-as-before.-which-model-produces-the-lowest-test-mse)
     -   [Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?](#compare-the-test-mse-for-the-best-knnwknn-models-to-the-test-mse-for-the-equivalent-linear-regression-decision-tree-boosting-and-random-forest-methods-using-the-same-combination-of-variables-as-before.-which-performs-the-best-why-do-you-think-this-method-performed-the-best-given-your-knowledge-of-how-it-works)
 -   [Voter turnout and depression \[2 points\]](#voter-turnout-and-depression-2-points)
 -   [Colleges](#colleges)
@@ -17,9 +16,11 @@ Setup
 =====
 
 ``` r
-knitr::opts_chunk$set(cache = TRUE)
-
-
+knitr::opts_chunk$set(
+    message = FALSE,
+    warning = FALSE,
+    cache = TRUE
+)
 library(ggdendro)
 library(randomForest)
 ```
@@ -123,6 +124,25 @@ mse = function(model, data) {
   x = modelr:::residuals(model, data)
   mean(x ^ 2, na.rm = TRUE)
 }
+
+# There seems to be a bug in the gbm function.
+# Work-around method found here: http://www.samuelbosch.com/2015/09/workaround-ntrees-is-missing-in-r.html
+
+predict.gbm = function (object, newdata, n.trees, type = "link", single.tree = FALSE, ...) {
+  if (missing(n.trees)) {
+    if (object$train.fraction < 1) {
+      n.trees = gbm.perf(object, method = "test", plot.it = FALSE)
+    }
+    else if (!is.null(object$cv.error)) {
+      n.trees = gbm.perf(object, method = "cv", plot.it = FALSE)
+    }
+    else {
+      n.trees = length(object$train.error)
+    }
+    cat(paste("Using", n.trees, "trees...\n"))
+    gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
+  }
+}
 ```
 
 Attitudes towards feminists
@@ -164,57 +184,140 @@ fem_knn = data_frame(k = seq(5, 100, by = 5),
 
 The models with K=35, K=40, and K=50 produce the lowest MSE (440.547). Next, we plot the MSE for each model:
 
-![](ps9-emo_files/figure-markdown_github/fem_knn_plot-1.png)
+![](ps9-emo_files/figure-markdown_github/fem_knn_plot-1.png) \#\# Calculate the test MSE for weighted KNN models with K = 5, 10, 15, , 100 using the same combination of variables as before. Which model produces the lowest test MSE?
 
-Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+``` r
+fem_w_knn = data_frame(k = seq(5, 100, by = 5), 
+                       wknn = map(k, ~ kknn(feminist ~ female + educ + income + dem + rep,
+                                            train = fem_train70, test = fem_test30, k = .)), 
+                       mse_wknn = map_dbl(wknn, ~ mean((fem_test30$feminist - .$fitted.values)^2))) %>%
+            left_join(fem_knn, by = "k") %>%
+            mutate(fem_knn = mse)%>%
+            select(k, fem_knn, mse_wknn) %>%
+            gather(method, mse, -k) %>%
+            mutate(method = str_replace(method, "mse_", ""))%>%
+            mutate(Method = factor(method, levels = c("fem_knn","wknn"), labels = c("KNN","Weighted KNN")))
+```
+
+![](ps9-emo_files/figure-markdown_github/fem_w_knn_plot-1.png)
 
 Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-`feminist.csv` contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards feminists. The variables are coded as follows:
+``` r
+lm_fem = lm(feminist ~ female + educ + income + dem + rep, data=fem_train70)
+mse_lm_fem = mse(lm_fem, fem_test30)
+```
 
--   `feminist` - feeling thermometer ranging from 0-100[1]
--   `female` - 1 if respondent is female, 0 if respondent is male
--   `age` - age of respondent in years
--   `dem` - 1 if respondent is a Democrat, 0 otherwise
--   `rep` - 1 if respondent is a Republican, 0 otherwise
--   `educ` - number of years of formal education completed by respondent
-    -   `17` - 17+ years (aka first year of graduate school and up)
--   `income` - ordinal variable indicating respondent's income
+``` r
+fem_tree = tree(feminist ~ female + educ + income + dem + rep, data = fem_train70)
+mse_fem_tree = mse(fem_tree,fem_test30)
+```
 
-        1. A. None or less than $2,999
-        2. B. $3,000 -$4,999
-        3. C. $5,000 -$7,499
-        4. D. $7,500 -$9,999
-        5. E. $10,000 -$10,999
-        6. F. $11,000-$12,499
-        7. G. $12,500-$14,999
-        8. H. $15,000-$16,999
-        9. J. $17,000-$19,999
-        10. K. $20,000-$21,999
-        11. M. $22,000-$24,999
-        12. N. $25,000-$29,999
-        13. P. $30,000-$34,999
-        14. Q. $35,000-$39,999
-        15. R. $40,000-$44,999
-        16. S. $45,000-$49,999
-        17. T. $50,000-$59,999
-        18. U. $60,000-$74,999
-        19. V. $75,000-$89,999
-        20. W. $90,000-$99,999
-        21. X. $100,000-$109,999
-        22. Y. $110,000-$119,999
-        23. Z. $120,000-$134,999
-        24. AA. $135,000-$149,999
-        25. BB. $150,000 and over
+``` r
+set.seed(1234)
+fem_boost_mdls = list("boosting_depth1" = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep,
+                                              data = fem_train70,
+                                              n.trees = 10000, interaction.depth = 1),
+                      "boosting_depth2" = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep,
+                                              data = fem_train70,
+                                              n.trees = 10000, interaction.depth = 2),
+                      "boosting_depth4" = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep,
+                                              data = fem_train70,
+                                              n.trees = 10000, interaction.depth = 4))
+```
 
-Estimate a series of models explaining/predicting attitudes towards feminists.
+    ## Distribution not specified, assuming gaussian ...
+    ## Distribution not specified, assuming gaussian ...
+    ## Distribution not specified, assuming gaussian ...
 
-1.  Split the data into a training and test set (70/30%).
-2.  Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
-3.  Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
-4.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+``` r
+set.seed(1234)
+data_frame(depth = c(1, 2, 4),
+           model = fem_boost_mdls[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) %>%
+           select(-model) %>%
+           knitr::kable(caption = "Optimal number of boosting iterations",
+                        col.names = c("Depth", "Optimal number of iterations"))
+```
+
+    ## Using OOB method...
+    ## Using OOB method...
+    ## Using OOB method...
+
+|  Depth|  Optimal number of iterations|
+|------:|-----------------------------:|
+|      1|                          2558|
+|      2|                          1850|
+|      4|                          1400|
+
+``` r
+set.seed(1234)
+
+fem_boost1 = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep, data = fem_train70,
+                 n.trees = 2558, interaction.depth = 1)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+fem_boost2 = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep, data = fem_train70,
+                 n.trees = 1850, interaction.depth = 2)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+fem_boost4 = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep, data = fem_train70,
+                 n.trees = 1400, interaction.depth = 4)
+```
+
+    ## Distribution not specified, assuming gaussian ...
+
+``` r
+mse_fem_boost1 = mse(fem_boost1,fem_test30)
+```
+
+    ## Using 2558 trees...
+
+``` r
+mse_fem_boost2 = mse(fem_boost2,fem_test30)
+```
+
+    ## Using 1850 trees...
+
+``` r
+mse_fem_boost4 = mse(fem_boost4,fem_test30)
+```
+
+    ## Using 1400 trees...
+
+``` r
+set.seed(1234)
+
+m = floor(sqrt(5))
+
+(fem_rf = randomForest(feminist ~ female + educ + income + dem + rep, data = fem_train70, mtry = m,
+                        ntree = 500))
+```
+
+    ## 
+    ## Call:
+    ##  randomForest(formula = feminist ~ female + educ + income + dem +      rep, data = fem_train70, mtry = m, ntree = 500) 
+    ##                Type of random forest: regression
+    ##                      Number of trees: 500
+    ## No. of variables tried at each split: 2
+    ## 
+    ##           Mean of squared residuals: 434
+    ##                     % Var explained: 6.22
+
+``` r
+mse_fem_rf = mse(fem_rf, fem_test30)
+```
+
+![](ps9-emo_files/figure-markdown_github/fem_compare_methods_plot-1.png)
+
+Boosting with a depth of 4 produces the lowest MSE (431.643). This is because this boosted model relies on trees with four splits, representing the complex relationship between the predictor variables and the outcome.
 
 Voter turnout and depression \[2 points\]
 =========================================
@@ -222,7 +325,7 @@ Voter turnout and depression \[2 points\]
 The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
 
 -   `vote96` - 1 if the respondent voted in the 1996 presidential election, 0 otherwise
--   `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)[2]
+-   `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)[1]
 -   `age` - age of the respondent
 -   `educ` - Number of years of formal education completed by the respondent
 -   `black` - 1 if the respondent is black, 0 otherwise
@@ -344,6 +447,4 @@ The `USArrests` dataset contains 50 observations (one for each state) from 1973 
 7.  Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
 8.  Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
 
-[1] Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.
-
-[2] The variable is an index which combines responses to four different questions: "In the past 30 days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.
+[1] The variable is an index which combines responses to four different questions: "In the past 30 days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.

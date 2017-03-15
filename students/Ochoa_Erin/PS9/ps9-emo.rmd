@@ -11,9 +11,11 @@ output:
 # Setup
 
 ```{r setup, include = TRUE}
-knitr::opts_chunk$set(cache = TRUE)
-
-
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	cache = TRUE
+)
 library(ggdendro)
 library(randomForest)
 library(tidyverse)
@@ -45,6 +47,25 @@ theme_set(theme_minimal())
 mse = function(model, data) {
   x = modelr:::residuals(model, data)
   mean(x ^ 2, na.rm = TRUE)
+}
+
+# There seems to be a bug in the gbm function.
+# Work-around method found here: http://www.samuelbosch.com/2015/09/workaround-ntrees-is-missing-in-r.html
+
+predict.gbm = function (object, newdata, n.trees, type = "link", single.tree = FALSE, ...) {
+  if (missing(n.trees)) {
+    if (object$train.fraction < 1) {
+      n.trees = gbm.perf(object, method = "test", plot.it = FALSE)
+    }
+    else if (!is.null(object$cv.error)) {
+      n.trees = gbm.perf(object, method = "cv", plot.it = FALSE)
+    }
+    else {
+      n.trees = length(object$train.error)
+    }
+    cat(paste("Using", n.trees, "trees...\n"))
+    gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
+  }
 }
 ```
 
@@ -101,9 +122,8 @@ ggplot(fem_knn, aes(k, mse)) +
        scale_x_continuous(breaks = seq(0,100,by=10)) +
        scale_y_continuous(breaks = seq(440,510,by=10))
 ```
+## Calculate the test MSE for weighted KNN models with K = 5, 10, 15, \dots, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
 
-## Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
-fem_train70, -feminist, -age
 ```{r fem_weighted_knn}
 fem_w_knn = data_frame(k = seq(5, 100, by = 5), 
                        wknn = map(k, ~ kknn(feminist ~ female + educ + income + dem + rep,
@@ -119,64 +139,107 @@ fem_w_knn = data_frame(k = seq(5, 100, by = 5),
 
 ```{r fem_w_knn_plot, echo=FALSE}
 ggplot(fem_w_knn, aes(k, mse, color = Method)) +
-geom_line() +
-geom_point() +
-#geom_hline(yintercept = mse_lm, linetype = 2) +
-labs(title = "Test MSE for KNN vs. Weighted KNN",
-     subtitle = "Attitude Toward Feminists Based on Gender, Education, Income, & Party Affiliation",
-     x = "K",
-     y = "Test mean squared error") +
-theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
-      panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
-scale_x_continuous(breaks = seq(0,100,by=10)) +
-scale_y_continuous(breaks = seq(440,510,by=10))
+       geom_line() +
+       geom_point() +
+       labs(title = "Test MSE for KNN vs. Weighted KNN",
+            subtitle = "Attitude Toward Feminists Based on Gender, Education, Income, & Party Affiliation",                 x = "K",
+            y = "Test mean squared error") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_x_continuous(breaks = seq(0,100,by=10)) +
+       scale_y_continuous(breaks = seq(420,510,by=10))
 ```
 
-`feminist.csv` contains a selection of variables from the [2008 American National Election Studies survey](http://www.electionstudies.org/) that allow you to test competing factors that may influence attitudes towards feminists. The variables are coded as follows:
+## Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
-* `feminist` - feeling thermometer ranging from 0-100^[Feeling thermometers are a common metric in survey research used to gauge attitudes or feelings of warmth towards individuals and institutions. They range from 0-100, with 0 indicating extreme coldness and 100 indicating extreme warmth.]
-* `female` - 1 if respondent is female, 0 if respondent is male
-* `age` - age of respondent in years
-* `dem` - 1 if respondent is a Democrat, 0 otherwise
-* `rep` - 1 if respondent is a Republican, 0 otherwise
-* `educ` - number of years of formal education completed by respondent
-    * `17` - 17+ years (aka first year of graduate school and up)
-* `income` - ordinal variable indicating respondent's income
+```{r fem_lm}
+lm_fem = lm(feminist ~ female + educ + income + dem + rep, data=fem_train70)
+mse_lm_fem = mse(lm_fem, fem_test30)
+```
 
-    ```
-    1. A. None or less than $2,999
-    2. B. $3,000 -$4,999
-    3. C. $5,000 -$7,499
-    4. D. $7,500 -$9,999
-    5. E. $10,000 -$10,999
-    6. F. $11,000-$12,499
-    7. G. $12,500-$14,999
-    8. H. $15,000-$16,999
-    9. J. $17,000-$19,999
-    10. K. $20,000-$21,999
-    11. M. $22,000-$24,999
-    12. N. $25,000-$29,999
-    13. P. $30,000-$34,999
-    14. Q. $35,000-$39,999
-    15. R. $40,000-$44,999
-    16. S. $45,000-$49,999
-    17. T. $50,000-$59,999
-    18. U. $60,000-$74,999
-    19. V. $75,000-$89,999
-    20. W. $90,000-$99,999
-    21. X. $100,000-$109,999
-    22. Y. $110,000-$119,999
-    23. Z. $120,000-$134,999
-    24. AA. $135,000-$149,999
-    25. BB. $150,000 and over
-    ```
+```{r fem_tree}
 
-Estimate a series of models explaining/predicting attitudes towards feminists.
+fem_tree = tree(feminist ~ female + educ + income + dem + rep, data = fem_train70)
+mse_fem_tree = mse(fem_tree,fem_test30)
+```
 
-1. Split the data into a training and test set (70/30%).
-1. Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
-1. Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
-1. Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+```{r fem_boosting}
+set.seed(1234)
+fem_boost_mdls = list("boosting_depth1" = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep,
+                                              data = fem_train70,
+                                              n.trees = 10000, interaction.depth = 1),
+                      "boosting_depth2" = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep,
+                                              data = fem_train70,
+                                              n.trees = 10000, interaction.depth = 2),
+                      "boosting_depth4" = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep,
+                                              data = fem_train70,
+                                              n.trees = 10000, interaction.depth = 4))
+```
+
+
+```{r fem_boost_iterations}
+
+set.seed(1234)
+data_frame(depth = c(1, 2, 4),
+           model = fem_boost_mdls[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) %>%
+           select(-model) %>%
+           knitr::kable(caption = "Optimal number of boosting iterations",
+                        col.names = c("Depth", "Optimal number of iterations"))
+```
+
+```{r biden_boosting_optimal_trees}
+
+set.seed(1234)
+
+fem_boost1 = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep, data = fem_train70,
+                 n.trees = 2558, interaction.depth = 1)
+
+fem_boost2 = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep, data = fem_train70,
+                 n.trees = 1850, interaction.depth = 2)
+
+fem_boost4 = gbm(as.numeric(feminist) - 1 ~ female + educ + income + dem + rep, data = fem_train70,
+                 n.trees = 1400, interaction.depth = 4)
+
+mse_fem_boost1 = mse(fem_boost1,fem_test30)
+mse_fem_boost2 = mse(fem_boost2,fem_test30)
+mse_fem_boost4 = mse(fem_boost4,fem_test30)
+```
+
+```{r fem_rf}
+set.seed(1234)
+
+m = floor(sqrt(5))
+
+(fem_rf = randomForest(feminist ~ female + educ + income + dem + rep, data = fem_train70, mtry = m,
+                        ntree = 500))
+mse_fem_rf = mse(fem_rf, fem_test30)
+```
+
+```{r fem_compare_methods_plot, echo=FALSE}
+ggplot(fem_w_knn, aes(k, mse, color = Method)) +
+       geom_line() +
+       geom_point() +
+       geom_hline(aes(yintercept=mse_fem_boost1, linetype = "Boosting (depth=1)"), color='orangered') +
+       geom_hline(aes(yintercept=mse_fem_boost2, linetype = "Boosting (depth=2)"), color='springgreen1') +
+       geom_hline(aes(yintercept=mse_fem_boost4, linetype = "Boosting (depth=4)"), color='purple1') +
+       geom_hline(aes(yintercept=mse_lm_fem, linetype = "Multiple Regression"), color='darkturquoise') +
+       geom_hline(aes(yintercept=mse_fem_rf, linetype = "Random Forest"), color='grey30') +
+       geom_hline(aes(yintercept=mse_fem_tree, linetype = "Regression Tree"), color='deeppink') +
+       scale_linetype_manual(name = "", values = c(2,1,2,2,1,1), 
+                             guide = guide_legend(override.aes = 
+                                                  list(color = c('orangered', 'springgreen1','purple1',
+                                                                 'darkturquoise','grey30','deeppink')))) +
+       labs(title = "Test MSE for Various Approaches",
+            subtitle = "Attitude Toward Feminists Based on Gender, Education, Income, & Party Affiliation",                 x = "K",
+            y = "Test mean squared error") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_x_continuous(breaks = seq(0,100,by=10)) +
+       scale_y_continuous(breaks = seq(420,510,by=10))
+```
+
+Boosting with a depth of 4 produces the lowest MSE (`r mse_fem_boost4`).  This is because this boosted model relies on trees with four splits, representing the complex relationship between the predictor variables and the outcome.
 
 # Voter turnout and depression [2 points]
 
