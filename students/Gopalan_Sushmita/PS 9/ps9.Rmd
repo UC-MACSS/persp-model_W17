@@ -1,0 +1,113 @@
+---
+title: "Problem set #9: Unsupervised Learning"
+author: "Sushmita V Gopalan"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(titanic)
+#library(rcfss)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(FNN)
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+# read in data
+
+college <- read_csv("data/college.csv")
+feminist <- read_csv("data/feminist.csv")
+arrests <- read_csv("data/USArrests.csv")
+health <- read_csv("data/mental_health.csv")
+
+```
+
+## Clustering States
+
+[1] Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+```{r}
+# Principal Component Analysis 
+arrests_label <-arrests$State
+arrests_df <- arrests[c("Murder", "Assault", "UrbanPop", "Rape")]
+pr.out <- prcomp(arrests_df, scale = TRUE)
+pr.out$rotation 
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+[2] Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+kmeans_fit2 <- kmeans(arrests_df, 2, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+plot(PC1, PC2, label=arrests_label)
+state_group <- as.factor(kmeans_fit2$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
+```
+
+[3] Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+kmeans_fit4 <- kmeans(arrests_df, 4, nstart = 20)
+
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=arrests_label)
+
+state_group <- as.factor(kmeans_fit4$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
+```
+
+[4] Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+kmeans_fit3 <- kmeans(arrests_df, 3, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=arrests_label)
+
+state_group <- as.factor(kmeans_fit3$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
+```
+
+[5] Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+
+```{r}
+pr.out <- prcomp(arrests_df, scale = TRUE)
+PCS <- data.frame(v1=PC1, v2=PC2)
+kmeans_fit3_pca <- kmeans(PCS, 3, nstart = 20)
+state_group <- as.factor(kmeans_fit3_pca$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
+```
+The overlaps between the groups is lower when I use the first two principal component score vectors for clustering, than when I use raw data. 
