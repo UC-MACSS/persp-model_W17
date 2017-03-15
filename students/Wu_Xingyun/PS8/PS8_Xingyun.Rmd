@@ -888,8 +888,8 @@ auc(roc_tree)
 
 #### Comparison
 
-  According to the plot below and the AUC values, the fitness of values are actially very close. The logistic regression gets the same AUC value as the classification decision tree, and the random forest provides a slightly lower AUC value. So the tree-based model using random forest would be the best model.
-  Wholly constructed by dummy variables, the performace of the three method in this context are very close.
+  According to the plot below and the AUC values, the fitness of values are actially very close. The logistic regression gets the largest AUC value , while the random forest provides slightly lower AUC values. And the AUC values of random forest model and the decision tree model are very close.So the logistic regression model using random forest would be the best model.
+  Wholly constructed by dummy variables, the performace of the three method in this context coule be close.
 
 ```{r problem3_comparison1, echo=FALSE}
 plot(roc_logit3_1, print.auc = TRUE, col = "blue", print.auc.x = .2, print.auc.y = .4)
