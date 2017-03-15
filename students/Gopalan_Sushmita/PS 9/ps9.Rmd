@@ -24,6 +24,9 @@ library(tidytext)
 library(tm)
 library(topicmodels)
 library(FNN)
+library(varhandle)
+library(class)
+
 
 options(digits = 3)
 set.seed(1234)
@@ -36,6 +39,101 @@ arrests <- read_csv("data/USArrests.csv")
 health <- read_csv("data/mental_health.csv")
 
 ```
+
+# Attitudes Towards Feminists
+[1] Split the data into a training and test set (70/30%).
+
+```{r}
+set.seed(1234)
+feminist_split <- resample_partition(feminist, p=c(test = 0.3, train = 0.7))
+feminist_train <- feminist_split$train %>%
+  tbl_df()
+feminist_test <- feminist_split$test %>%
+  tbl_df()
+
+test_label <- feminist_test$feminist
+train_label <- feminist_train$feminist
+
+train_data <- feminist_train[c("female", "age", "educ", "income", "dem", "rep")]
+test_data <- feminist_test[c("female", "age", "educ", "income", "dem", "rep")]
+
+# define mse function
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+[2] Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+
+```{r}
+set.seed(1234)
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+prediction_int <- unfactor(prediction)
+ks <- seq(5, 100, 5)
+mses <- list()
+for(i in 1:20){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i*5)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of KNN Model",
+     pch=20, cex=2)
+min_unweighted_mse <- mses[11]
+min_unweighted_mse
+
+```
+I test the KNN models using all available variables. The model with K = 55 and K = 65 both produce the lowest test MSE of `r min_unweighted_mse`
+
+[3] Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
+
+I obtain the lowest MSE of `r min_weighted_mse` for the weighted KNN model with K = 100.
+```{r}
+set.seed(1234)
+model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, 2)
+mses <- list()
+for(i in 1:20){
+  model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, k=i*5)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+ks <- seq(5, 100, 5)
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of Weighted KNN Model",
+     pch=20, cex=2)
+min_weighted_mse = mses[20]
+```
+
+[4] Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r}
+set.seed(1234)
+
+lm_fit <- lm(feminist_train$feminist ~ ., data=feminist_train)
+tree_fit <- tree(feminist_train$feminist ~ ., data=feminist_train, control = tree.control(nobs = nrow(feminist_train), mindev = 0))
+rf_fit <- randomForest(feminist_train$feminist ~ ., data=feminist_train, ntree = 500)
+boosting <- gbm(feminist_train$feminist ~ ., data=feminist_train, n.trees = 2000, interaction.depth = 2)
+
+mse_lm <- mse(predict(lm_fit, feminist_test), test_label)
+mse_tree <- mse(predict(tree_fit, feminist_test), test_label)
+mse_rf <- mse(predict(rf_fit, feminist_test), test_label)
+mse_boost <- mse(predict(boosting, feminist_test, n.trees=2000), test_label)
+mse_lm
+mse_tree
+mse_rf
+mse_boost
+```
+
+
+
+
+
+
 
 ## Clustering States
 
@@ -77,7 +175,7 @@ plot(PC1, PC2, label=arrests_label)
 
 state_group <- as.factor(kmeans_fit4$cluster)
 
-d <- data.frame(x=PC1, y=PC2, name=states_label)
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
 p <- ggplot(d, aes(x, y, label=name, color=state_group))
 p +  geom_text() + labs(title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
 ```
@@ -94,7 +192,7 @@ plot(PC1, PC2, label=arrests_label)
 
 state_group <- as.factor(kmeans_fit3$cluster)
 
-d <- data.frame(x=PC1, y=PC2, name=states_label)
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
 p <- ggplot(d, aes(x, y, label=name, color=state_group))
 p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
 ```
@@ -106,8 +204,63 @@ pr.out <- prcomp(arrests_df, scale = TRUE)
 PCS <- data.frame(v1=PC1, v2=PC2)
 kmeans_fit3_pca <- kmeans(PCS, 3, nstart = 20)
 state_group <- as.factor(kmeans_fit3_pca$cluster)
-d <- data.frame(x=PC1, y=PC2, name=states_label)
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
 p <- ggplot(d, aes(x, y, label=name, color=state_group))
 p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
 ```
 The overlaps between the groups is lower when I use the first two principal component score vectors for clustering, than when I use raw data. 
+
+[6] Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r}
+hc.complete <- hclust(dist(arrests), method = "complete")
+#ggdendrogram(hc.complete)
+```
+
+[7]Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r}
+h <- 150
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(states))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y, color = cl),
+            vjust = 0.8, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+The above dendrogram shows three clusters, delineated by colour.
+
+[8]Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+```{r}
+arrests_scaled <- scale(arrests_df)
+
+hc.complete <- hclust(dist(arrests_scaled), method = "complete")
+h <- 4
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(states))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = -.5, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+Upon scaling the data to have a standard deviation of 1, I obtain this dendrogram. We now see that the states are sorted into 4 main groups. Their groupings also appear fairly different from the dendrogram obtained in part 7. I would argue that it does indeed seem appropriate to scale variables before clustering in order to ensure that variables that are measured in higher scales (for e.g. - `r assault` ranges between 40 and 340, while `r murder` takes values under 20) aren't weighted higher.
