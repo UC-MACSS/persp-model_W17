@@ -538,5 +538,26 @@ ggdendrogram(hc_complete, labels = TRUE) +
   According to the dendrogram, for example, the Florida and New Mexico belong to the same cluster. For another example, Utah and Vermont belong to the same cluster. All states within the same branch defined by the cut belong to the same cluster.
 
 
-### 8. Hierarchically cluster with complete linkage and Euclidean distance
+### 8. Hierarchically cluster with scaling the variables to have standard deviation 1
 
+  The variables are scaled to have standard deviation 1, as is required. See the plot below for the new dendrogram.
+
+```{r problem4_8, echo=FALSE}
+# scale the data
+hc_data_scaled <- scale(hc_data)
+
+# run the hierarchical clustering using Euclidian distance
+hcscaled_complete <- hclust(dist(hc_data_scaled), method = 'complete')
+
+# plot the dendrogram
+hc2 <- ggdendrogram(data = hcscaled_complete, labels = TRUE) + 
+  geom_text() + 
+  labs(title = '50 States Hierarchical Clustering',
+       subtitle = 'Variables scaled to STD = 1',
+       y = 'Euclidean Distance')
+
+hc2
+```
+
+  According to the plot, the scaling process gives equal weight to each variables. So if we cut the dendrogram around 4, we would get 4 clusters. And if we cut the dendrogram around 5, we would get 2 clusters.
+  Generally, it depends on the need of research, whether the variables should be scaled before the inter-observation dissimilarities are computed. However, in this case, I think it would be more appropriate not to scale the variables before the inter-observation dissimilarities are computed. Because three of these variables are describing how much crime arrests the states have, while the remaining one is describing the relative pattern.
