@@ -1,0 +1,301 @@
+---
+title: "PA9"
+author: "Rodrigo Valdes"
+date: "March 15, 2017"
+output:
+    github_document:
+      toc: true
+---
+
+```{r}
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(e1071)
+library(stringr)
+library(FNN)
+library(kknn)
+library(tm)
+
+options(digits = 4)
+set.seed(007)
+
+setwd("/Users/ruy/Documents/UChicago/Winter_2017/pcm/persp-model/students/valdesortiz_rodrigo/ps9")
+```
+
+```{r}
+#--Dfs
+df_feminist <- read_csv("data/feminist.csv")
+df_feministF <- read_csv("data/feminist.csv") %>%
+  mutate_each(funs(as.factor(.)), female, dem, rep)
+
+df_mental <- read_csv("data/mental_health.csv") %>% drop_na()
+df_mentalF <- read_csv("data/mental_health.csv") %>%
+  drop_na() %>% 
+  mutate_each(funs(as.factor(.)), vote96, black, female, married)
+
+df_college <- read_csv("data/College.csv") %>%
+  mutate(Private = as.numeric(as.factor(Private)))
+
+df_arrest <- read_csv("data/USArrests.csv")
+
+
+#--Functions
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+Cols <- function(vec){
+  cols=rainbow(length(unique(vec)))
+  
+  return (cols[as.numeric(as.factor(vec))])
+}
+
+```
+
+
+# Feminism
+
+## 1.Split the data
+
+
+```{r}
+
+set.seed(007)
+#--Split data
+dfs_feminist <- resample_partition(df_feminist, c(test = 0.3, train = 0.7))
+df_feminist_tr <- as_tibble(dfs_feminist$train)
+df_feminist_te <- as_tibble(dfs_feminist$test)
+
+#--Split data with factor
+dfs_feministF <- resample_partition(df_feministF, c(test = 0.3, train = 0.7))
+df_feministF_tr <- as_tibble(dfs_feministF$train)
+df_feministF_te <- as_tibble(dfs_feministF$test)
+
+```
+
+## 2. Calculate the test MSE for KNN models with K = 5, 10, 15,.., 100.
+
+First, I will analyse which variables fit with the model. 
+```{r}
+test_varibles <- lm(formula = feminist ~ ., data = df_feminist_te)
+
+summary(test_varibles)
+```
+Based on this model, I will select female, income, democrat and republican.
+
+```{r}
+set.seed(007)
+
+#--KNN and mse
+KNN_1 <- data_frame(k = seq(5, 100, by=5),
+                    knn = map(k, ~ knn.reg(select(female, income, dem, rep),
+                                           y=df_feminist_tr$feminist,
+                                           test=select(female, income, dem, rep),                                           k=.)),
+mse = map_dbl(knn, ~ mean((df_feminist_te$feminist - .$pred)^2)))
+
+KNN_1
+```
+
+```{r}
+ggplot(KNN_1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test mean squared error")
+```
+
+## 3. Calculate the test MSE for weighted KNN models with 5, 10, 15,.., 100, using the same combination of variables as before. 
+
+```{r}
+set.seed(007)
+
+#--wKNN and mse
+wKNN_1 <- data_frame(k = seq(5, 100, by=5),
+                    knn = map(k, ~ kknn(feminist ~ female + income + dem + rep,
+                                        train=df_feminist_tr,
+                                        test=df_feminist_te, k =.)
+                    ),
+                    mse = map_dbl(knn, ~ mean((df_feminist_te$feminist - .$fitted.values)^2)))
+
+wKNN_1
+```
+
+```{r}
+ggplot(wKNN_1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test mean squared error")
+```
+
+## 4.Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before.
+
+Linear regression.
+```{r}
+set.seed(007)
+
+#--Linear regression
+lm_1 <- lm(feminist ~ female + income + dem + rep, data=df_feminist_tr)
+summary(lm_1)
+
+mse_lm1 <- mse(lm_1, df_feminist_te)
+mse_lm1
+```
+
+Decision tree
+```{r}
+tree_1 <- tree(feminist ~ female + income + dem + rep, data=df_feminist_tr)
+summary(tree_1)
+
+mse_tree1 <- mse(tree_1, df_feminist_te)
+mse_tree1
+```
+
+Boosting
+```{r}
+boost_1 <- gbm(feminist ~ female + income + dem + rep , data=df_feminist_tr, n.trees=500)
+
+summary(boost_1)
+```
+
+```{r}
+yhat.boost = predict(boost_1, newdata=df_feminist_te, n.trees=500)
+mse_boost_1 <- mean((yhat.boost - df_feminist_te$feminist)^2)
+mse_boost_1
+```
+
+Random Forest
+
+```{r}
+rf_1 <- randomForest(feminist ~ female + income + dem + rep, data=df_feminist_tr, ntree=500)
+summary(rf_1)
+
+mse_rf1 <- mse(rf_1, df_feminist_te)
+mse_rf1
+```
+
+# Voter turnout and depression
+
+## 1. Split the data
+```{r}
+set.seed(007)
+
+#--Split data
+dfs_mental <- resample_partition(df_mental, c(test = 0.3, train = 0.7))
+df_mental_tr <- as_tibble(dfs_mental$train)
+df_mental_te <- as_tibble(dfs_mental$test)
+
+#--Split data with factor
+dfs_mentalF <- resample_partition(df_mentalF, c(test = 0.3, train = 0.7))
+df_mentalF_tr <- as_tibble(dfs_mentalF$train)
+df_mentalF_te <- as_tibble(dfs_mentalF$test)
+```
+
+## 2. Calculate the test error rate for KNN models with K = 1, 2,.., 10, using whatever combination of variables you see fit. Which model produces the lowest test error rate?
+
+```{r}
+set.seed(007)
+
+#--KNN and err
+KNN_2 <- data_frame(k = 1:10,
+                    knn = map(k, ~ knn(train=select(df_mental_tr, -vote96),
+                                       test=select(df_mental_te, -vote96),
+                                       cl=df_mental_tr$vote96,
+                                       k=.)),
+                    err = map_dbl(knn, ~ mean(df_mental_te$vote96 != .))
+                    )
+KNN_2
+```
+
+```{r}
+ggplot(KNN_2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate")
+```
+
+## 3. Calculate the test MSE for weighted KNN models with K = 1, 2,.., 10 using the same combination of variables as before. Which model produces the lowest test error rate?
+
+```{r}
+set.seed(007)
+
+#--wKNN and err
+wKNN_2 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ .,
+                                         train=df_mentalF_tr,
+                                         test=df_mentalF_te, k =.)
+                     ),
+                     err = map_dbl(knn, ~ mean(df_mentalF_te$vote96 != .$fitted.values)))
+
+wKNN_2
+```
+
+```{r}
+ggplot(wKNN_2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate")
+```
+
+
+## 4.Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+Logistic regression
+```{r}
+set.seed(007)
+
+#--Linear regression
+logis_2 <- glm(vote96 ~ ., data=df_mentalF_tr, family=binomial)
+
+summary(logis_2)
+```
+
+```{r}
+logistic_2 <- df_mentalF_te %>%
+  add_predictions(logis_2) %>%
+  mutate(prob = exp(pred) / (1 + exp(pred))) %>%
+  mutate(pred_bi = as.numeric(prob > .5))
+
+err_logistic2 <- mean(df_mentalF_te$vote96 != logistic_2$pred_bi)
+err_logistic2
+```
+
+Decision tree
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
