@@ -65,7 +65,7 @@ ggplot(data=DF_FEM_KNN, mapping=aes(k, mse)) +
        y = "Test Mean Squared Error")
 ```
 
-![](I.2.-1.png)
+![](a.png)
 
 The KNN model with K=60 produces the lowest test MSE of 433.
 
@@ -117,7 +117,7 @@ ggplot(data=DF_FEM_WKNN, mapping=aes(k, mse)) +
        y = "Test Mean Squared Error")
 ```
 
-![](I.3.-1.png)
+![](b.png)
 
 The KNN model with K=100 produces the lowest test MSE of 397.
 
@@ -226,7 +226,7 @@ ggplot(data=DF_MH_KNN, mapping=aes(k, mse)) +
        y = "Test Mean Squared Error")
 ```
 
-![](II.2.-1.png)
+![](c.png)
 
 The KNN model with K=6 produces the lowest test MSE of 0.303.
 
@@ -268,7 +268,7 @@ ggplot(data=DF_MH_WKNN, mapping=aes(k, mse)) +
        y = "Test Mean Squared Error")
 ```
 
-![](II.3.-1.png)
+![](d.png)
 
 The KNN model with K=10 produces the lowest test MSE of 0.208.
 
@@ -387,7 +387,7 @@ PCA.DF_CL$rotation %>%
 biplot(PCA.DF_CL, scale = 0, cex = 0.6)
 ```
 
-![](III.1.-1.png)
+![](e.png)
 
 PC1 has postive correlation with `S.F.Ratio` (coefficient = 0.210) and negative correlation with `Top10perc` (coefficient = -0.360), `Top25perc` (coefficient = -0.345), `Expend` (coefficient = -0.333), and `outstate` (coefficient = -0.328). This means as PC1 increases, *S**t**u**d**e**n**t*/*f**a**c**u**l**t**y**r**a**t**i**o* goes up and *P**e**r**c**e**n**t**o**f**n**e**w**s**t**u**d**e**n**t**s**f**r**o**m**t**o**p**t**i**e**r**o**f**H*.*S*.*c**l**a**s**s*, *I**n**s**t**r**u**c**t**i**o**n**a**l**e**x**p**e**n**d**i**t**u**r**e**p**e**r**s**t**u**d**e**n**t*, *O**u**t* − *o**f* − *s**t**a**t**e**t**u**i**t**i**o**n* goes down. Thus, PC1 could be interpreted as a negative educational evironment.
 
@@ -420,7 +420,7 @@ PCA.DF_AR$rotation %>%
 biplot(PCA.DF_AR, scale = 0, cex = 0.6)
 ```
 
-![](IIII.1.-1.png)
+![](f.png)
 
 PC1 has negative correlation with all four variables. PC1 can be interpreted as general safety. PC2 has strong negative correlation with `UrbanPop`. PC2 can be interpreted as urban population.
 
@@ -465,7 +465,7 @@ labs(title = "US Arrests Data: Clustering Method",
      y = "Principal Component 2: Rural Population")
 ```
 
-![](IIII.2.-1.png) The plot visualizes 2 clusters based on the first principal component values. The plot shows the low PC1 value group (e.g. Florida, Nevada, California) and the hig PC1 value group (e.g. North Dakota, Vermont, New Hampshire). Therefore, states are mainly clustered by the high and low safety.
+![](g.png) The plot visualizes 2 clusters based on the first principal component values. The plot shows the low PC1 value group (e.g. Florida, Nevada, California) and the hig PC1 value group (e.g. North Dakota, Vermont, New Hampshire). Therefore, states are mainly clustered by the high and low safety.
 
 #### 3.Perform K-means clustering with K=4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -510,7 +510,7 @@ labs(title = "US Arrests Data: Clustering Method",
      y = "Principal Component 2: Rural Population")
 ```
 
-![](IIII.3.-1.png) The plot visualizes 4 clusters based on the first principal component values. The plot shows the lowest PC1 value group, the second lowesest PC1 value group, the second highest PC1 value group, and the highest PC1 value group. Therefore, states are mainly clustered by the high and low safety.
+![](h.png) The plot visualizes 4 clusters based on the first principal component values. The plot shows the lowest PC1 value group, the second lowesest PC1 value group, the second highest PC1 value group, and the highest PC1 value group. Therefore, states are mainly clustered by the high and low safety.
 
 #### 4.Perform K-means clustering with K=3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -554,7 +554,7 @@ labs(title = "US Arrests Data: Clustering Method",
      y = "Principal Component 2: Rural Population")
 ```
 
-![](IIII.4.-1.png)
+![](i.png)
 
 The plot visualizes 3 clusters based on the first principal component values. The plot shows the low PC1 value group, the middle PC1 value group, and the high PC1 value group. Therefore, states are mainly clustered by the high and low safety.
 
@@ -600,7 +600,7 @@ labs(title = "US Arrests Data: Clustering Method",
      y = "Principal Component 2: Rural Population")
 ```
 
-![](IIII.5.-1.png)
+![](j.png)
 
 The plot visualizes 3 clusters based on the first and second principal component values. The plot shows the group of low PC1 and low PC2 value , the group of low PC1 but high PC2 value, and the group of high PC1 value. Therefore, states are mainly clustered by the safety and rural population.
 
@@ -629,7 +629,7 @@ ggdendrogram(HC.DF_AR) +
         legend.position="none")
 ```
 
-![](IIII.6.-1.png)
+![](k.png)
 
 #### 7.Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
 
@@ -656,7 +656,7 @@ ggdendrogram(HC.DF_AR) +
         legend.position="none")
 ```
 
-![](IIII.7.-1.png)
+![](l.png)
 
 Similar to k-mean clustering, dendrogram with cut-off of 150 groups 3 clusters.The hierarchical structure reveals that the green group and the blue group share more similarity than the red group.
 
@@ -687,6 +687,6 @@ ggdendrogram(HC.DF_AR) +
         legend.position="none")
 ```
 
-![](IIII.8.-1.png)
+![](m.png)
 
 To avoid over-weighting the variables with large scale and under-weighting the variables with small scale, stadardization of variables before calculating the distance in recommended. The scaling provides equal wightage by giving higher weights on the variables of `Murder`,`Rape` since they have small values. The scaling has the effect on the dendrogram by making four splits at the top. Therefore, in my opinion, the variables should be scaled before the inter-observation dissimilarities are computed.
