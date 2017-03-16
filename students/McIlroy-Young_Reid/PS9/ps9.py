@@ -273,8 +273,28 @@ def q4part4(df, xNames):
     kclustering(4, sys._getframe().f_code.co_name, df, xNames)
 
 def q4part5(df, xNames):
-    print("{}: Doing 3-NN clustering on PCA sapce".format(sys._getframe().f_code.co_name))
+    print("{}: Doing 3-NN clustering on PCA space".format(sys._getframe().f_code.co_name))
     kclustering(3, sys._getframe().f_code.co_name, df, xNames)
+
+def q4part6(df, xNames):
+    clf = sklearn.cluster.AgglomerativeClustering(n_clusters = len(df), linkage = 'complete', affinity = 'euclidean')
+    clf.fit(df[xNames])
+    print("{}: Done hierarchical clustering ".format(sys._getframe().f_code.co_name))
+
+def q4part7(df, xNames):
+    print("{}: Doing hierarchical clustering ".format(sys._getframe().f_code.co_name))
+    clf = sklearn.cluster.AgglomerativeClustering(n_clusters = 3, linkage = 'complete', affinity = 'euclidean')
+    df['clusters'] = clf.fit_predict(df[xNames])
+    print("The clusters for each state are:")
+    print(df[['clusters']])
+
+def q4part8(df, xNames):
+    print("{}: Doing hierarchical clustering with scaled data ".format(sys._getframe().f_code.co_name))
+    clf = sklearn.cluster.AgglomerativeClustering(n_clusters = 3, linkage = 'complete', affinity = 'euclidean')
+    df['clusters'] = clf.fit_predict(sklearn.preprocessing.scale(df[xNames], with_mean = False))
+    print("The clusters for each state are:")
+    print(df[['clusters']])
+
 
 def question1():
     xVars = ['female', 'age', 'educ', 'income', 'dem', 'rep']
@@ -312,6 +332,9 @@ def question4():
     q4part3(df, xNames)
     q4part4(df, xNames)
     q4part5(df, ['pca0', 'pca1'])
+    q4part6(df, xNames)
+    q4part7(df, xNames)
+    q4part8(df, xNames)
 
 def main():
     os.makedirs(outputDir, exist_ok = True)
