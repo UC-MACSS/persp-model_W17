@@ -1,0 +1,387 @@
+---
+title: "Problem set #8: tree-based methods and support vector machines"
+author: "MACS 30100 - Perspectives on Computational Modeling"
+date: "**Due Monday March 6th at 11:30am**"
+output:
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(stringr)
+library(ISLR)
+library(gridExtra)
+library(grid)
+#library(rcfss)
+library(pROC)
+library(gbm)
+library(ggdendro)
+options(digits = 3)
+theme_set(theme_minimal())
+```
+
+
+# Part 1: Sexy Joe Biden (redux times two) [3 points]
+
+
+
+1. Split the data into a training set (70%) and a validation set (30%). **Be sure to set your seed prior to this part of your code to guarantee reproducibility of results.**
+
+
+```{r}
+set.seed(2017)
+biden_data = read.csv("data/biden.csv")
+biden.split = resample_partition(biden_data, c(test = .3, train = .7))
+train_set = biden.split$train$data
+validation_set = biden.split$test$data
+```
+
+
+2. Fit a decision tree to the training data, with `biden` as the response variable and the other variables as predictors. Plot the tree and interpret the results. What is the test MSE?
+
+The tree graph using the default settings is:
+
+```{r}
+library(tree)
+biden.tree =  tree(biden ~ ., data = train_set)
+#plot tree
+tree_data <- dendro_data(biden.tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +  ggtitle("Decision Tree with default settings")
+ptree 
+```
+
+
+Now we interpret the tree results, we can find the tree using default settings actually only use two predictors: dem and rep:
+
+* If dem < 0.5, indicating respondent is not a Democrat:
+  + If rep < 0.5, indicating  respondent is not a Republican, then predict  biden score 58.41(2 decimals rounded)
+  + If rep > 0.5, indicating  respondent is a Republican, then predict  biden score 42.71
+* If dem > 0.5, indicating respondent is a Democrat, then predict  biden score 74.57
+
+The test MSE is 400.907:
+
+```{r}
+mse = mean((validation_set$biden - predict(biden.tree, validation_set))^2)
+mse
+```
+
+3. Now fit another tree to the training data with the following `control` options:
+
+we use cross-validation to determine the optimal level of tree complexity and plot the optimal tree:
+
+```{r eval = FALSE}
+biden.tree2 = tree(biden ~ ., data = train_set, control = tree.control(nobs = nrow(train_set), mindev = 0))
+nodes = c(2:20)
+mses = c()
+for(i in nodes){
+  mod = prune.tree(biden.tree2, best = i)
+  mse = mean((validation_set$biden - predict(mod, validation_set))^2)
+  mses = c(mses, mse)
+}
+best = which.min(mses)
+best.tree = prune.tree(biden.tree2, best = nodes[best])
+tree_data <- dendro_data(best.tree)
+ptree <- ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +  ggtitle("Decision Pruned Tree with controlled settings")
+ptree 
+```
+
+
+Now we interpret the tree results, there are many predictors in the optimal tree, we only interpret some of them:
+
+* If dem < 0.5, indicating respondent is not a Democrat:
+  + If rep < 0.5, indicating  respondent is not a Republican:
+    - If female < 0.5, indicating  respondent is a male:
+    ...
+    - If female > 0.5, indicating  respondent is a female:
+    ...
+  + If rep > 0.5, indicating  respondent is a Republican:
+     - If female < 0.5, indicating  respondent is a male:
+    ...
+    - If female > 0.5, indicating  respondent is a female:
+    ...
+* If dem > 0.5, indicating respondent is a Democrat:
+  + If age < 53.5:
+  ...
+  + If age > 53.5:
+  ...
+
+And we can see pruning the tree improve the test MSE, it is 376.8649 now.
+
+
+4. Use the bagging approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results.
+
+```{r}
+set.seed(2017) 
+biden_bag = randomForest(biden ~ ., data = train_set , importance = TRUE, ntree = 500, mtry = 5)
+```
+
+The MSE is 194.2076(in my run time):
+
+```{r}
+mse = mean((validation_set$biden - predict(biden_bag, validation_set))^2)
+mse
+```
+
+And the variable importance measures plot is:
+
+```{r}
+varImpPlot(biden_bag)
+```
+
+The results show that the bagging approach has a much lower test MSE than the previous tree models, and the variable dem is the most important in `%IncMSE` measurement while age is the most important one in `IncNodePurity` measurement, the order of importance can be found in the above plots, and the female is lest important in both plots.
+
+
+5. Use the random forest approach to analyze this data. What test MSE do you obtain? Obtain variable importance measures and interpret the results. Describe the effect of $m$, the number of variables considered at each split, on the error rate obtained.
+
+```{r}
+set.seed(2017) 
+biden_rforest = randomForest(biden ~ ., data = train_set,importance = TRUE, ntree = 500)
+```
+
+
+The MSE is 389.533(in my run time):
+
+```{r}
+mse = mean((validation_set$biden - predict(biden_rforest, validation_set))^2)
+mse
+```
+
+And the variable importance measures plot is:
+
+```{r}
+varImpPlot(biden_rforest)
+```
+
+The results show that the bagging approach has a large test MSE and the variable dem is the most important in `%IncMSE` measurement and `IncNodePurity` measurement, the order of importance can be found in the above plots, and the female is lest important in `IncNodePurity` measurement while educ is the lest important in `%IncMSE` measurement.
+
+Now we describe the number of variables considered at each split:
+
+```{r}
+set.seed(2017) 
+mses = c()
+for(i in 1:5) {
+biden_rforest = randomForest(biden ~ ., data = train_set,importance = TRUE, ntree = 500, mtry = i)
+mse = mean((validation_set$biden - predict(biden_rforest, validation_set))^2)
+mses = c(mses, mse)
+}
+mses
+```
+
+We can find that the MSE becomes lower with increase of the number of variables considered at each split.
+
+6. Use the boosting approach to analyze the data. What test MSE do you obtain? How does the value of the shrinkage parameter $\lambda$ influence the test MSE?
+
+Now we use boosting approach:
+
+```{r}
+biden_boost = gbm(biden ~ .,  data = train_set, distribution = 'gaussian', n.trees = 1000, interaction.depth = 4)
+
+mse = mean((validation_set$biden - predict(biden_boost, newdata = validation_set, n.trees = 100)) ^ 2)
+mse
+
+ntrees = seq(100,1000,100)
+mses = c()
+for(i in ntrees) {
+  mse = mean((validation_set$biden - predict(biden_boost, newdata = validation_set, n.trees = i)) ^ 2)
+mses = c(mses, mse)
+}
+
+tempdf = data.frame(ntrees, mses)
+p =   ggplot(tempdf, aes(ntrees, mses)) +   geom_line(color = "red") +  ggtitle("Number of trees Vs MSE")
+p
+```
+
+Now we can see from the above plot that the test MSE decrease with the increase of number of trees, Use 1000 trees, i obtain a test MSE 413.1006.
+
+Then we study the shrinkage:
+
+```{r}
+shrinkage = seq(0.01, 0.1, 0.01)            
+mses = c()
+for(i in shrinkage) {
+  biden_boost = gbm(biden ~ .,  data = train_set, distribution = 'gaussian', n.trees = 1000, interaction.depth = 4, shrinkage = i)
+  mse = mean((validation_set$biden - predict(biden_boost, newdata = validation_set, n.trees = 1000)) ^ 2)
+mses = c(mses, mse)
+}
+tempdf = data.frame(shrinkage, mses)
+p =   ggplot(tempdf, aes(shrinkage, mses)) +   geom_line(color = "red") +  ggtitle("Shrinkage Vs MSE")
+p
+```
+
+Also we can see from the above plot that the test MSE decrease with the increase of shrinkage, Use shrinkage 0.1, i obtain a lowest test MSE 312.6112 with number of trees fixed on 1000.
+
+
+# Part 2: Modeling voter turnout [3 points]
+
+1. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five tree-based models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+
+We use 5 models: tree, pruned tree, bagged, random forest with ntree=200,  random forest with ntree=500.
+
+```{r}
+mhealth = read.csv("data/mental_health.csv")
+error_rate <- function(model, data, true) {
+  pred <- predict(model, newdata = data, type = 'class')
+  err = mean(pred != true, na.rm = TRUE)
+  err
+}
+mhealth = transform(mhealth, vote96 = factor(vote96),
+         black = factor(black), 
+         female = factor(female),
+         married = factor(married))
+set.seed(2017)
+a = resample_partition(na.omit(mhealth), c(test = .3, train = .7))
+train_set = a$train$data
+validation_set = a$test$data
+res = data_frame(tree_types = c('Tree', 'Pruned tree', 'Bagged approach', 'Random Forest', 'Random Forest'))
+
+mhealth.tree = tree(vote96 ~ ., data = train_set)
+
+mhealth.base <- tree(vote96 ~ ., data = train_set, control = 
+                        tree.control(nobs = nrow(train_set), mindev = 0))
+
+mhealth.p = prune.tree(mhealth.base, best = 20)
+
+set.seed(2017)
+mhealth_bag <- randomForest(vote96 ~ ., data = train_set,
+                           mtry = ncol(train_set) - 1, importance = TRUE, ntree = 500)
+mhealth_rforest <- randomForest(vote96 ~ .,  data = train_set,
+                              importance = TRUE,
+                              ntree = 200)
+
+mhealth_rforest2 <- randomForest(vote96 ~ ., data = train_set, importance = TRUE,
+                              ntree = 500)
+
+err1 = error_rate(mhealth.tree, validation_set, validation_set$vote96)
+err2 = error_rate(mhealth.p, validation_set, validation_set$vote96)
+err3 = error_rate(mhealth_bag , validation_set, validation_set$vote96)
+err4 = error_rate(mhealth_rforest, validation_set, validation_set$vote96)
+err5 = error_rate(mhealth_rforest2, validation_set, validation_set$vote96)
+
+errs = c(err1,err2,err3,err4,err5)
+res[,2] = errs
+res
+```
+
+We can find that Bagged approach has a lowest mis-classification rate which is 0.0008583691 in my run time, so it is the best model in this case among the selected tree based models.
+
+
+2. Use cross-validation techniques and standard measures of model fit (e.g. test error rate, PRE, ROC curves/AUC) to compare and evaluate at least five SVM models of voter turnout. Select the best model and interpret the results using whatever methods you see fit (graphs, tables, model fit statistics, predictions for hypothetical observations, etc.)
+
+
+```{r,eval=F}
+res = data_frame(tree_types = c('Linear', 'poly degree 2', 'poly degree 3', 'poly degree 4', 'poly degree 5'))
+svm.linear <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'linear',
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svm.poly2 <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', degree = 2,
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svm.poly3  <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', # default degree is 3
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svm.poly4 <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', degree = 4,
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+svm.poly5 <- best.tune(svm, vote96 ~ ., data = as_tibble(mhealth.split$train),
+                     kernel = 'polynomial', degree = 4,
+                     ranges = list(cost = c(.1, 1, 10, 100, 1000)))
+err1 = error_rate(svm.linear, validation_set, validation_set$vote96)
+err2 = error_rate(svm.poly2, validation_set, validation_set$vote96)
+err3 = error_rate(svm.poly3 , validation_set, validation_set$vote96)
+err4 = error_rate(svm.poly4, validation_set, validation_set$vote96)
+err5 = error_rate(svm.poly5, validation_set, validation_set$vote96)
+
+errs = c(err1,err2,err3,err4,err5)
+res[,2] = errs
+res
+```
+
+We can find that svm model with the polynomial degree 3 has a lowest misclassification rate in our selected svm models, so it is the best svm model.
+
+# Part 3: OJ Simpson [4 points]
+
+
+
+1. What is the relationship between race and belief of OJ Simpson's guilt? Develop a robust statistical learning model and use this model to explain the impact of an individual's race on their beliefs about OJ Simpson's guilt.
+
+```{r}
+simpson =  read.csv('data/simpson.csv')
+simpson =  transform(simpson, guilt = factor(guilt),
+         dem = factor(dem),    rep = factor(rep),
+         ind = factor(ind),   female = factor(female),
+         black = factor(black),
+         hispanic = factor(hispanic), educ = factor(educ))
+
+set.seed(2017)
+
+a = resample_partition(na.omit(simpson), c(test = .3, train = .7))
+train_set = a$train$data
+validation_set = a$test$data
+
+fit <- tree(guilt ~ black + hispanic, data = train_set , control = 
+                        tree.control(nobs = nrow(train_set ), mindev = 0))
+
+# plot tree
+tree_data <- dendro_data(fit, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+  
+```
+
+We can find that:
+
+if black = FALSE, whether hispanic is FALSE or not, then guilty and if not black then not guilty. It is very surprise result.
+
+2. How can you predict whether individuals believe OJ Simpson to be guilty of these murders? Develop a robust statistical learning model to predict whether individuals believe OJ Simpson to be either probably guilty or probably not guilty and demonstrate the effectiveness of this model using methods we have discussed in class.
+
+```{r}
+fit <- tree(guilt ~ ., data = train_set , control = 
+                        tree.control(nobs = nrow(train_set ), mindev = 0))
+
+# plot tree
+tree_data <- dendro_data(fit, type = 'uniform')
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(tree_data), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+```
+
+Now, use all the predictors, the result is shown above. We can find there are lots of possibilies now.
+
+
