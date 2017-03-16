@@ -1,0 +1,244 @@
+---
+title: "ps9"
+author: "YangHou"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE,message=FALSE)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(FNN)
+library(kknn)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(randomForest)
+library(tree)
+library(gbm)
+library(tm)
+library(e1071)
+
+options(digits = 3)
+set.seed(1234)
+```
+
+```{r}
+fdata=read_csv("feminist.csv")
+mdata=na.omit(read_csv("mental_health.csv"))
+cdata=read_csv("College.csv")%>%mutate(Private=ifelse(Private=='Yes',1,0))
+udata=read_csv("USArrests.csv")
+```
+
+## problem 1
+1.
+```{r}
+set.seed(1234)
+fdata_split=resample_partition(fdata,c(test=0.3,train=0.7))
+ftrain=fdata[fdata_split$train$idx,]
+ftest=fdata[fdata_split$test$idx,]
+```
+
+2.
+```{r}
+knn_df=data_frame(kv=seq(5,100,by=5),knn_models=map(kv,~knn.reg(select(ftrain, -feminist), y=ftrain$feminist, test=select(ftest, -feminist),
+k=.)),mse=map_dbl(knn_models, ~ mean((ftest$feminist - .$pred) ^ 2)))
+ggplot(knn_df,aes(kv,mse))+geom_line()+geom_point()+labs(title="KNN on Feminist",x="K",y="MSE")
+```
+
+
+```{r}
+min_k=knn_df$kv[which.min(knn_df$mse)]
+min_k
+best_knn=knn_df$knn_models[[which.min(knn_df$mse)]]
+```
+
+So the k=45 model produces the lowest MSE.
+
+3.
+```{r}
+kknn_df=data_frame(kv=seq(5,100,by=5),kknn_models=map(kv,~kknn(feminist~.,train=ftrain,test=ftest,k=.)),mse=map_dbl(kknn_models, ~ mean((ftest$feminist - .$fitted.values) ^ 2)))
+ggplot(kknn_df,aes(kv,mse))+geom_line()+geom_point()+labs(title="KKNN on Feminist",x="K",y="MSE")
+```
+
+```{r}
+min_kk=kknn_df$kv[which.min(kknn_df$mse)]
+min_kk
+best_kknn=kknn_df$kknn_models[[which.min(kknn_df$mse)]]
+```
+
+So the k=100 model produces the lowest MSE.
+
+4.
+```{r}
+mse_cal=function(model,data){
+  x=modelr:::residuals(model,data)
+  mean(x^2,na.rm=TRUE)
+}
+lm_m=lm(feminist~.,data=fdata_split$train)
+mse_lm=mse_cal(lm_m,fdata_split$test)
+mse_lm
+```
+
+```{r}
+tree_m=tree(feminist~.,data=fdata_split$train)
+mse_tree=mse_cal(tree_m,fdata_split$test)
+mse_tree
+```
+
+```{r}
+boost_m=gbm(feminist~.,data=fdata_split$train,n.trees=500)
+yhat=predict(boost_m,newdata=fdata_split$test,n.trees=500)
+mse_boot=mean((yhat-ftest$feminist)^2)
+mse_boot
+```
+
+```{r}
+random_m=randomForest(feminist~.,data=fdata_split$train,n.trees=500)
+mse_ran=mse_cal(random_m,fdata_split$test)
+mse_ran
+```
+
+As we can see, the MSE values are very close. If we must choose, the linear reqgression has the smallest MSE value, thus it performs the best. I think the predictors happen to naturelly form a linear relation. Other methods may be influenced by the random errors in the data thus has a higher MSE value. However, since the MSE values are very closed, other methods also estimated well.
+
+##problem 2
+1.
+```{r}
+mdata_split=resample_partition(mdata,c(test=0.3,train=0.7))
+mtrain=mdata[mdata_split$train$idx,]
+mtest=mdata[mdata_split$test$idx,]
+```
+
+2.
+```{r}
+knn_df=data_frame(kv=1:10,knn_models=map(kv,~knn(train=select(mtrain, -vote96), cl=mtrain$vote96, test=select(mtest,-vote96),
+k=.)),test_err=map_dbl(knn_models, ~ mean(mtest$vote96!=.)))
+ggplot(knn_df,aes(kv,test_err))+geom_line()+geom_point()+labs(title="KNN on Mental",x="K",y="Test error rate")
+```
+
+```{r}
+min_test_err=knn_df$kv[which.min(knn_df$test_err)]
+min_test_err
+best_knn=knn_df$knn_models[[which.min(knn_df$test_err)]]
+```
+
+The k=9 model calculates the lowest test MSE.
+
+3.
+```{r}
+kknn_df=data_frame(kv=1:10,kknn_models=map(kv,~kknn(vote96~.,train=mutate(mtrain,vote96=factor(vote96)), test=mutate(mtest,vote96=factor(vote96)),
+k=.)),test_err=map_dbl(kknn_models, ~ mean(mtest$vote96!=.$fitted.values)))
+ggplot(kknn_df,aes(kv,test_err))+geom_line()+geom_point()+labs(title="KKNN on Mental",x="K",y="Test error rate")
+```
+
+```{r}
+min_test_err=kknn_df$kv[which.min(kknn_df$test_err)]
+min_test_err
+best_knn=kknn_df$kknn_models[[which.min(kknn_df$test_err)]]
+```
+
+The k=10 model produces the lowest test MSE.
+
+4.
+```{r}
+mdataf=read_csv("mental_health.csv")%>%drop_na()%>%mutate_each(funs(as.factor(.)), vote96, black, female, married)
+mdataf_split=resample_partition(mdataf,c(test=0.3,train=0.7))
+mtrain=as_tibble(mdataf_split$train)
+mtest=as_tibble(mdataf_split$test)
+```
+
+```{r}
+err.rate.tree=function(model,data){
+  data=as_tibble(data)
+  response=as.character(model$terms[[2]])
+  pred=predict(model,mewdata=data,type="class")
+  actual=data[[response]]
+  return(mean(pred!=actual,na.rm=TRUE))
+}
+l_model=glm(vote96~.,data=mtrain,family = binomial)
+logg=mtest%>%add_predictions(l_model)%>%mutate(prob=exp(pred)/(1+exp(pred)))%>%mutate(pred_bi=as.numeric(prob>0.5))
+err_log=mean(mtest$vote96!=logg$pred_bi)
+err_log
+```
+
+```{r}
+mtrain_tree=mtrain%>%mutate(vote96 = factor(vote96, levels = 0:1, label =c("no_vote", "vote")))
+mtest_tree=mtest%>%mutate(vote96 = factor(vote96, levels = 0:1, label =c("no_vote", "vote")))
+tree_m=tree(vote96~.,data=as_tibble(mtrain_tree))
+err_tree=err.rate.tree(tree_m,as_tibble(mtest_tree))
+err_tree
+```
+
+```{r}
+boot_m=gbm(vote96~.,data=mtrain,n.trees=500)
+yhat=predict(boot_m,newdata=mtest,n.trees=500)
+yhat_bi=as.numeric(yhat>0.5)
+err_boost=mean(yhat!=mtest$vote96)
+err_boost
+```
+```{r}
+random_m=randomForest(vote96~.,data=mtrain,ntress=500)
+err_random=err.rate.tree(random_m,mtest)
+err_random
+```
+
+```{r}
+sv_m=svm(vote96~.,data=mtrain,kernel="linear",cost=5)
+yhat=predict(sv_m,newdata=mtest)
+err_svm=mean(yhat!=mtest$vote96)
+err_svm
+```
+
+As we can see, the wknn method works the best. Since the wknn weights the nearest neighbors in the training sample to make the prediction, it may be the case that the neighbors for the dependent varibale happen to have strong preidictive power.
+
+##problem 3
+```{r}
+pca_m=prcomp(cdata,scale=TRUE)
+pca_m$rotation
+```
+
+```{r}
+biplot(pca_m,scale=9,cex=0.6)
+```
+
+As we can see, for the first principal component, PhD,Terminal,Top10perc,Top25perc,Outstate,Expend and Grad.Rate have the most influence. 
+
+For the second principal, Private, Apps, Accept, Enroll, F.Undergrad, and P.Undergrad have the most influence. 
+
+##problem 4
+1.
+```{r}
+pca_m=prcomp(x=select(udata,-State),scale=TRUE)
+biplot(pca_m,scale=0,cex=0.6)
+```
+2.
+```{r}
+kmean42=kmeans(select(udata,-State),centers=2,nstart = 1)
+ggplot(mapping=aes(x=pca_m$x[,1],y=pca_m$x[,2],label=udata$State,color=factor(kmean42$cluster)))+geom_point()+labs(title="Kmean Cluster with k=2",x="PC1",y="PC2")
+```
+
+3.
+```{r}
+kmean43=kmeans(select(udata,-State),centers=4,nstart = 1)
+ggplot(mapping=aes(x=pca_m$x[,1],y=pca_m$x[,2],label=udata$State,color=factor(kmean43$cluster)))+geom_point()+labs(title="Kmean Cluster with k=4",x="PC1",y="PC2")
+```
+
+4.
+```{r}
+kmean44=kmeans(select(udata,-State),centers=3,nstart = 1)
+ggplot(mapping=aes(x=pca_m$x[,1],y=pca_m$x[,2],label=udata$State,color=factor(kmean44$cluster)))+geom_point()+labs(title="Kmean Cluster with k=3",x="PC1",y="PC2")
+```
+
+5.
+```{r}
+kmean45=kmeans(pca_m$x[,1:2],centers=3,nstart = 1)
+ggplot(mapping=aes(x=pca_m$x[,1],y=pca_m$x[,2],label=udata$State,color=factor(kmean45$cluster)))+geom_point()+labs(title="Kmean Cluster with k=3",x="PC1",y="PC2")
+```
+
