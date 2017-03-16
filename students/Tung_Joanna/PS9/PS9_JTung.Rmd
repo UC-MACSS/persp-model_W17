@@ -1,0 +1,809 @@
+---
+title: "PS9_JTung"
+author: "Tung, Joanna"
+date: "March 9, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r global_options}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+
+```
+
+
+IMPORT Packages!
+```{r}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(gbm)
+library(ggdendro)
+library(tree)
+library(randomForest)
+library(e1071)
+```
+
+```{r}
+# Create function mse to calculate the mean squared error
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+# create function to calculate tree/classification test error
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+```
+
+PART ONE: Attitudes towards feminists
+
+1) Split the data into a training and test set (70/30%).
+
+Import the data
+```{r}
+fem <- read_csv("data/feminist.csv") %>%
+  na.omit
+```
+
+Split the data into the training/test set partitions
+```{r}
+# set the random seed
+set.seed(1234)
+
+# Split feminist data into test/training set partition
+fem_split <- resample_partition(fem, c(test = 0.3, train = 0.7))
+fem_train <- fem_split$train %>%
+  tbl_df()
+fem_test <- fem_split$test %>%
+  tbl_df()
+```
+
+2) Calculate the test MSE for KNN models with K=5,10,15,.,100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+Since this an unsupervised learning for exploratory purposes, all variables were included in the KNN models. The K-nearest neighbors model with k = 100 returned the lowest test MSE of 456.0094.
+```{r}
+# calculate the test mse for different k values
+fem_mse1_knn <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist), y = fem_train$feminist,
+                         test = select(fem_test, -feminist), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+# plot the results
+ggplot(fem_mse1_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "KNN for Feminist",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+# view the calculated test mse values
+fem_mse1_knn$mse
+```
+
+3) Calculate the test MSE for weighted KNN models with K = 5, 10, 15, ., 100 using the same combination of variables as before. Which model produces the lowest test MSE?
+
+The weighted K-nearest neighbors model with k = 100 again produced the lowest test MSE, 437.3657. 
+```{r}
+# calculate the test mse for different k values
+fem_mse2_knn <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ .,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+# plot the results
+ggplot(fem_mse2_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Weighted KNN for Feminist",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+# view the calculated test mse values
+fem_mse2_knn
+```
+
+4) Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works
+
+Using the test MSE as our indicator, of the models run below, the Boosting mdethod with interaction depth 4 and trees = 1302 "performed the best" with the lowest test MSE of 432.5293. This is perhaps not entirely unsurprising because the boosting method works to iteratively reduce residual with every new tree. Since test MSE grows with increasing magnitude of residuals, boosting is a naturally good approach for reducing test MSE.
+
+```{r}
+# create dataframe of results
+P1_4_results <- data_frame(Model = c("KNN", "WKNN", "Linear Regression", "Decision Tree", "Boosting", "Random Forest"),
+                           Specs = c("k = 45", "k = 100", "N/A", "Pruned with Terminal Nodes = 3", "Interaction Depth = 4, No. of Trees = 1302", "No. of Trees = 1000"),
+                           Test_MSE = c(455.7123, 437.3657, 435.1107, 436.1426, 432.5293, 437.925)) %>%
+  arrange((Test_MSE))
+
+# print table of results
+library(knitr)
+kable(P1_4_results)
+```
+
+
+```{r}
+# compare to linear regression
+fem_lm <- lm(feminist ~ ., data = fem_split$train)
+fem_mse_lm <- mse(fem_lm, fem_split$test)
+
+fem_mse_lm
+summary(fem_lm)
+```
+
+```{r}
+# compare to decision tree
+
+# set the random seed
+set.seed(1234)
+
+# generate 10-fold CV trees
+fem_cv <- crossv_kfold(fem, k = 10) %>%
+  mutate(tree = map(train, ~ tree(feminist ~ ., data = .)))
+
+# calculate each possible prune result for each fold
+fem_cv2 <- expand.grid(fem_cv$.id, 2:10) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(fem_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.tree(.x, best = .y)),
+         mse = map2_dbl(prune, test, mse))
+
+# plot the results
+fem_mse <- fem_cv2 %>%
+  select(k, mse) %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE))
+
+fem_mse_plot <- fem_mse %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of terminal nodes",
+       y = "Test MSE")
+fem_mse_plot
+
+# Select smallest terminal nodes (=3 from plot above) and create the final DT
+# generate tree model
+fem_DT <- tree(feminist ~ ., data = fem_split$train)
+
+# prune the model using terminal nodes = 3
+mod_fem_DT <- prune.tree(fem_DT, best = 3)
+
+# plot the tree
+pfem_DT <- dendro_data(mod_fem_DT)
+ptree_fem <- ggplot(segment(pfem_DT)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), 
+               alpha = 0.5) +
+  geom_text(data = label(pfem_DT), 
+            aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(pfem_DT), 
+            aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro()
+
+ptree_fem
+
+fem_mse
+```
+
+```{r}
+# compare to the boosting method, part one
+
+# set random seed
+set.seed(1234)
+
+# run multiple models
+fem_boost_testmodels <- list("boosting_depth1" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 5000, interaction.depth = 1),
+                       "boosting_depth2" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 5000, interaction.depth = 2),
+                       "boosting_depth4" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 5000, interaction.depth = 4),
+                       "boosting_depth10" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 5000, interaction.depth = 10))
+
+
+data_frame(depth = c(1, 2, 4, 10),
+           model = fem_boost_testmodels[c("boosting_depth1", "boosting_depth2", "boosting_depth4", "boosting_depth10")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) 
+```
+
+```{r}
+# compare to the boosting method, part two
+
+# set random seed
+set.seed(1234)
+
+# run the models with the optimal number of trees
+fem_boost_models <- list("boosting_depth1" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 2294, interaction.depth = 1),
+                       "boosting_depth2" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 1692, interaction.depth = 2),
+                       "boosting_depth4" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 1302, interaction.depth = 4),
+                       "boosting_depth10" = gbm(feminist ~ .,
+                                               data = fem_split$train,
+                                               n.trees = 974, interaction.depth = 10))
+
+# get predictions for the different models using the test data
+boost1_pred <- predict(fem_boost_models$boosting_depth1,
+                       newdata = as_tibble(fem_split$test),
+                       n.trees = 2294)
+boost2_pred <- predict(fem_boost_models$boosting_depth2,
+                       newdata = as_tibble(fem_split$test),
+                       n.trees = 1692)
+boost4_pred <- predict(fem_boost_models$boosting_depth4,
+                       newdata = as_tibble(fem_split$test),
+                       n.trees = 1302)
+boost10_pred <- predict(fem_boost_models$boosting_depth10,
+                       newdata = as_tibble(fem_split$test),
+                       n.trees = 974)
+
+# print the MSE for the test set
+boost1_mse <- mean((boost1_pred - fem_test$feminist)^2)
+boost1_mse
+
+boost2_mse <- mean((boost2_pred - fem_test$feminist)^2)
+boost2_mse
+
+boost4_mse <- mean((boost4_pred - fem_test$feminist)^2)
+boost4_mse
+
+boost10_mse <- mean((boost10_pred - fem_test$feminist)^2)
+boost10_mse
+
+```
+
+```{r}
+# compare to the random Forest method
+
+# set the seed
+set.seed(1234)
+
+# perform bagging on the training set
+fem_rf <- randomForest(feminist ~ ., data = fem_split$train, ntree = 1000)
+
+# print results
+print(fem_rf)
+
+# calculate error
+femrf_err <- mse(fem_rf, fem_split$test)
+femrf_err
+```
+
+PART TWO: Voter turnout and depression
+
+1) Split the data into a training and test set (70/30).
+
+IMPorT THE DATA!
+```{r}
+# read in the data and get rid of NAs
+voter <- read_csv("data/mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit
+
+voter
+# code to test MSE's with different subset of variables
+#voter <- subset(voter_data, select = -c(black,female,married, inc10))
+#voter
+```
+
+
+```{r}
+# set the random seed
+set.seed(1234)
+
+# Split voter data into test/training set partition
+vote_split <- resample_partition(voter, c(test = 0.3, train = 0.7))
+vote_train <- vote_split$train %>%
+  tbl_df()
+vote_test <- vote_split$test %>%
+  tbl_df()
+```
+
+2) Calculate the test error rate for KNN models with K=1,2,.,10, using whatever combination of variables you see fit. Which model produces the lowest test error?
+
+Again, because this is exploratory learning, all variables were included in the analysis. The K-nearest neighbors model with k = 3 produced the lowest test error, 0.3065903.
+```{r}
+# calculate the test error for different k values
+vote_err1_knn <- data_frame(k = 1:10,
+                            knn_train = map(k, ~ class::knn(select(vote_train, -vote96),
+                                                test = select(vote_train, -vote96),
+                                                cl = vote_train$vote96, k = .)),
+                            knn_test = map(k, ~ class::knn(select(vote_train, -vote96),
+                                                test = select(vote_test, -vote96),
+                                                cl = vote_train$vote96, k = .)),
+                            err_train = map_dbl(knn_train, ~ mean(vote_test$vote96 != .)),
+                            err_test = map_dbl(knn_test, ~ mean(vote_test$vote96 != .)))
+
+# plot the results
+ggplot(vote_err1_knn, aes(k, err_test)) +
+  geom_line() +
+  labs(x = "K",
+       y = "Test error rate") +
+  expand_limits(y = 0)
+
+
+# view test error
+vote_err1_knn$err_test
+```
+
+3) Calculate the test error rate for weighted KNN models with K=1,2,.,10 using the same combination of variables as before. Which model produces the lowest test error rate?
+
+The weighted K-nearest neighbors model with K = 10 produced the lowest test error rate, 0.2779370. 
+```{r}
+# calculate the test error for different k values, with weighted KNN
+vote_err2_knn <- data_frame(k = 1:10,
+                            knn = map(k, ~ kknn(vote96 ~ .,
+                                          train = vote_train, test = vote_test, k = .)),
+                            err = map_dbl(knn, ~ mean(vote_test$vote96 != .$fitted.values)))
+
+# plot the results
+ggplot(vote_err2_knn, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Weighted KNN for Voter Turnout",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+# view the error
+vote_err2_knn
+```
+
+4) Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+The logistic regression produced the lowest test error. This is likely because some of the predictor variables in the data reliably predict voting behavior, such that the logistic regression approach, which accounts for the "contribution" of each variable that reduces predictive error, works best to capture the "effect" of the necssary predictor variables. The other methods do not "tune" individual variable contribution in the same way, which may have given the logistic regression approach an advantage for this data set.
+```{r}
+# create table of results
+P2_4_results <- data_frame(Model = c("KNN", "WKNN", "Logistic Regression", "Decision Tree", "Boosting", "Random Forest", "SVM - linear kernal", "SVM - polynomial kernal", "SVM - radial kernal"),
+                           Specs = c("k = 9", "k = 10", "N/A", "Pruned with Terminal Nodes = 6", "Interaction Depth = 4, No. of Trees = 1794", "No. of Trees = 1000", "Cost = 1, Gamma = 0.125", "Cost = 5, Degree = 3, Gamma = 0.125", "Cost = 1, Gamma = 0.125"),
+                           Test_Error = c(0.3037249, 0.2779370, 0.2722063, 0.3037249, 0.2922636, 0.3008596, 0.2855616, 0.3015206, 0.2917344)) %>%
+  arrange((Test_Error))
+
+# view table
+library(knitr)
+kable(P2_4_results)
+```
+
+
+```{r}
+# compare to linear regression
+vote_glm <- glm(vote96 ~ ., data = vote_split$train, family = binomial)
+
+# calculate the error
+fitted <- predict(vote_glm, as_tibble(vote_split$test), type = "response")
+logit_err <- mean(as_tibble(vote_split$test)$vote96 != round(fitted))
+
+logit_err
+summary(vote_glm)
+```
+
+```{r}
+# set the seed
+set.seed(1234)
+
+# estimate model
+vote_DT <- tree(vote96 ~ ., data = vote_split$train)
+
+# generate 10-fold CV trees
+vote_DT_cv <- as_tibble(vote_split$train) %>%
+  na.omit() %>%
+  crossv_kfold(k = 10) %>%
+  mutate(tree = map(train, ~ tree(vote96 ~ ., data = .)))
+
+# calculate each possible prune result for each fold
+vote_DT_cv <- expand.grid(vote_DT_cv$.id, 2:20) %>%
+  as_tibble() %>%
+  mutate(Var2 = as.numeric(Var2)) %>%
+  rename(.id = Var1,
+         k = Var2) %>%
+  left_join(vote_DT_cv) %>%
+  mutate(prune = map2(tree, k, ~ prune.misclass(.x, best = .y)),
+         mse = map2_dbl(prune, test, err.rate.tree))
+
+# plot the prune results
+vote_DT_plot <- vote_DT_cv %>%
+  group_by(k) %>%
+  summarize(test_mse = mean(mse),
+            sd = sd(mse, na.rm = TRUE)) %>%
+  ggplot(aes(k, test_mse)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Voter Turnout tree",
+       x = "Number of terminal nodes",
+       y = "Test error rate")
+
+vote_DT_plot
+
+# prune the tree using the terminal nodes = 6, chosen for best balance of error reduction and simplicity
+vote_pDT <- prune.tree(vote_DT, best = 6)
+
+# draw the tree
+tree_data <- dendro_data(vote_pDT) 
+ggplot(segment(tree_data)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend),
+              alpha = 0.5) +
+  geom_text(data = label(tree_data),
+           aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
+  geom_text(data = leaf_label(tree_data),
+           aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
+  theme_dendro() +
+  labs(title = "Voter turnout, train prune tree")
+
+tree_data
+
+# calculate the test error
+pDT_fitted <- predict(vote_pDT, as_tibble(vote_split$test), type = "class")
+ptree_err <- mean(as_tibble(vote_split$test)$vote96 != pDT_fitted)
+
+ptree_err
+```
+
+```{r}
+# compare to the boosting method
+
+# set random seed
+set.seed(1234)
+
+# run multiple models
+vote_boost_testmodels <- list("boosting_depth1" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 5000, interaction.depth = 1),
+                              "boosting_depth2" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 5000, interaction.depth = 2),
+                              "boosting_depth4" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 5000, interaction.depth = 4),
+                              "boosting_depth10" = gbm(as.numeric(vote96) - 1 ~ .,
+                                              data = vote_split$train,
+                                              n.trees = 5000, interaction.depth = 10))
+
+# print the optimal tree number for each interaction depth
+data_frame(depth = c(1, 2, 4, 10),
+           model = vote_boost_testmodels[c("boosting_depth1", "boosting_depth2", "boosting_depth4", "boosting_depth10")],
+           optimal = map_dbl(model, gbm.perf, plot.it = FALSE))
+```
+
+```{r}
+# compare to the boosting method
+
+# set random seed
+set.seed(1234)
+
+# run the models with the optimal number of trees
+vote_boost_models <- list("boosting_depth1" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 3647, interaction.depth = 1),
+                          "boosting_depth2" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 2442, interaction.depth = 2),
+                          "boosting_depth4" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 1739, interaction.depth = 4),
+                          "boosting_depth10" = gbm(as.numeric(vote96) - 1 ~ .,
+                                               data = vote_split$train,
+                                               n.trees = 1305, interaction.depth = 10))
+
+# calculate test error for the different models using the test data
+boost1_pred <- vote_test %>%
+  mutate(pred = round(predict(vote_boost_models$boosting_depth1, newdata = as_tibble(vote_split$test), n.trees = 3647, type = "response")))
+boost1_err <- mean(boost1_pred$pred != as.numeric(boost1_pred$vote96) - 1)
+  
+boost2_pred <- vote_test %>%
+  mutate(pred = round(predict(vote_boost_models$boosting_depth2, newdata = as_tibble(vote_split$test), n.trees = 2442, type = "response")))
+boost2_err <- mean(boost2_pred$pred != as.numeric(boost1_pred$vote96) - 1)
+
+boost4_pred <- vote_test %>%
+  mutate(pred = round(predict(vote_boost_models$boosting_depth4, newdata = as_tibble(vote_split$test), n.trees = 1739, type = "response")))
+boost4_err <- mean(boost4_pred$pred != as.numeric(boost1_pred$vote96) - 1)
+
+boost10_pred <- vote_test %>%
+  mutate(pred = round(predict(vote_boost_models$boosting_depth10, newdata = as_tibble(vote_split$test), n.trees = 1305, type = "response")))
+boost10_err <- mean(boost10_pred$pred != as.numeric(boost1_pred$vote96) - 1)
+
+
+boost1_err
+boost2_err
+boost4_err
+boost10_err
+```
+
+```{r}
+# compare to the random Forest method
+
+# set the seed
+set.seed(1234)
+
+# perform bagging on the training set
+vote_rf <- randomForest(vote96 ~ ., data = vote_split$train, ntree = 500)
+
+# print results
+print(vote_rf)
+
+err2 <- err.rate.tree(vote_rf,vote_split$test)
+err2
+```
+
+```{r}
+set.seed(1234)
+# try a linear kernal SVM application
+
+# suggest a set of linear kernals to test
+vote_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(vote_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(vote_lin_tune)
+
+# select best linear kernal model
+vote_lin <- vote_lin_tune$best.model
+summary(vote_lin)
+```
+
+```{r}
+set.seed(1234)
+# try a polynomial kernal SVM application
+
+# suggest a set of polynomial kernals to test
+vote_poly_tune <- tune(svm, vote96  ~ ., data = as_tibble(vote_split$train),
+                    kernel = "polynomial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(vote_poly_tune)
+
+# select best polynomial kernal model
+vote_poly <- vote_poly_tune$best.model
+summary(vote_poly)
+```
+
+```{r}
+set.seed(1234)
+# try a radial kernal SVM application
+
+# suggest a set of radial kernals to test
+vote_rad_tune <- tune(svm, vote96  ~ ., data = as_tibble(vote_split$train),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(vote_rad_tune)
+
+# select best radial kernal model
+vote_rad <- vote_rad_tune$best.model
+summary(vote_rad)
+
+```
+
+Part THREE: College
+
+Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+
+The results show that the first principal component (PC1) explains ~30%, while the second principal component (PC2) explains ~28% of the variance in the data. 18 total components are used to explain the total variance in the data. The variables strongly correlated with PC1 are those indicating high applicant achievement (top 10% or 25% of high school class), out of state tuition and expenditures per student, and finally those indicating highly-educated faculty, either holding PhD or terminal degrees. The variables strongly correlated with PC2 are the the number of full time undergraduates and number of new enrollees. 
+```{r}
+# import necessary package
+library(plyr)
+
+# import the data
+college <- read_csv("data/college.csv")
+
+# manipulate data to turn categoricals into binary 1,0
+college$Private <- mapvalues(college$Private, from = c("Yes", "No"), to = c(1, 0))
+college$Private <- as.numeric(college$Private)
+
+# perform PCA analysis
+pr.out <- prcomp(college, scale = TRUE)
+summary(pr.out)
+pr.out
+# plot PC1 v PC2
+biplot(pr.out, scale = 0, cex = .6)
+
+# view variable principal component loading vector
+pr.out$rotation
+```
+```{r}
+summary(pr.out)
+pr.out
+```
+
+PART FOUR: Clustering States
+
+IMPORT THE DATA!
+```{r}
+# import the data, remove NAs
+crime <- read_csv("data/USArrests.csv") %>%
+  na.omit
+
+```
+
+1) Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+PCA was performed on the data set. The Observations were plotted on the first and second principal components, below.
+```{r}
+# perform PCA
+pr.out <- prcomp(x = select(crime, -State), scale = TRUE)
+summary(pr.out)
+pr.out
+# plot PC1 v PC2
+biplot(pr.out, scale = 0, cex = .6, xlabs = crime$State)
+
+# view principal component loading vectors
+pr.out$rotation
+```
+
+2) Perform K-means clustering with K=2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+The PCA above finds Murder, Assault and Rape to be strongly correlated with the first principal component and urban population to be most strongly correlated with the second primary component. We would interpret the plot below as likely reflecting the difference (by color) in "violent" versus "less violent" states (since PC1 reflects measures of violence, as indicated by the relative the magnitude of reported rotation output).
+```{r}
+# set the random seed
+set.seed(1234)
+
+# estimate k=2 clusters
+
+# modify original dataframe to include kmeans cluster assignment and PC1 and PC2 scores
+k2clust <- crime %>%
+    mutate(k2 = as.factor(kmeans(crime[,2:5], 2, nstart = 1)$cluster),
+           PC1 = as.data.frame(pr.out$x)$PC1,
+           PC2 = as.data.frame(pr.out$x)$PC2)
+          
+# plot each data point on the PC1 and PC2 component with each state color-coded by cluster membership
+k2clust %>%
+  ggplot(aes(PC1, PC2, color = k2)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "Plot on First and Second Principal Component",
+       subtitle = "Grouped into 2 Subgroups by K-means")
+
+pr.out
+```
+
+3) Perform K-means clustering with K=4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+The K-means clustering with K=4 is split again along the "violent" and "less violent" spectrum. We can observe this by the splits in the colors, which generally seem to split the data along values of PC1, rather than PC2. There is more contribution from PC2, however, as evidenced by the diagonality of the splits observed. The persistence of splits occurring primarily along the PC1 axis indicates that "violence" is generally very descriptive of the data variance.
+```{r}
+# set the random seed
+set.seed(1234)
+
+# estimate k=4 clusters
+
+# modify original dataframe to include kmeans cluster assignment and PC1 and PC2 scores
+k4clust <- crime %>%
+    mutate(k4 = as.factor(kmeans(crime[,2:5], 4, nstart = 1)$cluster),
+           PC1 = as.data.frame(pr.out$x)$PC1,
+           PC2 = as.data.frame(pr.out$x)$PC2)
+          
+#  plot each data point on the PC1 and PC2 component with each state color-coded by cluster membership
+k4clust %>%
+  ggplot(aes(PC1, PC2, color = k4)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "Plot by First and Second Principal Component",
+       subtitle = "Grouped into 4 Subgroups by K-means")
+```
+
+4) Perform K-means clustering with K=3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+The K-means clustering with K=3 is split along the "violent" and "less violent" spectrum, as expressed by PC1. The delineation between clusters at the edges are not especially distinct.
+```{r}
+# set the random seed
+set.seed(1234)
+
+# estimate k=3 clusters
+
+# modify original dataframe to include kmeans cluster assignment and PC1 and PC2 scores
+k3clust <- crime %>%
+    mutate(k3 = as.factor(kmeans(crime[,2:5], 3, nstart = 1)$cluster),
+           PC1 = as.data.frame(pr.out$x)$PC1,
+           PC2 = as.data.frame(pr.out$x)$PC2)
+          
+#  plot each data point on the PC1 and PC2 component with each state color-coded by cluster membership
+k3clust %>%
+  ggplot(aes(PC1, PC2, color = k3)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "Plot by First and Second Principal Component",
+       subtitle = "Grouped into 3 Subgroups by K-means")
+```
+
+5) Perform K-means clustering with K=3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with K=3 based on the raw data
+
+The K-means clustering with K=3 was performed on the first two prinicpal component score vectors. The delineation between clusters at the edges is now much sharper than those from question 4. This approach seems to have clustered the data generally as follows: once along the "violent" axis (PC1) and once again along the "urban population" axisx (PC2) for only those states that are "less violent," per their negative PC1 score.
+```{r}
+# set the random seed
+set.seed(1234)
+
+# estimate k=3 clusters first two principal components score vectors, rather than the raw data: simply add the new kmeans cluster id to the k3clust dataframe from above
+k3clust_mod <- k3clust %>%
+    mutate(k3mod = as.factor(kmeans(k3clust[,7:8], 3, nstart = 1)$cluster))
+          
+#  plot each data point on the PC1 and PC2 component with each state color-coded by cluster membership
+k3clust_mod %>%
+  ggplot(aes(PC1, PC2, color = k3mod)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "K-means Grouping by First and Second Principal Component",
+       subtitle = "Grouped into 3 Subgroups")
+
+k3clust_mod
+```
+
+6) Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+Hierarchical clustering was used to cluster the states. The dendrogram is plotted below.
+```{r}
+# modify dataset so that State names will show up on the dendrogram, might as well also remove "State" now
+hc_dat <- as.matrix(select(crime, -State))
+rownames(hc_dat) <- crime$State
+
+# run the hierarchical clustering using Euclidian distance
+hc_complete <- hclust(dist(hc_dat), method = 'complete')
+
+# plot the dendrogram
+hc1 <- ggdendrogram(data = hc_complete, labels = TRUE) + 
+  geom_text() + 
+  labs(title = '50 States Hierarchical Clustering',
+       y = 'Euclidean Distance')
+
+hc1
+```
+
+7) Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+The table showing the state and cluster assignment is provided below. The table has been sorted by cluster.
+```{r}
+# cut the tree so that clusters = 3; turn results into a data frame
+p7_cut <- cutree(hc_complete, k = 3) %>% 
+  data_frame(State = names(.), Cluster = .)
+
+# sort the states by cluster assignment
+p7_out <- arrange(p7_cut, Cluster)
+
+# view states by cluster assignment
+p7_out
+```
+
+8) Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+Scaling all the variables to have standard deviation of 1 effectively places equal weight on each variable in the hierarchical clustering performed. As the analysis above showed, the degree of reported violence seems to have a very important role in describing variation between states. If we scale all the variables as suggested, we will impact our ability to accurately account for the contribution of those variables that describe "violence." Since these variables seem to be very descriptive of data variance, it is probably not a good idea to scale the variables accordingly.
+```{r}
+# scale the data
+hc_dat_scale <- scale(hc_dat)
+
+# run the hierarchical clustering using Euclidian distance
+hcscale_complete <- hclust(dist(hc_dat_scale), method = 'complete')
+
+# plot the dendrogram
+hc2 <- ggdendrogram(data = hcscale_complete, labels = TRUE) + 
+  geom_text() + 
+  labs(title = '50 States Hierarchical Clustering',
+       subtitle = 'Variables scaled to STD = 1',
+       y = 'Euclidean Distance')
+
+hc2
+```
+
