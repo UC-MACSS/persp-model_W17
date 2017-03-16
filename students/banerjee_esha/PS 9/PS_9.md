@@ -28,7 +28,7 @@ library(knitr)
 fm = read_csv('feminist.csv')
 mh = read_csv('mental_health.csv')
 clg = read_csv('College.csv')
-usa = read_csv('USArrests.csv')
+arrests = read_csv('USArrests.csv')
 ```
 
 Attitudes towards feminists
@@ -61,7 +61,7 @@ mse_lm
 
 ``` r
 mse_knn <- data_frame(k = seq(5, 100, by = 5), 
-                      knn = map(k, ~ knn.reg(select(fm_train, -age, -female, -dem, -rep), y = fm_train$feminist, test = select(fm_test, -age, -female, -dem, -rep), k = .)), 
+                      knn = map(k, ~ knn.reg(select(fm_train, -feminist, -educ, -income ), y = fm_train$feminist, test = select(fm_test, -feminist, -educ, -income), k = .)), 
                       mse = map_dbl(knn, ~ mean((fm_test$feminist - .$pred)^2))) 
 
 
@@ -81,7 +81,7 @@ knn_mse_fem<-min(mse_knn$mse)
 knn_mse_fem
 ```
 
-    ## [1] 0.1986106
+    ## [1] 463.1369
 
 MSE is lowest for the model with the variables age, female, dem, rep & K = 5.
 
@@ -277,6 +277,26 @@ mse_4
 
     ## [1] 444.8929
 
+``` r
+Methods <- c("Linear model", "Decision Tree", "Random Forests", "Boosting", "KNN")
+MSE <- c(mse_lm, mse_tree, mse_rf, mse_2, knn_mse_fem)
+MSE
+```
+
+    ## [1] 447.1426 456.2566 445.3172 445.7057 463.1369
+
+``` r
+kable(data.frame(Methods, MSE))
+```
+
+| Methods        |       MSE|
+|:---------------|---------:|
+| Linear model   |  447.1426|
+| Decision Tree  |  456.2566|
+| Random Forests |  445.3172|
+| Boosting       |  445.7057|
+| KNN            |  463.1369|
+
 Voter turnout and depression
 ============================
 
@@ -314,7 +334,7 @@ x<- mh_test %>%
 err.rate.glm <-mean(x$vote96 != x$pred)
 
 # estimate the MSE for KNN K=1,2,...,10
-mse_knn <- data_frame(k = 1:10,
+mse_knn <- data_frame(k = seq(1, 10, by = 1),
                       knn_train = map(k, ~ class::knn(select(mh_train, -vote96),
                                                 test = select(mh_train, -vote96),
                                                 cl = mh_train$vote96, k = .)),
@@ -323,6 +343,7 @@ mse_knn <- data_frame(k = 1:10,
                                                 cl = mh_train$vote96, k = .)),
                       mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
                       mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
 
 ggplot(mse_knn, aes(k, mse_test)) +
   geom_line() +
@@ -343,11 +364,11 @@ hm_knn_mse<-min(mse_knn$mse_test)
 
 ``` r
 set.seed(111)
-mse_wknn <- data_frame(k = 1:10,
+mse_wknn <- data_frame(k = seq(1, 10, by = 1),
                       wknn = map(k, ~ kknn(vote96 ~., train = mh_train, test = mh_test, k =.)),
                       mse_test_wknn = map_dbl(wknn, ~ mean(mh_test$vote96 != as.numeric(.$fitted.values > 0.5))))
 
-mse_wknn_mh <- min(mse_wknn$ mse_test_wknn)
+mse_wknn_mh <- min(mse_wknn$mse_test_wknn)
 
 err<-mse_wknn %>%
   left_join(mse_knn, by = "k") %>%
@@ -375,75 +396,53 @@ err %>%
 
 ``` r
 set.seed(111)
-# Decision Tree
-tree_mh <- tree(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train)
-tree_data <- dendro_data(tree_mh)
-
-ggplot(segment(tree_data)) +
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.5) +
-  geom_text(data = label(tree_data), aes(x = x, y = y, label = label_full), vjust = -0.5, size = 3) +
-  geom_text(data = leaf_label(tree_data), aes(x = x, y = y, label = label), vjust = 0.5, size = 3) +
-  theme_dendro() +
-  labs(title = "Voter Turnout")
-```
-
-![](PS_9_files/figure-markdown_github/unnamed-chunk-10-1.png)
-
-``` r
-set.seed(111)
-
-# RF
-rf<- randomForest(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, ntree = 500)
-
-data_frame(var = rownames(importance(rf)),
-           MeanDecreaseRSS = importance(rf)[,1]) %>%
-  mutate(var = fct_reorder(var, MeanDecreaseRSS, fun = median)) %>%
-  ggplot(aes(var, MeanDecreaseRSS)) +
-  geom_point() +
-  coord_flip() +
-  labs(title = "Predicted Voter Turnout",
-       x = NULL,
-       y = "Average decrease in the Gini Index")
-```
-
-![](PS_9_files/figure-markdown_github/unnamed-chunk-11-1.png)
-
-``` r
-set.seed(111)
-# Boosting
-mh_models <- list("boosting_depth1" = gbm(vote96 ~ inc10 + age + educ + mhealth_sum,
-                                               data = mh_train,
-                                               n.trees = 10000, interaction.depth = 1),
-                       "boosting_depth2" = gbm(vote96 ~ inc10 + age + educ + mhealth_sum,
-                                               data = mh_train,
-                                               n.trees = 10000, interaction.depth = 2),
-                       "boosting_depth4" = gbm(vote96 ~ inc10 + age + educ + mhealth_sum,
-                                               data = mh_train,
-                                               n.trees = 10000, interaction.depth = 4))
+mh_tree <- tree(vote96 ~ ., data = mh_train,
+     control = tree.control(nobs = nrow(mh),
+                            mindev = 0))
+mh_rf <- randomForest(vote96 ~., data = mh_train, ntree = 500)
+mh_boost <- gbm(mh_train$vote96 ~ ., data=mh_train, n.trees = 10000, interaction.depth = 2)
 ```
 
     ## Distribution not specified, assuming bernoulli ...
-    ## Distribution not specified, assuming bernoulli ...
-    ## Distribution not specified, assuming bernoulli ...
 
 ``` r
-data_frame(depth = c(1, 2, 4),
-           model = mh_models[c("boosting_depth1", "boosting_depth2", "boosting_depth4")],
-           optimal = map_dbl(model, gbm.perf, plot.it = FALSE)) %>%
-  select(-model) %>%
-  kable(caption = "Optimal number of boosting iterations",
-               col.names = c("Depth", "Optimal number of iterations"))
+mh_tune <- tune(svm, vote96 ~., data = mh_train, 
+                          kernel = "linear", 
+                          range = list(cost = c(.001, 0.01, .1, 1, 5, 10, 100)))
+mh_lm_best <- mh_tune$best.model
+mh_poly_tune <- tune(svm, vote96 ~ ., data = mh_train,
+                     kernel = "polynomial",
+                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_best <- mh_poly_tune$best.model
+
+
+mse_lmsvm <- mse(mh_best, mh_test)
+mse_glm <- mse(mh_glm, mh_test)
+mse_tree <- mse(mh_tree, mh_test)
+mse_rf <- mse(mh_rf, mh_test)
+mse_boost <- mse(mh_boost, mh_test)
 ```
 
-    ## Using OOB method...
-    ## Using OOB method...
-    ## Using OOB method...
+    ## Using 10000 trees...
 
-|  Depth|  Optimal number of iterations|
-|------:|-----------------------------:|
-|      1|                          3518|
-|      2|                          2388|
-|      4|                          1791|
+``` r
+mse_polysvm <- mse(mh_best, mh_test)
+
+Methods <- c("Logistic model", "Decision Tree", "Random Forests", "Boosting", "Support Vector Machine (Poly)", "Support vector Machine (linear)", "Weighted KNN")
+Errors <- c(mse_glm, mse_tree, mse_rf, mse_boost, mse_polysvm, mse_lmsvm, mse_wknn_mh)
+
+kable(data.frame(Methods, Errors))
+```
+
+| Methods                         |     Errors|
+|:--------------------------------|----------:|
+| Logistic model                  |  1.0748561|
+| Decision Tree                   |  0.2686692|
+| Random Forests                  |  0.1968784|
+| Boosting                        |  1.7338439|
+| Support Vector Machine (Poly)   |  0.2719548|
+| Support vector Machine (linear) |  0.2719548|
+| Weighted KNN                    |  0.3151862|
 
 Colleges
 ========
@@ -461,7 +460,7 @@ pr.out <- prcomp(c, scale = TRUE)
 biplot(pr.out, scale = 0, cex = .6)
 ```
 
-![](PS_9_files/figure-markdown_github/unnamed-chunk-13-1.png)
+![](PS_9_files/figure-markdown_github/unnamed-chunk-11-1.png)
 
 ``` r
 pr.out <- prcomp(clg[,2:18], scale = TRUE)
@@ -546,4 +545,146 @@ pr.out$rotation
 biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(clg)))
 ```
 
+![](PS_9_files/figure-markdown_github/unnamed-chunk-12-1.png)
+
+``` r
+# Principal Component Analysis 
+states_label <-arrests$State
+arrests_df <- arrests[c("Murder", "Assault", "UrbanPop", "Rape")]
+pr.out <- prcomp(arrests_df, scale = TRUE)
+pr.out$rotation 
+```
+
+    ##                 PC1        PC2        PC3         PC4
+    ## Murder   -0.5358995  0.4181809 -0.3412327  0.64922780
+    ## Assault  -0.5831836  0.1879856 -0.2681484 -0.74340748
+    ## UrbanPop -0.2781909 -0.8728062 -0.3780158  0.13387773
+    ## Rape     -0.5434321 -0.1673186  0.8177779  0.08902432
+
+``` r
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-13-1.png) \#\#\#Part 2
+
+``` r
+kmeans_fit2 <- kmeans(arrests_df, 2, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+```
+
 ![](PS_9_files/figure-markdown_github/unnamed-chunk-14-1.png)
+
+``` r
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+#plot(PC1, PC2, label=arrests_label)
+state_group <- as.factor(kmeans_fit2$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-14-2.png) \#\#\#Part 3
+
+``` r
+kmeans_fit4 <- kmeans(arrests_df, 4, nstart = 20)
+
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-15-1.png)
+
+``` r
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=states_label)
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-15-2.png)
+
+``` r
+state_group <- as.factor(kmeans_fit4$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-15-3.png) \#\#\#Part 4
+
+``` r
+kmeans_fit3 <- kmeans(arrests_df, 3, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-16-1.png)
+
+``` r
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+#plot(PC1, PC2, label=arrests_label)
+
+state_group <- as.factor(kmeans_fit3$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-16-2.png) \#\#\#Part 5
+
+``` r
+pr.out <- prcomp(arrests_df, scale = TRUE)
+PCS <- data.frame(v1=PC1, v2=PC2)
+kmeans_fit3_pca <- kmeans(PCS, 3, nstart = 20)
+state_group <- as.factor(kmeans_fit3_pca$cluster)
+d <- data.frame(x=PC1, y=PC2, name=states_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-17-1.png)
+
+### Part 6
+
+``` r
+hc.complete <- hclust(dist(arrests_df), method = "complete")
+
+# plot
+ggdendrogram(hc.complete) + labs(title = 'US Arrests Heirarchical Clustering')
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-18-1.png)
+
+``` r
+h <- 150
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(arrests_df))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-18-2.png)
+
+### Part 8
+
+``` r
+hc.standard <- hclust(dist(scale(arrests_df)), method = "complete")
+
+#plot
+ggdendrogram(hc.standard) + labs(title = 'US Arrests Standardized Heirarchical Clustering')
+```
+
+![](PS_9_files/figure-markdown_github/unnamed-chunk-19-1.png)
