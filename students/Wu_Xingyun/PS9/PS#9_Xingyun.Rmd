@@ -26,6 +26,9 @@ library(ggdendro)
 library(randomForest)
 library(gbm)
 library(pander)
+#library(tidytext)
+#library(tm)
+#library(topicmodels)
 
 options(digits = 3)
 set.seed(1234)
@@ -264,7 +267,6 @@ mse_wknn <- data_frame(k = 1:10,
                       mse_test_wknn = map_dbl(wknn, ~ mean(data2_test$vote96 != as.numeric(.$fitted.values > 0.5))))
 
 mse_wknn_mh <- min(mse_wknn$ mse_test_wknn)
-cat(mse_wknn_mh)
 
 err<-mse_wknn %>%
   left_join(mse_knn, by = "k") %>%
@@ -284,9 +286,90 @@ err %>%
        method = NULL) +
   expand_limits(y = 0) +
   theme(legend.position = "bottom")
+
+cat("The lowest MSE is: ", mse_wknn_mh)
 ```
+
+  According to the plot, with the increase of `k`, the weighted KNN models performs better than the traditional KNN model. The lowest test error rate of KNN models is produced by the model with `k = 10`, and the test MSE is `r mse_wknn_mh`.
+  
+
+### 4. Comparison
+
+```{r problem2_4, echo=FALSE}
+set.seed(1234)
+
+# the equivalent GLM has already been estimated, with test error rate named err.rate.glm
+
+# the equivalent decision tree
+# Single decision tree model:
+# data preparation
+mh_rm_na_fac<- mh_rm_na %>%
+  mutate (vote96 = factor(vote96, levels = 0:1, label =c("no_vote", "vote")))
+mh_split <- resample_partition(mh_rm_na_fac, c(test = 0.3, train = 0.7))
+mh_train <- as_tibble(mh_split$train)
+mh_test <- as_tibble(mh_split$test)
+# decision tree
+tree_mh <- tree(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train)
+error_tree <- err.rate.tree(tree_mh, mh_test)
+
+# random forest
+rf<- randomForest(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, ntree = 500)
+error_rf <- err.rate.tree(rf, mh_test)
+
+# the equivalent boosting model
+mh_split <- resample_partition(mh_rm_na, c(test = 0.3, train = 0.7))
+mh_train <- as_tibble(mh_split$train)
+mh_test <- as_tibble(mh_split$test)
+boost_mh = gbm (vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, n.trees = 10000, interaction.depth = 4, distribution = "bernoulli")  
+error<-list()
+for (i in 100:1000) {
+  e<- mean(round(predict(boost_mh,newdata = mh_test,n.trees = i)) != mh_test$vote96)
+  error<-append(error, e)
+}
+
+err_boost<- data_frame("tree" = 100:1000,
+                      "error_rate" = unlist(error))
+
+err_boost500 <- min(err_boost$error_rate)
+
+# SVM
+mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_lin_tune)
+
+# Best
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+```
+
+  According to the comparison, the best model is, with the test error rate as.
+
 
 ## Part 3: Colleges
 
+  In the `College` dataset, only the variable `Private` is a factor variable. And it prevents the PCA analysis from running. So I set it as a numeric variable.
+  The first two principal components are shown in the plot below.
+
+```{r problem3_data, echo=FALSE}
+# to run PCA, treat the variable "Private" as numerical variable
+data3 <- read.csv("College.csv")%>%
+  mutate(Private = as.numeric(Private))
+
+pr.out <- prcomp(data3, scale = TRUE)
+biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(data3)))
+pr.out$rotation
+```
+
+  According to the table, the variables `Top10perc`, `Top25perc`, `Outstate`, `PhD`, `Terminal` and `Expend` are highly correlated. Their vectors' directions and their length are very similar, all between (0.30, 0.37), on the first principal component dimension. On the second principal component, the strongly correlated variables are `Private`, `Apps`, `Accept`, `Enroll`, `F.Undergrad` and `P.Undergrad`. Their vectors' length are very similar. It makes sense.
+  The first principal component represents the quality of the colleges (expenditure, and popularity are also explanatory factors of quality :)). And the second principal component represents how large the population is.
+
 
 ## Part 4: Clustering states
+
+```{r problem4_data, echo=FALSE}
+data4 <- read.csv("USArrests")
+
+```
+
+
