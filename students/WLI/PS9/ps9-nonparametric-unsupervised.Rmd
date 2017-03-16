@@ -1,0 +1,464 @@
+---
+title: "Problem set #9: nonparametric methods and unsupervised learning"
+author: "Weijia Li"
+output:
+  github_document:
+    toc: true
+---
+
+# Attitudes towards feminists [3 points]
+```{r setup, include = FALSE}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(purrr)
+library(tree)
+library(gbm)
+library(randomForest)
+library(caret)
+library(ggdendro)
+library(cowplot)
+
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE
+                      )
+options(digits = 3)
+theme_set(theme_minimal())
+```
+
+
+#### Split the data into a training and test set (70/30%).
+```{r}
+fem <- read_csv('data/feminist.csv') 
+
+set.seed(1234) 
+fem_split <- resample_partition(fem, c(test = .3, train = .7))
+
+fem_train <- fem[fem_split$train$idx, ]
+fem_test <- fem[fem_split$test$idx, ]
+```
+
+
+#### Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+```{r}
+data_frame(k_vals = seq(5, 100, by = 5),
+           knn_models = map(k_vals, ~ 
+                              knn.reg(as.data.frame(select(fem_train, -feminist)), 
+                                      y = as.vector(as.data.frame(select(fem_train, feminist))), 
+                                                    test = as.data.frame(select(fem_test, -feminist)),
+                                                    k = .)
+                            ),
+           mse = map_dbl(knn_models, ~ mean((fem_test$feminist - .$pred) ^ 2))
+) %>% 
+{.} -> df
+
+min_mse_k <- df$k_vals[which.min(df$mse)]
+best_knn <- df$knn_models[[which.min(df$mse)]]
+
+df %>%
+  ggplot(aes(k_vals, mse)) +
+    geom_line() +
+    scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_mse_k)) +
+    geom_vline(aes(xintercept = min_mse_k), color = 'red', linetype = 'dashed') +
+     labs(title = 'Test MSE of KNN Regression on Feminist Warmth Score',
+         y = 'Test MSE',
+         x = 'Number of Neighbors (k)',
+         color = '')
+
+```
+
+
+With all predictors use, minimum MSE is at 45 neighbors in KNN Regression.
+
+
+#### Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
+
+```{r}
+df <- data_frame(k_vals = seq(5, 100, by = 5),
+           knn_models = map(k_vals, ~ 
+                              kknn(feminist ~ ., train = fem_train, 
+                                   test = fem_test, k = .)
+                            ),
+           mse = map_dbl(knn_models, ~ mean((fem_test$feminist - .$fitted.values) ^ 2)))
+
+min_mse_k <- df$k_vals[which.min(df$mse)]
+best_wknn <- df$knn_models[[which.min(df$mse)]]
+
+df %>%
+  ggplot(aes(k_vals, mse)) +
+    geom_line() +
+    labs(title = 'Test MSE of Weighted KNN Regression on Feminist Warmth Score',
+         y = 'Test MSE',
+         x = 'Number of Neighbors (k)', 
+         color = '') +
+    scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_mse_k)) +
+    geom_vline(aes(xintercept = min_mse_k), color = 'red', linetype = 'dashed')
+```
+
+
+Test MSE is monotonically decreasing with k and the minimum MSE now at 100 neighbors in KNN Regression.
+
+
+#### Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r}
+set.seed(1234)
+
+mse <- function(model, data, name = 'feminist'){
+  if (any(class(model) %in% c('lm', 'tree','randomForest'))) {
+    x <- modelr:::residuals(model, data)
+    m <- mean(x ^ 2, na.rm = TRUE)
+  } else if (any(class(model) == 'knnReg')) {
+    m <- mean((model$pred - data$data[data$idx, ][[name]]) ^ 2)
+    return(m)
+  } else if (any(class(model) == 'kknn')) {# Weighted KNN
+    m <- mean((model$fitted.values - data$data[data$idx, ][[name]]) ^ 2)
+    return(m)
+  } else if(any(class(model) == 'gbm')) {
+    m <- mean((data$data[data$idx, ][[name]] - 
+                     predict(model, newdata = data, n.trees = model$n.trees)) ^ 2)
+    return(m)
+  }
+}
+
+df <- data_frame(model = list('Best KNN (knn)' = best_knn, 'Best wKNN (kknn)' = best_wknn,
+                              'Linear Regression (lm) ' = lm(feminist ~ ., data = fem_split$train),
+                              'Decision Tree (tree)' = tree(feminist ~ ., data = fem_split$train),
+                              'Boosting (1000 Trees)' = gbm(feminist ~ ., data = fem_split$train, distribution = 'gaussian',
+                                                n.trees = 1000, interaction.depth = 2), 
+                              'Random Forest (500 Trees)' = randomForest(feminist ~ ., data = fem_split$train,
+                                                                         importance = TRUE, ntree = 500)),
+                 mse = map_dbl(model, ~ mse(., data = fem_split$test))
+)
+
+
+minmse = list('min_mse' = min(df$mse), 'min_mse_model' = names(df$model[which.min(df$mse)]))
+df2 <- data_frame(model = list('Best KNN' = best_knn, 'best wKNN' = best_wknn),
+                  vals = c(5, 4))
+
+minmse
+
+df %>%
+  ggplot(aes(names(model), mse)) +
+    geom_col(aes(fill = names(model)), width = 0.4, alpha = 0.5, show.legend = FALSE) +
+    coord_flip() + 
+    labs(title = 'Comparign Test MSE for Different Methods',
+         subtitle = sprintf('Best Method: %s (%.3f Test MSE)', minmse$min_mse_model, minmse$min_mse),
+         x = '',
+         y = 'Test MSE') +
+    theme(plot.title = element_text(hjust = 2))
+```
+
+Linear regression has the lowest MSE of 435. But the numbers of linear regression, weighted KNN, Boosting with 1000 trees and random forest with 500 trees varies little around 435.
+
+
+# Voter turnout and depression [2 points]
+
+Estimate a series of models explaining/predicting voter turnout.
+
+#### Split the data into a training and test set (70/30).
+```{r}
+mhealth <- na.omit(read_csv('data/mental_health.csv'))
+
+set.seed(1234)
+mhealth_split <- resample_partition(mhealth, c(test = .3, train = .7))
+
+mhealth_train <- mhealth[mhealth_split$train$idx, ]
+mhealth_test <- mhealth[mhealth_split$test$idx, ]
+```
+
+
+#### Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+```{r}
+df <- data_frame(k_vals = seq(5, 100, by = 5),
+           knn_classifiers = map(k_vals, ~ 
+                              class::knn(as.data.frame(select(mhealth_train, -vote96)), 
+                                      cl = as.data.frame(select(mhealth_train, vote96))$vote96, 
+                                                    test = as.data.frame(select(mhealth_test, -vote96)),
+                                                    k = .)),
+           test_err = map_dbl(knn_classifiers, ~ mean(unlist(.) != mhealth_test$vote96, na.rm = TRUE)))
+
+min_test_err_k <- df$k_vals[which.min(df$test_err)]
+best_knn_classifier <- df$knn_classifiers[[which.min(df$test_err)]]
+
+df %>%
+  ggplot(aes(k_vals, test_err)) +
+    geom_line() +
+    geom_vline(aes(xintercept = min_test_err_k), color = 'red', linetype = 'dashed') +
+    scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_test_err_k)) +
+    labs(title = 'Test Error of KNN Classification',
+         y = 'Test Error Rate',
+         x = 'Number of Neighbors (k)') 
+```
+
+With all predictors used, when k equals to 15 the test error is minimum.
+
+#### Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
+
+```{r}
+df <- data_frame(k_vals = seq(5, 100, by = 5),
+           knn_classifiers = map(k_vals, 
+                                 ~ kknn(vote96 ~ ., train = mutate(mhealth_train, vote96 = factor(vote96)),
+                                   test = mutate(mhealth_test, vote96 = factor(vote96)),
+                                   k = .)),
+           test_err = map_dbl(knn_classifiers, ~ mean(mhealth_test$vote96 != .$fitted.values)))
+
+min_test_err_k <- df$k_vals[which.min(df$test_err)]
+best_wknn_classifier <- df$knn_classifiers[[which.min(df$test_err)]]
+
+df %>%
+  ggplot(aes(k_vals, test_err)) +
+    geom_line() +
+    geom_vline(aes(xintercept = min_test_err_k), color = 'red', linetype = 'dashed', show.legend = TRUE) +
+    scale_x_continuous(breaks = append(c(25, 50, 75, 100), min_test_err_k)) +
+    labs(title = 'Test Error of KNN Classification',
+         y = 'Test Error Rate',
+         x = 'Number of Neighbors (k)',
+         color = '')
+```
+
+
+Minimum Test Error Rate now at 30 neighbors.
+
+
+#### Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+```{r}
+test_err <- function(model, data, response = 'vote96'){
+    actual <- data$data[data$idx, ][[response]]
+    # For output of class::knn
+    if (class(model) == 'factor') { 
+      test_err <- mean(model != data$data[data$idx, ][[response]], na.rm = TRUE)} 
+    
+    # Weighted KNN
+    else if (any(class(model) == 'kknn')) {
+      test_err <- 
+        mean((as.numeric(levels(model$fitted.values))[model$fitted.values] - data$data[data$idx, ][[response]]) ^ 2)}
+    
+    else if (class(model) == 'tree') {
+      pred <- predict(model, data, type = 'class')
+      test_err <- mean(pred != actual, na.rm = TRUE)}
+
+    else if (any(class(model) == 'randomForest')){
+      pred_factor <- predict(model, data, type = 'class')
+      pred <- as.numeric(levels(pred_factor))[pred_factor]
+  
+      test_err <- mean(pred != actual, na.rm = TRUE)}    
+    
+    else if (any(class(model) == 'gbm')) {
+      test_err <- predict(model, newdata = as_tibble(data), type = 'response', n.trees = model$n.trees) %>%
+        (function(x) round(x) != data$data[data$idx, ][[response]]) %>%
+        mean()}
+    
+    else if (all(class(model) == c('glm', 'lm'))){
+      probs <- predict(model, data, type = 'response')
+      pred <- ifelse(probs > .5, 1, 0)
+      test_err <- mean(pred != actual, na.rm = TRUE)}
+    
+    if (exists('test_err')){
+      return(test_err)}
+    
+    else {print(c(class(model), None))}}
+
+
+set.seed(1234)
+
+df <- data_frame(model = list('Best KNN (class::knn)' = best_knn_classifier, 'Best wKNN (kknn)' = best_wknn_classifier,
+                              'Logistic Regression (glm)' = glm(vote96 ~ ., data = mhealth_split$train, family = binomial),
+                              'Decision Tree (tree)' = tree(factor(vote96) ~ ., data = mhealth_split$train),
+                              'Boosting (1000 Trees)' = gbm(vote96 ~ ., data = mhealth_split$train, 
+                                                            distribution = 'gaussian',
+                                                n.trees = 1000, interaction.depth = 2), 
+                              'Random Forest (500 Trees)' = randomForest(factor(vote96) ~ ., data = mhealth_split$train,
+                                                                         importance = TRUE, ntree = 500))
+                 ,
+                 test_err = map_dbl(model, ~ test_err(., data = mhealth_split$test))
+)
+
+stats = list('min_test_err' = min(df$test_err), 'min_test_err_model_name' = names(df$model[which.min(df$test_err)]))
+
+stats
+
+df %>%
+  ggplot(aes(names(model), test_err)) +
+    geom_col(aes(fill = names(model)), width = 0.5, alpha =0.5, show.legend = FALSE) +
+    coord_flip() + 
+    labs(title = 'Test Error for Voting in 1996 for Various Classifiers (All Predictors)',
+         x = '',
+         y = 'Test Error') +
+    theme(plot.title = element_text(hjust = 2))
+```
+
+Weighted KNN has the minimum test error of 0.269. This may due to the fact that wKNN weights the nearest k in the training sample to make a prediction
+
+
+# Colleges [2 points]
+
+Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+
+
+```{r}
+college <- read_csv('data/College.csv') %>%
+  mutate(Private = ifelse(Private == 'Yes', 1, 0))
+
+pr_out <- prcomp(college, scale = TRUE)
+summary(pr_out)
+
+biplot(pr_out, scale = 0, cex = .6)
+```
+
+The first two principal components account for 58.4% of the variance of the data. From the bi-plot, more universities have negative values of the principal components.
+
+```{r}
+print('First Principal Component')
+pr_out$rotation[, 1]
+
+print('Second Principal Component')
+pr_out$rotation[, 2]
+```
+
+
+From the results above, Top10perc, Top25perc, Outstate, PhD, Terminal, and Expend  are strongly correlated on the first principal component, and Accept, F.Undergrad, and Enroll appear to be strongly correlated on the second principal component.
+
+# Clustering states [3 points]
+
+#### Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+```{r}
+crime <- read_csv('data/USArrests.csv')
+
+pr_out <- prcomp(x = select(crime, -State), scale = TRUE)
+
+biplot(pr_out, scale = 0, cex = .6)
+```
+
+The first principal component roughly corresponds to level of violent crime, and the second roughly corresponds with urban population.
+
+
+#### Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+kmeans_clusters <- function(df, num_clusters, data, orig = TRUE){
+  set.seed(1234)
+  if (orig){
+    data <- select(data, -State)
+    cluster_ids <- factor(kmeans(data, num_clusters)$cluster)
+  } else { 
+    cluster_ids <- factor(kmeans(select(df, -State), num_clusters)$cluster)
+  }
+  return(mutate(df, cluster_id = cluster_ids))
+}
+
+pca2_df <- select(as_data_frame(pr_out$x), PC1:PC2) %>%
+  mutate(State = crime$State)
+
+pca2_df %>% kmeans_clusters(2, crime) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = 2'),
+         color = 'Cluster ID')
+
+```
+
+The plot shows a clear grouping of States. The clustering is a split on the first component vector, mostly the 1st Cluster ID states have lower violent crimes rate (Rape, Murder, and Assault) than those in the 2nd Cluster ID.
+
+#### Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+
+```{r}
+
+pca2_df %>% kmeans_clusters(4, crime) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = 4'),
+         color = 'Cluster ID')
+```
+
+This graph shows 4 clear clusters. Again, the differences between the clusters are mostly on the first principal component.
+
+#### Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+
+pca2_df %>% kmeans_clusters(3, crime) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = 3'),
+         color = 'Cluster ID')
+```
+
+The graph shows 3 clusters, yet the second cluster mingles with the other two. 
+
+#### Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+
+```{r}
+pca2_df %>% kmeans_clusters(3, crime, FALSE) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = 3 (on first two principal components)'),
+         color = 'Cluster ID')
+```
+
+This graph shows 3 distinct clusters. Unlike previous graphs, the clusters also split on the 2nd principal componet rather than solely on the 1st principal component, more like the distribution seen on biplot of (PC1, PC2). 
+
+#### Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r}
+states <- select(crime, State)$State
+crime2 <- as.matrix(select(crime, - State))
+rownames(crime2) <- states
+
+hc <- hclust(dist(crime2), method = 'complete')
+
+hc1 <- ggdendrogram(hc, labels = TRUE) + 
+  labs(title = '50 States Hierarchical Clustering',
+       y = 'Euclidean Distance')
+
+hc1
+```
+
+#### Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r}
+cluster <- cutree(hc, k = 3)
+
+print("states belong to cluster 1:")
+states[cluster==1]
+print("states belong to cluster 2:")
+states[cluster==2]
+print("states belong to cluster 3:")
+states[cluster==3]
+
+```
+
+
+#### Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+```{r}
+hc <- hclust(dist(scale(crime2)), method = 'complete')
+
+hc2 <- ggdendrogram(hc, labels = TRUE) + 
+  labs(title = '50 States Hierarchical Clustering on Scaled Variables',
+       y = 'Euclidean Distance')
+
+hc2
+hc1
+```
+
+
+a. Scaling the variables makes the Euclidean distance from the complete linkage method much smaller. 
+b. The clusterings are different.
+
+Larger standard deviation will overweight the variables, thus I would suggest the variables to be scaled before inter-observation dissimilarities are computed unless all variables are given the same standard deviation. 
+
