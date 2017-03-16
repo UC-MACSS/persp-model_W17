@@ -20,7 +20,10 @@ fem = read.csv("feminist.csv")
 mh = read.csv("mental_health.csv")
 arrest = read.csv("USArrests.csv")
 ```
-    
+# PS9
+
+## Attitudes towards feminists
+
 1
 ```{r part1_1,echo=TRUE}
 set.seed(1)

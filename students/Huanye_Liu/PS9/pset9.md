@@ -48,6 +48,12 @@
     mh = read.csv("mental_health.csv")
     arrest = read.csv("USArrests.csv")
 
+PS9
+===
+
+Attitudes towards feminists
+---------------------------
+
 1
 
     set.seed(1)
