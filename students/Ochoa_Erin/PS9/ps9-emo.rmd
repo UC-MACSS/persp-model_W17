@@ -288,8 +288,9 @@ mh_knn = data_frame(k = 1:10,
                     mse_train = map_dbl(knn_train, ~ mean(mh_test30$vote96 != .)),
                     mse_test = map_dbl(knn_test, ~ mean(mh_test30$vote96 != .)))
 
-ggplot(mh_knn, aes(k, mse_test)) +
-  geom_line() +
+ggplot(mh_knn, aes(k, mse_test)) + 
+  geom_line(color='deeppink',size=1.5) +
+  geom_point(color='darkturquoise', size=2) +
   labs(x = "K Nearest Neighbors",
        y = "MSE",
        title = "MSE for K Nearest Neigbors",
@@ -310,16 +311,15 @@ mh_wknn_error = mh_wknn %>%
                 left_join(mh_knn, by = as.factor("k")) %>%
                 select(k, mse_test_wknn, mse_test) %>%
                 gather(method, mse, -k) %>%
-                mutate(method = factor(method, levels =c("mse_test_wknn","mse_test"), labels = c("Weighted KNN","KNN")))
+                mutate(Method = factor(method, levels =c("mse_test_wknn","mse_test"), labels = c("Weighted KNN","KNN")))
 
-ggplot(mh_wknn_error,aes(k, mse, color = method)) +
+ggplot(mh_wknn_error,aes(k, mse, color = Method)) +
        geom_line() +
        geom_point() +
        labs(title = "MSE for KNN and Weighted KNN",
        subtitle = "Voting Behavior (1996) Based on Age, Income, Education, & Depression Index Score",
        x = "K",
-       y = "MSE",
-       method = NULL)
+       y = "MSE")
 ```
 
 
@@ -340,7 +340,54 @@ logit_mh_error = mean(voted_all_accuracy$vote96 != voted_all_accuracy$pred)
 
 ```{r mh_tree}
 
+mh_tree = tree(vote96 ~ age + inc10 + educ + mhealth_sum, data = mh_train70)
+tree_data = dendro_data(mh_tree)
+
+mse_mh_tree = mse(mh_tree,mh_test30)
 ```
+
+```{r mh_boost}
+
+```
+
+```{r mh_rf}
+mh_rf = randomForest(vote96 ~ age + inc10 + educ + mhealth_sum , data = mh_train70, ntree = 500)
+
+mse_mh_rf = mse(mh_rf, mh_test30)
+```
+
+```{r mh_svm}
+mh_svm2 = tune(svm, vote96 ~ ., data = mh_train70,
+          kernel = "linear",
+          range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin2 = mh_svm2$best.model
+
+mse_mh_svm = mse(mh_lin2,mh_test30)
+```
+
+
+```{r mh_compare_methods_plot, echo=FALSE}
+ggplot(mh_wknn_error, aes(k, mse, color = Method)) +
+       geom_line() +
+       geom_point() +
+       geom_hline(aes(yintercept=mse_mh_tree, linetype = "Classification Tree"), color='orangered') +
+       geom_hline(aes(yintercept=logit_mh_error, linetype = "Logistic regression"), color='darkturquoise') +
+       geom_hline(aes(yintercept=mse_mh_rf, linetype = "Random Forest"), color='springgreen1') +
+       geom_hline(aes(yintercept=mse_mh_svm, linetype = "SVM"), color='purple1') +
+       scale_linetype_manual(name = "", values = c(2,1,1,2), 
+                             guide = guide_legend(override.aes = 
+                                                  list(color = c('orangered','darkturquoise', 'springgreen1','purple1')))) +
+       labs(title = "Test MSE for Various Approaches",
+            subtitle = "Voting Behavior Based on Age, Income, Education, & Depression Index Score",
+            x = "K",
+            y = "Test mean squared error") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_x_continuous(breaks = seq(0,10,by=2)) +
+       scale_y_continuous(breaks = seq(0,.5,by=.1))
+```
+
 # Colleges
 
 #### Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
