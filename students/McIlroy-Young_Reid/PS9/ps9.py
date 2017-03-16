@@ -4,6 +4,8 @@ import sklearn.neighbors
 import sklearn.ensemble
 import sklearn.tree
 import sklearn.svm
+import sklearn.decomposition
+import sklearn.cluster
 
 import numpy as np
 import warnings
@@ -21,6 +23,8 @@ outputDir = 'images'
 
 femnistFname = 'data/feminist.csv'
 mentalFname = 'data/mental_health.csv'
+collegeFname = 'data/College.csv'
+usaFname = 'data/USArrests.csv'
 
 def getholdOut(df, split = .7):
     sf = df.reindex(np.random.permutation(df.index))
@@ -126,46 +130,91 @@ def getMSEs(models, test, xVars, yVar, fname, stringNames = False):
     plt.close()
     return resultsDF
 
+def makePCAPlot(df, fname):
+    clf = sklearn.decomposition.PCA(n_components = 2)
+    clf.fit(df)
+    mapping = clf.transform(df)
+    fig, ax = plt.subplots()
+    pallet = seaborn.color_palette("coolwarm", len(df.columns))
+    ax.scatter(mapping[:,0], mapping[:,1], color = 'g')
+    max0 = np.max(mapping[:,0])
+    max1 = np.max(mapping[:,1])
+    randScaling = .3
+    for i, c in enumerate(df.columns):
+        a = np.zeros((len(df.columns),))
+        a[i] = max(df[c])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            vec = clf.transform(a)
+            ax.scatter(vec[:,0], vec[:,1], color = pallet[i], label = c)
+            ax.annotate(c,
+            xy=(vec[0,0], vec[0,1]),
+            xytext=(vec[0,0] + max0 * np.random.uniform(-randScaling, randScaling),
+            vec[0,1] + max1 * np.random.uniform(-randScaling, randScaling)),
+            arrowprops = {'shrink' : .1, 'facecolor' : pallet[i], 'headwidth' : 4, 'headlength' : 5, 'width' : 2})
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.set_ylabel("PCA 1")
+    ax.set_xlabel("PCA 0")
+    plt.savefig("{}/{}.{}".format(outputDir, fname, outFormat), format = outFormat)
+    plt.close()
+    return clf
+
+def kclustering(k, fname, df, xNames):
+    clf = sklearn.cluster.KMeans(n_clusters = k)
+    fits = clf.fit_predict(df[xNames])
+    fig, ax = plt.subplots()
+    pallet = seaborn.color_palette("hls", k)
+    colours = [pallet[c] for c in fits]
+    for i, state in enumerate(df.index):
+        ax.scatter(df['pca0'][i], df['pca1'][i], color = colours[i])
+        ax.annotate(state, (df['pca0'][i], df['pca1'][i]))
+    ax.set_ylabel("PCA 1")
+    ax.set_xlabel("PCA 0")
+    ax.set_title('{}: {}-nearests clusters'.format(fname, k))
+    plt.savefig("{}/{}.{}".format(outputDir, fname, outFormat), format = outFormat)
+    plt.close()
+
 def q1part2(train, test, xVars, yVar):
     models = collections.OrderedDict([
     ((i + 1) * 5,
-    sklearn.neighbors.KNeighborsClassifier(n_neighbors=(i + 1) * 5, weights='uniform')) for i in range(20)])
+    sklearn.neighbors.KNeighborsRegressor(n_neighbors=(i + 1) * 5, weights='uniform')) for i in range(20)])
     for name, model in models.items():
         model.fit(train[xVars], train[yVar])
     results = getMSEs(models, test, xVars, yVar, sys._getframe().f_code.co_name)
     print("{}: unweighted MSE table".format(sys._getframe().f_code.co_name))
     print(results.to_string(index=False, justify = 'right'))
-    print("The minumum MSE is {:.2f}, at {} neighbors".format(np.min(results['MSE']), results['num-neighbors'][np.argmin(results['MSE'])]))
+    print("The minimum MSE is {:.2f}, at {} neighbors".format(np.min(results['MSE']), results['num-neighbors'][np.argmin(results['MSE'])]))
 
 def q1part3(train, test, xVars, yVar):
     models = collections.OrderedDict([
     ((i + 1) * 5,
-    sklearn.neighbors.KNeighborsClassifier(n_neighbors=(i + 1) * 5, weights='distance')) for i in range(20)])
+    sklearn.neighbors.KNeighborsRegressor(n_neighbors=(i + 1) * 5, weights='distance')) for i in range(20)])
     for name, model in models.items():
         model.fit(train[xVars], train[yVar])
     results = getMSEs(models, test, xVars, yVar, sys._getframe().f_code.co_name)
     print("{}: weighted MSE table".format(sys._getframe().f_code.co_name))
     print(results.to_string(index=False, justify = 'right'))
-    print("The minumum MSE is {:.2f}, at {} neighbors".format(np.min(results['MSE']), results['num-neighbors'][np.argmin(results['MSE'])]))
+    print("The minimum MSE is {:.2f}, at {} neighbors".format(np.min(results['MSE']), results['num-neighbors'][np.argmin(results['MSE'])]))
 
 def q1part4(train, test, xVars, yVar):
     models = collections.OrderedDict([
-        ('30-NN, unweighted', sklearn.neighbors.KNeighborsClassifier(n_neighbors= 30, weights = 'uniform')),
-        ('30-NN, weighted', sklearn.neighbors.KNeighborsClassifier(n_neighbors= 30, weights = 'distance')),
+        ('30-NN, unweighted', sklearn.neighbors.KNeighborsRegressor(n_neighbors= 30, weights = 'uniform')),
+        ('30-NN, weighted', sklearn.neighbors.KNeighborsRegressor(n_neighbors= 30, weights = 'distance')),
         ('linear', sklearn.linear_model.LinearRegression()),
         ('linearSVM', sklearn.svm.LinearSVC()),
-        ('RandomForest', sklearn.ensemble.RandomForestClassifier()),
-        ('DecisionTree', sklearn.tree.DecisionTreeClassifier()),
+        ('RandomForest', sklearn.ensemble.RandomForestRegressor()),
+        ('DecisionTree', sklearn.tree.DecisionTreeRegressor()),
         ('logit', sklearn.linear_model.LogisticRegression()),
-        ('AdaBoost', sklearn.ensemble.AdaBoostClassifier()),
+        ('AdaBoost', sklearn.ensemble.AdaBoostRegressor()),
         ])
     for name, model in models.items():
         model.fit(train[xVars], train[yVar])
     results = getMSEs(models, test, xVars, yVar, sys._getframe().f_code.co_name, stringNames = True)
     print("{}: MSE table".format(sys._getframe().f_code.co_name))
     print(results.to_string(index=False, justify = 'right'))
-    print("The minumum MSE is {:.2f}, at {} neighbors".format(np.min(results['MSE']), results['model'][np.argmin(results['MSE'])]))
-
+    print("The minimum MSE is {:.2f}, for the {} model".format(np.min(results['MSE']), results['model'][np.argmin(results['MSE'])]))
 
 def q2part2(train, test, xVars, yVar):
     models = collections.OrderedDict([
@@ -176,7 +225,7 @@ def q2part2(train, test, xVars, yVar):
     results = getResults(models, test, xVars, yVar, sys._getframe().f_code.co_name)
     print("{}: results table".format(sys._getframe().f_code.co_name))
     print(results.to_string(index=False, justify = 'right'))
-    print("The minumum error rate is {:.2f}, at {} neighbors".format(np.min(results['error-rate']), results['num-neighbors'][np.argmin(results['error-rate'])]))
+    print("The minimum error rate is {:.2f}, at {} neighbors".format(np.min(results['error-rate']), results['num-neighbors'][np.argmin(results['error-rate'])]))
 
 def q2part3(train, test, xVars, yVar):
     models = collections.OrderedDict([
@@ -187,7 +236,7 @@ def q2part3(train, test, xVars, yVar):
     results = getResults(models, test, xVars, yVar, sys._getframe().f_code.co_name)
     print("{}: unweighted results table".format(sys._getframe().f_code.co_name))
     print(results.to_string(index=False, justify = 'right'))
-    print("The minumum error rate is {:.2f}, at {} neighbors".format(np.min(results['error-rate']), results['num-neighbors'][np.argmin(results['error-rate'])]))
+    print("The minimum error rate is {:.2f}, at {} neighbors".format(np.min(results['error-rate']), results['num-neighbors'][np.argmin(results['error-rate'])]))
 
 def q2part4(train, test, xVars, yVar):
     models = collections.OrderedDict([
@@ -205,7 +254,27 @@ def q2part4(train, test, xVars, yVar):
     results = getResults(models, test, xVars, yVar, sys._getframe().f_code.co_name, stringNames = True)
     print("{}: weighted results table".format(sys._getframe().f_code.co_name))
     print(results.to_string(index=False, justify = 'left'))
-    print("The minumum error rate is {:.2f}, for {}".format(np.min(results['error-rate']), results['model'][np.argmin(results['error-rate'])]))
+    print("The minimum error rate is {:.2f}, for the {} model".format(np.min(results['error-rate']), results['model'][np.argmin(results['error-rate'])]))
+
+def q4part1(df):
+    print("{}: Doing PCA".format(sys._getframe().f_code.co_name))
+    return makePCAPlot(df, sys._getframe().f_code.co_name)
+
+def q4part2(df, xNames):
+    print("{}: Doing 2-NN clustering".format(sys._getframe().f_code.co_name))
+    kclustering(2, sys._getframe().f_code.co_name, df, xNames)
+
+def q4part3(df, xNames):
+    print("{}: Doing 2-NN clustering".format(sys._getframe().f_code.co_name))
+    kclustering(3, sys._getframe().f_code.co_name, df, xNames)
+
+def q4part4(df, xNames):
+    print("{}: Doing 4-NN clustering".format(sys._getframe().f_code.co_name))
+    kclustering(4, sys._getframe().f_code.co_name, df, xNames)
+
+def q4part5(df, xNames):
+    print("{}: Doing 3-NN clustering on PCA sapce".format(sys._getframe().f_code.co_name))
+    kclustering(3, sys._getframe().f_code.co_name, df, xNames)
 
 def question1():
     xVars = ['female', 'age', 'educ', 'income', 'dem', 'rep']
@@ -226,10 +295,30 @@ def question2():
     q2part3(train, test, xVars, yVar)
     q2part4(train, test, xVars, yVar)
 
+def question3():
+    print("{}: Doing PCA".format(sys._getframe().f_code.co_name))
+    df = pandas.read_csv(collegeFname)
+    df['Private'] = df['Private'].apply(lambda x: 1 if x == 'Yes' else 0)
+    return makePCAPlot(df, sys._getframe().f_code.co_name)
+
+def question4():
+    xNames = ['Murder', 'Assault', 'UrbanPop', 'Rape']
+    df = pandas.read_csv(usaFname, index_col='State')
+    pca = q4part1(df)
+    mapping = pca.transform(df)
+    df['pca0'] = mapping[:, 0]
+    df['pca1'] = mapping[:, 1]
+    q4part2(df, xNames)
+    q4part3(df, xNames)
+    q4part4(df, xNames)
+    q4part5(df, ['pca0', 'pca1'])
+
 def main():
     os.makedirs(outputDir, exist_ok = True)
     question1()
     question2()
+    question3()
+    question4()
 
 if __name__ == '__main__':
     main()
