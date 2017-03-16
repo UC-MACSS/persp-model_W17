@@ -177,15 +177,15 @@ Test error rate for weighted KNN models
 
 Then, I fit a weighted KNN model using the same combination of predictors as the previous KNN model with the least test error rate.
 
-The weighted KNN model with *k* = 1 gives the least test error rate (0.372). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+The weighted KNN model with *k* = 9 gives the least test error rate (0.309). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
 
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20wKNN-1.png)
 
 |    k|  err.rate|
 |----:|---------:|
-|    1|   0.37249|
-|    2|   0.56160|
-|    3|   0.67049|
+|    9|   0.30946|
+|    7|   0.31232|
+|    5|   0.31519|
 
 Comparison of KNN/weighted KNN to other models
 ----------------------------------------------
@@ -206,7 +206,7 @@ The following table summarizes the error rates of all fitted models sorted by te
 | Boosting            |   0.26934|
 | Logistic regression |   0.27819|
 | Decision tree       |   0.30372|
-| Weighted KNN        |   0.37249|
+| Weighted KNN        |   0.30946|
 | Random Forest       |   1.00000|
 
 The table shows that the KNN model has the lowest test error rate of all (0.120).

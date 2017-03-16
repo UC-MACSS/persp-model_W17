@@ -349,12 +349,12 @@ We observe that the least possible test error rate with $p-2$ KNN models is stil
 ## Test error rate for weighted KNN models
 Then, I fit a weighted KNN model using the same combination of predictors as the previous KNN model with the least test error rate.  
   
-The weighted KNN model with $k=1$ gives the least test error rate (0.372). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+The weighted KNN model with $k=9$ gives the least test error rate (0.309). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
 
 ```{r Part 2 wKNN}
-# wKNN of p-1 predictors (-mhealth_sum), k = 1, err.rate = 0.37249
+# wKNN of p-1 predictors (-mhealth_sum), k = 9, err.rate = 0.30946
 mhe_err_wknn1 <- data_frame(k = seq(1,10),
-                            knn = map(k, ~ kknn(vote96 ~ .-mhealth_sum,
+                            knn = map(k, ~ kknn(factor(vote96) ~ .-mhealth_sum,
                                                 train = mhe_train,
                                                 test = mhe_test, k = .)),
                             err.rate = map_dbl(knn, ~ mean(.$fitted.values != mhe_test$vote96)))
