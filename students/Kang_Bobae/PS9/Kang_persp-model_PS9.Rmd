@@ -1,0 +1,585 @@
+---
+title: "Problem set #9: Nonparametric methods and unsupervised learning"
+author: "Bobae Kang"
+date: "March 13, 2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE, cached = TRUE}
+# markdown setting
+library(knitr)
+opts_chunk$set(echo = FALSE, error = FALSE, message = FALSE, warning = FALSE)
+
+# Import packages
+library(rmarkdown)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(rcfss)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(pROC)
+library(FNN)
+library(kknn)
+library(data.table)
+library(tree)
+library(randomForest)
+library(gbm)
+library(e1071)
+library(ggfortify)
+
+options(digits = 5)
+
+# Set seed
+set.seed(123)
+
+# import data
+feminist <- fread('data/feminist.csv')
+mhealth <- fread('data/mental_health.csv') %>% na.omit()
+college <- fread('data/College.csv')
+usarrests <- USArrests 
+```
+
+# Part 1. Attitudes towards feminists
+```{r Part 1 setup}
+# Split data into train and test sets
+fem_split <- resample_partition(feminist, c(test = 0.3, train = 0.7))
+fem_train <- feminist[fem_split$train$idx]
+fem_test <- feminist[fem_split$test$idx]
+
+# Define a function for getting mse 
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+## Test MSE for KNN models
+In this section, I try different sets of predictors to find a KNN model with the least score for test mean squared error (MSE).
+  
+First, I use all $p$ predictors with $k = 5,10,15,...,100$. I find that the model with $k=85$ has the lowest test MSE (503.87). The following plot shows the MSE scores of models with different $k$ values. Also, the table below shows the three of the KNN models sorted by test MSE scores:  
+
+```{r Part 1 KNN p}
+# Use all p predictors, k = 85, mse = 503.87
+fem_mse_knn <- data_frame(k = seq(5, 100, by = 5),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist), y = fem_train$feminist,
+                                             test = select(fem_test, -feminist), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+# plot
+ggplot(fem_mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using all predictors',
+       x = "K",
+       y = "Test mean squared error")
+
+# table
+kable(fem_mse_knn %>% select(-knn) %>% arrange(by=mse) %>% head(3))
+```
+
+***
+
+Then I fit KNN models with $p-1$ predictors. Among different sets of $p-1$ predictors,the model using all predictors but `age` with $k=45$, gives the least test MSE score. The following plot compares the MSE scores of all-but-`age` models with different $k$ values. Also, the table below shows the three of the KNN models sorted by test MSE scores:  
+
+```{r Part 1 KNN p-1}
+# Use best of p-1 predictors (-age): k = 45, mse = 488.02
+fem_mse_knn1 <- data_frame(k = seq(5, 100, by = 5),
+                          knn = map(k, ~ knn.reg(select(fem_train, -c(feminist,age)), y = fem_train$feminist,
+                                                 test = select(fem_test, -c(feminist,age)), k = .)),
+                          mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+# plot
+ggplot(fem_mse_knn1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using p-1 predictors (-age)',
+       x = "K",
+       y = "Test mean squared error")
+
+# table
+kable(fem_mse_knn1 %>% select(-knn) %>% arrange(by=mse) %>% head(3))
+```
+
+***
+
+KNN models with $p-2$ predictors. After trying many different sets of $p-2$ predictors, I find that and the model using all predictors but `age` and `educ`, with $k=35$, gives the least test MSE score. The following plot shows the MSE scores of models with different $k$ values. Also, the table below shows the three of the KNN models sorted by test MSE scores:  
+
+```{r Part 1 KNN p-2}
+# Use best of p-2 predictors (-age, -educ), k = 35, mse = 464.57
+fem_mse_knn2 <- data_frame(k = seq(5, 100, by = 5),
+                           knn = map(k, ~ knn.reg(select(fem_train, -c(feminist,age,educ)), y = fem_train$feminist,
+                                                  test = select(fem_test, -c(feminist,age,educ)), k = .)),
+                           mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+# plot
+ggplot(fem_mse_knn2, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using p-2 predictors (-age, -educ)',
+       x = "K",
+       y = "Test mean squared error")
+
+# table
+kable(fem_mse_knn2 %>% select(-knn) %>% arrange(by=mse) %>% head(3))
+```
+
+***
+
+KNN models with $p-3$ predictors. After trying many different sets of $p-2$ predictors, I find that the model excluding `age`, `educ` and `income` variables, with $k=35$, gives the least test MSE score (464.54). The following plot shows the MSE scores of models with different $k$ values. Also, the table below shows the three of the KNN models sorted by test MSE scores:  
+
+```{r Part 1 KNN p-3}
+# Use best of p-3 predictors (-age, -educ, -income), k=80, mse=464.54
+fem_mse_knn3 <- data_frame(k = seq(5, 100, by = 5),
+                           knn = map(k, ~ knn.reg(select(fem_train, -c(feminist,age,educ,income)), y = fem_train$feminist,
+                                                  test = select(fem_test, -c(feminist,age,educ,income)), k = .)),
+                           mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+# plot
+ggplot(fem_mse_knn3, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using p-3 predictors (-age, -educ, -income)',
+       x = "K",
+       y = "Test mean squared error")
+
+# table
+kable(fem_mse_knn3 %>% select(-knn) %>% arrange(by=mse) %>% head(3))
+```
+
+***
+
+KNN models with $p-4$ predictors. After trying many different sets of $p-4$ predictors, I find that the model excluding `age`, `educ`, `income` and `female` variables, with $k=25$, gives the least test MSE score (476.55). The following plot shows the MSE scores of models with different $k$ values. Also, the table below shows the three of the KNN models sorted by test MSE scores:  
+
+```{r}
+# Use best of p-4 predictors (-age, -educ, -income, -female), k=25, mse=467.55
+fem_mse_knn4 <- data_frame(k = seq(5, 100, by = 5),
+                           knn = map(k, ~ knn.reg(select(fem_train, -c(feminist,age,educ,income,female)), y = fem_train$feminist,
+                                                  test = select(fem_test, -c(feminist,age,educ,income,female)), k = .)),
+                           mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+# plot
+ggplot(fem_mse_knn3, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using p-4 predictors (-age, -educ, -income, -femlae)',
+       x = "K",
+       y = "Test mean squared error")
+
+# table
+kable(fem_mse_knn4 %>% select(-knn) %>% arrange(by=mse) %>% head(3))
+
+# store the best 
+fem_mse_knn_best <- fem_mse_knn3 %>% filter(mse == min(mse))
+fem_mse_knn_best <- fem_mse_knn_best$mse
+```
+
+However, the least test MSE score with $p-4$ KNN models is still greater than the least test MSE score with $p-3$ KNN models. Therefore, I  will use all predictors except `age`, `educ` and `income` for modeling for the rest of the Part 1.
+
+## Test MSE for weighted KNN model
+Then, I fit a weighted KNN model using the same combination of predictors as the previous KNN model with the least test MSE.  
+  
+The weighted KNN model with $k=45$ gives the least test MSE (475.24). The following plot shows the MSE scores of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test MSE scores:  
+
+```{r Part 1 wKNN}
+# wKNN of p-3 predictors (-age, -educ, -income), k=45, mse=475.24
+fem_mse_wknn3 <- data_frame(k = seq(5, 100, by = 5),
+                            knn = map(k, ~ kknn(feminist ~ .-age-educ-income, train = fem_train, test = fem_test, k = .)),
+                            mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+# plot
+ggplot(fem_mse_wknn3, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of weighted KNN models',
+       subtitle = 'Using p-4 predictors (-age, -educ, -income)',
+       x = "K",
+       y = "Test mean squared error")
+
+# table
+kable(fem_mse_wknn3 %>% select(-knn) %>% arrange(by=mse) %>% head(3))
+
+fem_mse_wknn_best <- fem_mse_wknn3 %>% filter(mse == min(mse)) 
+fem_mse_wknn_best <- fem_mse_wknn_best$mse
+```
+
+## Comparison of KNN/weighted KNN to other models
+Let's compare the KNN and weighted KNN models with other models. Using the same set of predictors, I fit the following models:
+
+* Linear regression
+* Decision tree
+* Boosting (with 5000 trees)
+* Random forest (with 5000 trees)
+
+The following table summarizes the MSE scores of all fitted models:  
+
+```{r Part 1 compare}
+# Fit a linear regression model
+fem_lin <- lm(feminist ~ .-age-educ-income, data=fem_train)
+fem_mse_lin <- mse(fem_lin, fem_test)
+
+# Fit a decision tree
+fem_tree <- tree(feminist ~ .-age-educ-income, data=fem_train)
+fem_mse_tree <- mse(fem_tree, fem_test)
+
+# Fit a boosting model
+fem_bst <- gbm(feminist ~ .-age-educ-income, data=fem_train, n.trees=5000, distribution='gaussian')
+fem_mse_bst <- mean((fem_test$feminist - predict(fem_bst, newdata=as_tibble(fem_test), n.trees=5000))^2)
+
+# Fit a random forest model 
+fem_rf <- randomForest(feminist ~ .-age-educ-income, data=fem_train, ntree = 5000)
+fem_mse_rf <- mse(fem_rf, fem_test)
+
+
+# Compare all
+Models <- c('KNN', 'Weighted KNN', 'Linear regression', 'Decision tree', 'Boosting', 'Random Forest')
+MSE <- c(fem_mse_knn_best, fem_mse_wknn_best, fem_mse_lin, fem_mse_tree, fem_mse_bst, fem_mse_rf)
+kable(data.frame(Models, MSE) %>%  arrange(by=MSE), caption='Comparison of different models')
+```
+
+The table shows that the KNN model has the lowest MSE of all (464.54). 
+
+
+# Part 2. Voter turnout and depression
+```{r Part 2 setup}
+# Split data into train and test sets
+mhe_split <- resample_partition(mhealth, c(test = 0.3, train = 0.7))
+mhe_train <- mhealth[mhe_split$train$idx]
+mhe_test <- mhealth[mhe_split$test$idx]
+```
+
+## Test error rate for KNN models
+In this section, I try different sets of predictors to find a KNN model with the least score for test error rate.
+  
+First, I use all $p$ predictors with $k = 1,2,3,...,10$. The model with $k=9$ gives the least test error rate (0.327). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+```{r Part 2 KNN p}
+# Use all p predictors, k = 9, err.rate = 0.327
+mhe_err_knn <- data_frame(k = seq(1,10),
+                          knn = map(k, ~ knn(select(mhe_train, -vote96), 
+                                             test = select(mhe_test, -vote96),
+                                             cl = mhe_train$vote96,
+                                             k = .)),
+                          err.rate = map_dbl(knn, ~ mean(. != mhe_test$vote96)))
+
+# plot
+ggplot(mhe_err_knn, aes(k, err.rate)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using all predictors',
+       x = "K",
+       y = "Test error rate")
+
+# table
+kable(mhe_err_knn %>% select(-knn) %>% arrange(by=err.rate) %>% head(3))
+```
+
+***
+
+KNN models with $p-1$ predictors. After trying different sets of $p-1$ predictors, I find that the model using all predictors but `mhealth_sum`, with $k=1$, gives the least test error rate (0.120). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+
+```{r Part 2 KNN p-1}
+# Use best of p-1 predictors (-mhealth_sum), k = 1, err.rate = 0.12034
+mhe_err_knn1 <- data_frame(k = seq(1,10),
+                          knn = map(k, ~ knn(select(mhe_train, -vote96-mhealth_sum), 
+                                             test = select(mhe_test, -vote96-mhealth_sum),
+                                             cl = mhe_train$vote96,
+                                             k = .)),
+                          err.rate = map_dbl(knn, ~ mean(. != mhe_test$vote96)))
+
+# plot
+ggplot(mhe_err_knn1, aes(k, err.rate)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using p-1 predictors (-mhealth_sum)',
+       x = "K",
+       y = "Test error rate")
+
+# table
+kable(mhe_err_knn1 %>% select(-knn) %>% arrange(by=err.rate) %>% head(3))
+```
+
+***
+
+KNN models with $p-2$ predictors. After trying different sets of $p-2$ predictors, I find that the model using all predictors but `mhealth_sum` and `inc10`, with $k=9$, gives the least test error rate (0.258). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+
+```{r Part 2 KNN p-2}
+# Use best of p-2 predictors (-mhealth_sum, -inc10), k = 9, err.rate = 0.25788
+mhe_err_knn2 <- data_frame(k = seq(1,10),
+                          knn = map(k, ~ knn(select(mhe_train, -vote96-mhealth_sum-inc10), 
+                                             test = select(mhe_test, -vote96-mhealth_sum-inc10),
+                                             cl = mhe_train$vote96,
+                                             k = .)),
+                          err.rate = map_dbl(knn, ~ mean(. != mhe_test$vote96)))
+
+# plot
+ggplot(mhe_err_knn2, aes(k, err.rate)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of KNN models',
+       subtitle = 'Using p-2 predictors (-mhealth_sum, -inc10)',
+       x = "K",
+       y = "Test error rate")
+
+# table
+kable(mhe_err_knn2 %>% select(-knn) %>% arrange(by=err.rate) %>% head(3))
+
+# stroe the best knn test error rate
+mhe_err_knn_best <- mhe_err_knn1 %>% filter(err.rate == min(err.rate))
+mhe_err_knn_best <- mhe_err_knn_best$err.rate
+```
+
+We observe that the least possible test error rate with $p-2$ KNN models is still greater than the least test MSE score with $p-1$ KNN models. Therefore, I  will use all predictors except `mhealth_sum` for modeling for the rest of the Part 2.
+
+## Test error rate for weighted KNN models
+Then, I fit a weighted KNN model using the same combination of predictors as the previous KNN model with the least test error rate.  
+  
+The weighted KNN model with $k=9$ gives the least test error rate (0.309). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+
+```{r Part 2 wKNN}
+# wKNN of p-1 predictors (-mhealth_sum), k = 9, err.rate = 0.30946
+mhe_err_wknn1 <- data_frame(k = seq(1,10),
+                            knn = map(k, ~ kknn(factor(vote96) ~ .-mhealth_sum,
+                                                train = mhe_train,
+                                                test = mhe_test, k = .)),
+                            err.rate = map_dbl(knn, ~ mean(.$fitted.values != mhe_test$vote96)))
+
+# plot
+ggplot(mhe_err_wknn1, aes(k, err.rate)) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Comparison of weighted KNN models',
+       subtitle = 'Using p-1 predictors (-mhealth_sum)',
+       x = "K",
+       y = "Test error rate")
+
+# table
+kable(mhe_err_wknn1 %>% select(-knn) %>% arrange(by=err.rate) %>% head(3))
+
+mhe_err_wknn_best <- mhe_err_wknn1 %>% filter(err.rate == min(err.rate))
+mhe_err_wknn_best <- mhe_err_wknn_best$err.rate
+```
+
+## Comparison of KNN/weighted KNN to other models
+Let's compare the KNN and weighted KNN models with other models. Using the same set of predictors, I fit the following models:
+
+* Logistic regression
+* Decision tree
+* Boosting (with 5000 trees)
+* Random forest (with 5000 trees)
+
+The following table summarizes the error rates of all fitted models sorted by test error rates:  
+
+```{r Part 2 compare}
+# Fit a logistic regression model
+mhe_logit <- glm(as.factor(vote96) ~ .-mhealth_sum, data = mhe_train, family='binomial')
+
+accuracy <- mhe_train %>%
+  add_predictions(mhe_logit) %>%
+  mutate(pred = exp(pred) / (1 + exp(pred)),
+         pred = as.numeric(pred > .5))
+
+mhe_err_logit <- mean(accuracy$vote96 != accuracy$pred, na.rm = TRUE)
+
+# Fit a decision tree
+mhe_tree <- tree(as.factor(vote96) ~ .-mhealth_sum, data = mhe_train)
+mhe_err_tree <- mean(predict(mhe_tree, mhe_test, type = "class") != mhe_test$vote96, na.rm = TRUE)
+
+# Fit a boosting model
+mhe_bst <- gbm(vote96 ~ .-mhealth_sum, data = mhe_train, n.trees = 5000, distribution='bernoulli')
+mhe_err_bst <- mean(ifelse(predict(mhe_bst, mhe_test, n.trees = 5000, type = 'response') > .5, 1, 0) != mhe_test$vote96)
+
+# Fit a random forest model
+mhe_rf <- randomForest(vote96 ~ .-mhealth_sum, data = mhe_train, ntree = 5000)
+mhe_err_rf <- mean(predict(mhe_rf, mhe_test) != mhe_test$vote96)
+
+# Fit a SVM model
+mhe_svm <- svm(vote96 ~ .-mhealth_sum, data = mhe_train, type='C-classification')
+mhe_err_svm <- mean(predict(mhe_svm, mhe_test) != mhe_test$vote96)
+
+
+# Compare all
+Models <- c('KNN', 'Weighted KNN', 'Logistic regression', 'Decision tree', 'Boosting', 'Random Forest', 'SVM')
+Err.rate <- c(mhe_err_knn_best, mhe_err_wknn_best, mhe_err_logit, mhe_err_tree, mhe_err_bst, mhe_err_rf, mhe_err_svm)
+kable(data.frame(Models, Err.rate) %>% arrange(by=Err.rate))
+```
+
+The table shows that the KNN model has the lowest test error rate of all (0.120).
+
+
+# Part 3. Colleges
+## Principal component analysis
+In this Part, I perform principal component analysis of `college` dataset. The maximum possible number of principal components for the current dataset is 18, which is to the number of total variables. The below shows the first five principal components and how they relate to the original variables.  
+
+```{r Part 3 PCA}
+# convert Private into numerical values 
+college$Private <- ifelse(college$Private == 'Yes', 1, 0)
+
+# Perform PCA
+col_pr.out <- prcomp(college, scale=TRUE)
+# Check the result, first 5 principal components 
+kable(col_pr.out$rotation[,1:5])
+
+```
+
+## Plot
+Now I plot the observations in `college` data on the first and second principal components. The red arrows illustrate the loadings of both principal components. As shown in the table above as well as the plot below, the following predictors are strongly correlated with the first principal component (horizontal axis): `Top10perc`, `Top25perc`, `Expend`, `Terminal`, `PhD`, and `Outstate`. On the other hand, the following perdictors are strongly correlated with the second principal component: `F.Undergrad`, `Enroll`, `Accept`, `Apps`, and `Private`. 
+
+```{r Part 3 plot PCA}
+autoplot(col_pr.out, data = cbind(rownames(college), data.frame(college)),
+         shape = FALSE, label = TRUE, label.size = 3,
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = 'Principal Component Analysis: College data')
+```
+
+
+# Part 4. Clustering states
+## Principal component analysis
+In this Part, I perform principal component analysis of `USArrests` dataset. The maximum possible number of principal components for the current dataset is four, which is to the number of total variables. The table below shows the all four principal components and how they relate to the original variables.  
+
+```{r Part 4 PCA}
+# PCA
+usa_pr.out <-  prcomp(usarrests, scale=TRUE)
+# Check the result
+kable(usa_pr.out$rotation)
+```
+
+The following figure plots the observations on the first and second principal components. The red arrows illustrate the loadings of both principal components. It is noticeable that the first principal component (horisontal axis) is largely related to the violent crime variables, namely `Murder`, `Assault` and `Rape`, while the second principal component (vertical axis) has much to do with `UrbanPop` variable. Roughly speaking, observations in the first quadrant are states with low violent crime rates observations and small urban population. The second quadrant contains states with high violent crime rates and small urban population. The thrid quadrant has states with high violent crime rates and large urban population. Lastly, states in the fourth quadrant have low violent crime rates and small urban population.        
+```{r Part 4 PCA plot}
+# plot
+autoplot(usa_pr.out, data = usarrests,
+         shape = FALSE, label = TRUE, label.size = 3,
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = 'Principal Component Analysis: USArrest data')
+```
+
+## K-means clustering (k=2)
+Now I use K-means clustering with $k=2$ and divide states into two clusters. The following plot shows that the K-means clustering divides the states into two groups approximately by their first principal component scores. In other words, overall, states that have negative scores on the first principal component are in one cluster and states that have positive scores on the first principal component are in the other cluster.  
+
+```{r Part 4 K-means 2}
+usa_kmeans2 <- kmeans(usarrests, 2, nstart = 20)
+pred2 <- as.factor(usa_kmeans2$cluster)
+
+# plot
+autoplot(usa_pr.out, data = cbind(usarrests, pred2), 
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'pred2',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = 'Principal Component Analysis: USArrest data',
+       subtitle = 'K-means clustering with k = 2') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+## K-means clustering (k=4)
+How about four clusters? The following plot shows that the first principal component is still the most critical aspect with respect to dividing the observations into clusters. That is, the clusters are divided alongside the horisontal axis that is the first principal component.  
+
+```{r Part 4 K-means 4}
+usa_kmeans4 <- kmeans(USArrests, 4, nstart = 20)
+pred4 <- as.factor(usa_kmeans4$cluster)
+
+# plot
+autoplot(usa_pr.out, data = cbind(usarrests, pred4), 
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'pred4',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = 'Principal Component Analysis: USArrest data',
+       subtitle = 'K-means clustering with k = 4') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+## K-means clustering (k=3)
+Now I try K-means clustering with $k=3$. The following plot shows that, again, the first principal component is the most critical aspect with respect to clustering the observations.  
+
+```{r Part 4 K-means 3}
+usa_kmeans3 <- kmeans(USArrests, 3, nstart = 20)
+pred3 <- as.factor(usa_kmeans3$cluster)
+
+# plot
+autoplot(usa_pr.out, data = cbind(usarrests, pred3), 
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'pred3',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = 'Principal Component Analysis: USArrest data',
+       subtitle = 'K-means clustering with k = 3') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+## K-means clustering (k=3, on principal component score vectors)
+I try another K-means clustering with $k=3$--this time, however, on the first two principal components score vectors, rather than the raw data. I observe that the new clusters are more clearly separated from one another. That is, some of the states that were near the border between two different clusters in the previous clustering now belong to the other side of the border. Examples of such states are: Georgia, Tennessee, Texas, Colorado Missouri, Ohio, Penssylvania, Connecticut, Hawaii, Indiana, Nebraska, Kansas, and Utah. 
+
+```{r Part 4 K-means 3-2}
+usa_kmeans3_pca <- kmeans(data.frame(usa_pr.out$x)[,1:2], 3, nstart=20)
+pred3_pca <- as.factor(usa_kmeans3_pca$cluster)
+# plot
+autoplot(usa_pr.out, data=cbind(data.frame(usa_pr.out$x)[,1:2], pred3_pca),
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'pred3_pca',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 3) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = 'Principal Component Analysis: USArrest data',
+       subtitle = 'K-means clustering with k = 3, on principal component score vectors') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+## Hierarchical clustering 
+Now I apply hierarchical clustering to the current dataset with complete linkage and Euclidean distance. Observations that have smalle the pairwise differences are merged into a single cluster early in the process. At the end of the process, all observations are merged into a single cluster. As the plot shows, it is possible to choose different number of clusters based on the cutoff point.  
+
+```{r Part 4 HC}
+usa_hc.complete <- hclust(dist(usarrests), method = 'complete')
+ggdendrogram(usa_hc.complete)
+```
+
+For example, with the cutoff point at height = 150, we get three different clusters of states. In the following plot, the vertical dashed line marks the cutoff height. At the bottom of the dendrogram, state names are colored according to their membership in one of the three clusters.  
+```{r Part 4 HC, cut}
+h <- 150
+# extract dendro data
+hcdata <- dendro_data(usa_hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(rownames(usarrests)),
+                       cl = as.factor(cutree(usa_hc.complete, h = h))))
+
+# plot dendrogram
+ggdendrogram(usa_hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90)+
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+## Hierarchical clustering, after scaling
+In the previous hierarchical clustering attempt, I have disregarded the fact that different variables are on different scales. This may result in disproportionately weighing the importance of each variable when the algorithm calcuates the pairwise dissimilarities between observations. More specifically, variables with larger range can outweight others with smaller range. The use of unscaled data, therefore, may misrepresent the actual contribution of each variable to the clustering of observations. To control for this, in this second attempt of hiearchical clustering, I first standardize the variables so that all variable have standard deviation of 1. The following dendrogram shows that the clustering of observations has changed significantly due to the scaling. 
+
+```{r Part 4 HC scaling}
+# scaling
+usarrests2 <- scale(usarrests) %>% as.data.frame()
+
+# perform hierarchical clustering
+usa2_hc.complete <- hclust(dist(usarrests2), method = 'complete')
+ggdendrogram(usa2_hc.complete)
+```
+
+It is my view that standardizing variables to have the common scale is generally an improvement with respect to clustering based on pairwise dissimilarities. This is because, as I have stated above, scaling prevents certain variables that have singificantly larger variability than others merely due to the unit from distroting the clustering outcome.
