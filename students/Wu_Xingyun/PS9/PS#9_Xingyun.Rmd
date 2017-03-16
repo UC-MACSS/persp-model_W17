@@ -27,7 +27,7 @@ library(randomForest)
 library(gbm)
 library(pander)
 #library(tidytext)
-#library(tm)
+library(tm)
 #library(topicmodels)
 
 options(digits = 3)
@@ -348,8 +348,7 @@ summary(mh_lin)
 
 ## Part 3: Colleges
 
-  In the `College` dataset, only the variable `Private` is a factor variable. And it prevents the PCA analysis from running. So I set it as a numeric variable.
-  The first two principal components are shown in the plot below.
+  In the `College` dataset, only the variable `Private` is a factor variable. And it prevents the PCA analysis from running. So I set it as a numeric variable and test whether it is strongly correlated with other variables.
 
 ```{r problem3_data, echo=FALSE}
 # to run PCA, treat the variable "Private" as numerical variable
@@ -357,6 +356,14 @@ data3 <- read.csv("College.csv")%>%
   mutate(Private = as.numeric(Private))
 
 pr.out <- prcomp(data3, scale = TRUE)
+biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(data3)))
+#pr.out$rotation
+```
+
+  It turns out that `Private is not strongly correlated with other variables. To make my PCA result more precise, I have to ignore it and run PCA with other varialbs in the following analysis. The first two principal components are shown in the plot below.
+  
+```{r problem3_model, echo=FALSE}
+pr.out <- prcomp(data3[, 2:18], scale = TRUE)
 biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(data3)))
 pr.out$rotation
 ```
@@ -367,9 +374,169 @@ pr.out$rotation
 
 ## Part 4: Clustering states
 
-```{r problem4_data, echo=FALSE}
-data4 <- read.csv("USArrests")
+  The categorical variable `State` is used to mark the data source, which is not relevant to modelling analysis. But it is still kept for labels of plot.
 
+```{r problem4_data, echo=FALSE}
+data4 <- read.csv("USArrests.csv")%>%
+#  select(Murder, Assault, Rape, UrbanPop)%>%
+  na.omit()
 ```
 
+### 1. PCA
+
+  The PCA is performed. See the plot below for its observations on the first and second principal components.
+  
+```{r problem4_1, echo=FALSE}
+# ignore the factor variable "State" in PCA
+pr.out2 <- prcomp(data4[,2:5], scale = TRUE)
+biplot(pr.out2, scale = 0, cex = .6, xlabs=data4$State)
+pr.out2$rotation
+```
+
+  The first principal component is mainly formed by `Murder`, `Assault` and `Rape`, which represents crime arrests of the data. And the second principal component is mainly formed by `UrbanPop`, which represents crime rate calculated by arrests over urban population. The PCA performs pretty well here.
+  
+
+### 2. K-means clustering with K = 2
+
+  The K-means clustering with K = 2 is performed as required. See the plot for the observations on the first and second principal components.
+
+```{r problem 4_2, echo=FALSE}
+set.seed(1234)
+
+k2clust <- data4 %>%
+    mutate(k2 = as.factor(kmeans(data4[,2:5], 2, nstart = 1)[[1]]),
+           PC1 = as.data.frame(pr.out2$x)$PC1,
+           PC2 = as.data.frame(pr.out2$x)$PC2)
+          
+# plot
+k2clust %>%
+  ggplot(aes(PC1, PC2, color = k2)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "Plot on First and Second Principal Component",
+       subtitle = "Grouped into 2 Subgroups by K = 2")
+```
+
+  The states are clustered into two subgroups. One of the group is more relevant to the first principal component, which could be called "dangerous " states. And the other group is more relevant to the second principal component, which could be called "safe" states.
+  
+
+### 3. K-means clustering with K = 4
+
+  The K-means clustering with K = 2 is performed as required. See the plot for the observations on the first and second principal components.
+  
+```{r problem 4_3, echo=FALSE}
+set.seed(1234)
+
+k3clust <- data4 %>%
+    mutate(k4 = as.factor(kmeans(data4[,2:5], 4, nstart = 1)[[1]]),
+           PC1 = as.data.frame(pr.out2$x)$PC1,
+           PC2 = as.data.frame(pr.out2$x)$PC2)
+          
+# plot
+k3clust %>%
+  ggplot(aes(PC1, PC2, color = k4)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "Plot on First and Second Principal Component",
+       subtitle = "Grouped into 4 Subgroups by K = 4")
+```
+
+  The states are clustered into 4 subgroups. It seems that their group membership is defined by the first principal component, rather than  the second principal component. They could be defined as "most dangerous", "dangerous", "safe" and "most safe" states.
+
+
+### 4. K-means clustering with K = 3
+
+  The K-means clustering with K = 2 is performed as required. See the plot for the observations on the first and second principal components.
+
+```{r problem 4_4, echo=FALSE}
+set.seed(1234)
+
+k4clust <- data4 %>%
+    mutate(k3 = as.factor(kmeans(data4[,2:5], 3, nstart = 1)[[1]]),
+           PC1 = as.data.frame(pr.out2$x)$PC1,
+           PC2 = as.data.frame(pr.out2$x)$PC2)
+          
+# plot
+k4clust %>%
+  ggplot(aes(PC1, PC2, color = k3)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "Plot on First and Second Principal Component",
+       subtitle = "Grouped into 4 Subgroups by K = 3")
+```
+
+  The K-means clustring with K = 3 still group the states based on their performance on the first principal component. But the differences among groups are not very clear.
+
+
+### 5. K-means clustering with K = 3 on the first two principal components score vectors
+
+  The K-means clustering with K = 2 is performed as required. See the plot for the observations on the first and second principal components.
+
+```{r problem4_5, echo=FALSE}
+set.seed(1234)
+
+# estimate k=3 clusters first two principal components score vectors, rather than the raw data: simply add the new kmeans cluster id to the k3clust dataframe from above
+k5clust <- k4clust %>%
+    mutate(k3mod = as.factor(kmeans(k4clust[,7:8], 3, nstart = 1)[[1]]))
+          
+#  plot each data point on the PC1 and PC2 component with each state color-coded by cluster membership
+k5clust %>%
+  ggplot(aes(PC1, PC2, color = k3mod)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title = "K-means Grouping by First and Second Principal Component",
+       subtitle = "Grouped into 3 Subgroups")
+```
+
+  Now we could happily defined the states as "dangerous", "neutral" and "safe" states. Differences among the three groups now are much more clear.
+
+
+### 6. Hierarchical clustering
+
+  Hierarchical clustering is performed with complete linkage and Eudclidean distance, as is required.
+
+```{r problem4_6, echo=FALSE}
+# to make the data cleaner and display names of the states
+hc_data <- as.matrix(select(data4, -State))
+rownames(hc_data) <- data4$State
+
+# run the hierarchical clustering using Euclidian distance
+hc_complete <- hclust(dist(hc_data), method = 'complete')
+
+# plot the dendrogram
+hc1 <- ggdendrogram(data = hc_complete, labels = TRUE) + 
+  geom_text() + 
+  labs(title = 'Hierarchical Clustering',
+       y = 'Euclidean Distance')
+hc1
+```
+
+  We should read the dendrogram from the bottom-up. Some states fuse together near the bottom, which means they are similar, like Florida and North Carolina. States fuse together on a higher level are less similar, like Ohio and Vermont. States fuse on the top would be the most unlike, like Florida and Vermont.
+
+
+### 7. Cut the dendrogram
+
+  The dendrogram is cut at `height = 150`, because it appears on the plot of `question 6` that it could be cut into three distince clusters at approximately this height.
+
+```{r problem4_7, echo=FALSE}
+h <- 150
+# extract dendro data
+hcdata2 <- dendro_data(hc_complete)
+hclabs <- label(hcdata2) %>%
+  left_join(data_frame(label = data4$State),
+                       cl = as.factor(cutree(hc_complete, h = h)))
+
+# plot dendrogram
+ggdendrogram(hc_complete, labels = TRUE) +
+  geom_text(data = hclabs, aes(label = label, x = x, y = 0),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+  According to the dendrogram, for example, the Florida and New Mexico belong to the same cluster. For another example, Utah and Vermont belong to the same cluster. All states within the same branch defined by the cut belong to the same cluster.
+
+
+### 8. Hierarchically cluster with complete linkage and Euclidean distance
 
