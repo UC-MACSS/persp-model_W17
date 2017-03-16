@@ -251,7 +251,7 @@ knn_mse2_2<-min(mse_knn$mse_test)
 knn_mse2_2
 ```
 
-  According to the plot, the KNN model does not perform better than GLM. The model with `k = 8` produces the lowest test MSE, which is `r hm_knn_mse`.
+  According to the plot, the KNN model does not perform better than GLM. The model with `k = 8` produces the lowest test MSE, which is `r knn_mse2_2`.
 
 
 ### 3. Weighted KNN models
@@ -287,10 +287,10 @@ err %>%
   expand_limits(y = 0) +
   theme(legend.position = "bottom")
 
-cat("The lowest MSE is: ", mse_wknn_mh)
+cat("The lowest MSE is: ", knn_mse2_3)
 ```
 
-  According to the plot, with the increase of `k`, the weighted KNN models performs better than the traditional KNN model. The lowest test error rate of KNN models is produced by the model with `k = 10`, and the test MSE is `r mse_wknn_mh`.
+  According to the plot, with the increase of `k`, the weighted KNN models performs better than the traditional KNN model. The lowest test error rate of KNN models is produced by the model with `k = 10`, and the test MSE is `r knn_mse2_3`.
   
 
 ### 4. Comparison
@@ -309,11 +309,11 @@ mh_train <- as_tibble(mh_split$train)
 mh_test <- as_tibble(mh_split$test)
 # decision tree
 mh_tree <- tree(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train)
-error_tree <- err.rate.tree(mh_tree, mh_test)
+err_tree <- err.rate.tree(mh_tree, mh_test)
 
 # random forest
 rf<- randomForest(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, ntree = 500)
-error_rf <- err.rate.tree(rf, mh_test)
+err_rf <- err.rate.tree(rf, mh_test)
 
 # the equivalent boosting model
 mh_split <- resample_partition(data2, c(test = 0.3, train = 0.7))
@@ -345,14 +345,15 @@ summary(mh_lin)
 ```{r problem2_4_comparison, echo=FALSE}
 cat('The test error rate of the best KNN model is: ', knn_mse2_2, '\n')
 cat('The test error rate of the best wKNN model is: ', knn_mse2_3, '\n')
-cat('The test error rate of equivalent logistic regression model is: ', mse_lm, '\n')
+cat('The test error rate of equivalent logistic regression model is: ', err_glm, '\n')
 cat('The test error rate of equivalent decision tree is: ', err_tree, '\n')
 cat('The test error rate of equivalent boosting method is: ', err_bst, '\n')
 cat('The test error rate of equivalent random forest is: ', err_rf, '\n')
 cat('The test error rate of equivalent SVM is: ', 0.258, '\n')
 ```
 
-  According to the comparison, the best model is, with the test error rate as.
+  According to the comparison, the best model is SVM, with the test error rate 0.258. The SVM enlarges the feature space by using kernels, to accomodate a non-linear decision boundary. As long as its assumption fits the data features, it could have good performance.
+  Note that the test MSE of the best wKNN model is lower than the test MSE of the best KNN model. The traditional KNN model does not necessarily perform better than the weighted KNN model.
 
 
 ## Part 3: Colleges
