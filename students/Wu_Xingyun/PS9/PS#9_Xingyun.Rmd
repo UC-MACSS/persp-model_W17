@@ -226,7 +226,7 @@ x<- data2_test %>%
   mutate (pred = logit2prob(pred),
           prob = pred,
           pred = as.numeric(pred > 0.5))
-err.rate.glm <-mean(x$vote96 != x$pred)
+err_glm <-mean(x$vote96 != x$pred)
 
 # estimate the MSE for KNN K=1,2,...,10
 mse_knn <- data_frame(k = 1:10,
@@ -241,14 +241,14 @@ mse_knn <- data_frame(k = 1:10,
 
 ggplot(mse_knn, aes(k, mse_test)) +
   geom_line() +
-  geom_hline(yintercept = err.rate.glm, linetype = 2) +
+  geom_hline(yintercept = err_glm, linetype = 2) +
   labs(x = "K",
        y = "Test error rate",
        title = "KNN on Vote Turnout") +
   expand_limits(y = 0)
 
-hm_knn_mse<-min(mse_knn$mse_test)
-hm_knn_mse
+knn_mse2_2<-min(mse_knn$mse_test)
+knn_mse2_2
 ```
 
   According to the plot, the KNN model does not perform better than GLM. The model with `k = 8` produces the lowest test MSE, which is `r hm_knn_mse`.
@@ -266,7 +266,7 @@ mse_wknn <- data_frame(k = 1:10,
                       wknn = map(k, ~ kknn(vote96 ~., train = data2_train, test = data2_test, k =.)),
                       mse_test_wknn = map_dbl(wknn, ~ mean(data2_test$vote96 != as.numeric(.$fitted.values > 0.5))))
 
-mse_wknn_mh <- min(mse_wknn$ mse_test_wknn)
+knn_mse2_3 <- min(mse_wknn$ mse_test_wknn)
 
 err<-mse_wknn %>%
   left_join(mse_knn, by = "k") %>%
@@ -278,7 +278,7 @@ err %>%
   ggplot(aes(k, mse, color = method)) +
   geom_line() +
   geom_point() +
-  geom_hline(yintercept = err.rate.glm, linetype = 2) +
+  geom_hline(yintercept = err_glm, linetype = 2) +
   labs(title = "Test MSE for linear regression vs. KNN, on Vote Turnout",
        subtitle = "Traditional and weighted KNN",
        x = "K",
@@ -298,26 +298,25 @@ cat("The lowest MSE is: ", mse_wknn_mh)
 ```{r problem2_4, echo=FALSE}
 set.seed(1234)
 
-# the equivalent GLM has already been estimated, with test error rate named err.rate.glm
+# the equivalent GLM has already been estimated, with test error rate named err_glm
 
 # the equivalent decision tree
-# Single decision tree model:
 # data preparation
-mh_rm_na_fac<- mh_rm_na %>%
+data2_tree<- data2 %>%
   mutate (vote96 = factor(vote96, levels = 0:1, label =c("no_vote", "vote")))
-mh_split <- resample_partition(mh_rm_na_fac, c(test = 0.3, train = 0.7))
+mh_split <- resample_partition(data2_tree, c(test = 0.3, train = 0.7))
 mh_train <- as_tibble(mh_split$train)
 mh_test <- as_tibble(mh_split$test)
 # decision tree
-tree_mh <- tree(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train)
-error_tree <- err.rate.tree(tree_mh, mh_test)
+mh_tree <- tree(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train)
+error_tree <- err.rate.tree(mh_tree, mh_test)
 
 # random forest
 rf<- randomForest(vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, ntree = 500)
 error_rf <- err.rate.tree(rf, mh_test)
 
 # the equivalent boosting model
-mh_split <- resample_partition(mh_rm_na, c(test = 0.3, train = 0.7))
+mh_split <- resample_partition(data2, c(test = 0.3, train = 0.7))
 mh_train <- as_tibble(mh_split$train)
 mh_test <- as_tibble(mh_split$test)
 boost_mh = gbm (vote96 ~ age + inc10 + mhealth_sum + educ, data = mh_train, n.trees = 10000, interaction.depth = 4, distribution = "bernoulli")  
@@ -330,9 +329,9 @@ for (i in 100:1000) {
 err_boost<- data_frame("tree" = 100:1000,
                       "error_rate" = unlist(error))
 
-err_boost500 <- min(err_boost$error_rate)
+err_bst <- min(err_boost$error_rate)
 
-# SVM
+# SVM: with linear kernel
 mh_lin_tune <- tune(svm, vote96 ~ ., data = as_tibble(mh_split$train),
                     kernel = "linear",
                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
@@ -341,6 +340,16 @@ summary(mh_lin_tune)
 # Best
 mh_lin <- mh_lin_tune$best.model
 summary(mh_lin)
+```
+
+```{r problem2_4_comparison, echo=FALSE}
+cat('The test error rate of the best KNN model is: ', knn_mse2_2, '\n')
+cat('The test error rate of the best wKNN model is: ', knn_mse2_3, '\n')
+cat('The test error rate of equivalent logistic regression model is: ', mse_lm, '\n')
+cat('The test error rate of equivalent decision tree is: ', err_tree, '\n')
+cat('The test error rate of equivalent boosting method is: ', err_bst, '\n')
+cat('The test error rate of equivalent random forest is: ', err_rf, '\n')
+cat('The test error rate of equivalent SVM is: ', 0.258, '\n')
 ```
 
   According to the comparison, the best model is, with the test error rate as.
