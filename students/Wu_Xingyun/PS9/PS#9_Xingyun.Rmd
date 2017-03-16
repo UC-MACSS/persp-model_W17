@@ -7,24 +7,248 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(tree)
+library(e1071)
+library(ggdendro)
+library(randomForest)
+library(gbm)
+library(pander)
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Part 1: Attitudes towards feminists
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+### 1.
 
-```{r cars}
-summary(cars)
+  The data has been imported and spitted as required.
+  
+```{r read_data1, echo=FALSE, include=FALSE}
+data1 <- read.csv('feminist.csv')
+
+# mark the qualitative variables
+data1<-data1 %>%
+  mutate (female = factor (female, levels =0:1, labels = c("male","female")),
+          inc = factor (income, levels = 1: 25, labels = c("0","3","5","7.5","10","11","12.5","15","17","20","22","25","30","35","40","45","50","60","75","90","100","110","120","135","150"))) %>%
+  mutate (inc=as.numeric(as.character(inc)))%>%
+  # omit missing values
+  na.omit()
+
+# data split
+set.seed(1234)
+data1_split <- resample_partition(data1, p = c("test" = .3, "train" = .7))
+data1_train <- as_tibble(data1_split$train)
+data1_test <- as_tibble(data1_split$test)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+### 2. KNN models
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+  The response variable of my model is `feminist`, and the predictors I choose are `female`, `age`, `educ` and `income`. The plot below shows the relation between test MSE for KNN models and values of k.
+  
+```{r problem1_2, echo=FALSE}
+# define the function calculating MSE
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+# generate KNN models with K=5, 10, 15, 20, 25,..., 100
+mse1_2 <- data_frame(k = seq(5, 100, by = 5), 
+                      knn = map(k, ~ knn.reg(select(data1_train, -female, -age, -educ, -income), y = data1_train$feminist, test = select(data1_test, -female, -age, -educ, -income), k = .)), 
+                      mse = map_dbl(knn, ~ mean((data1_test$feminist - .$pred)^2))) 
+
+# plot the MSE on different k value
+ggplot(mse1_2, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "KNN for Feminist Score",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+knn_mse1_2<-min(mse1_2$mse)
+knn_mse1_2
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+  According to the plot, the test MSE increases with the increase of k for KNN models. Thus, it would be the model with `k = 5` that produces the lowest test MSE, which is 5.81.
+  
+  
+### 3. Weighted KNN models
+
+  Settings of response variable and predictors are the same as the previous question. The plot below shows the relationship between the test MSE and k of weighted KNN models.
+  
+```{r problem1_3, echo=FALSE}
+# generate weighted KNN models with K=5, 10, 15, 20, 25,..., 100
+mse1_3 <- data_frame(k = seq(5, 100, by = 5), 
+                      wknn = map(k, ~ kknn(feminist ~ female + age + educ + inc, train = data1_train, test = data1_test, k = .)), 
+                      mse_wknn = map_dbl(wknn, ~ mean((data1_test$feminist - .$fitted.values)^2)))
+
+# estimate the MSE for LM
+mse_lm <- lm(feminist ~ female + age + educ + inc, data = data1_train) %>%
+  mse(.,data1_test)
+
+# plot the MSE on different k value
+ggplot(mse1_3, aes(k, mse_wknn)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(title = "Weighted KNN for Feminist Score",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+knn_mse1_3<-min(mse1_3$mse_wknn)
+knn_mse1_3
+```
+
+  The plot shows that the test MSE decreases with the increase of k. The lowest test MSE is 447, which occurs when `k = 100`.
+  However, both the plot and the lowest test MSE shows that the weighted KNN models does not perform well. Their lowest test MSE is much higher than the lowest test MSE for the previous KNN models. In addition, the plot shows that their test MSE is not improved, compared to the test MSE of the OLS model.
+  
+  
+### 4. Comparison
+
+  As is required, I calculated the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of varialbes as before. And compare them to the test MSE for the best KNN/wKNN models.
+  Note that the model with boosting method is with `depth = 1`.
+  
+```{r problem1_4_models, echo=FALSE}
+# decision tree model
+tree <- tree(feminist ~ female + age + educ + inc, data = data1_train)
+mse_tree <- mse(tree, data1_test)
+
+# function to calculate the MSE for each boosting model
+mse_boost <-function(model, test, tree_number) {
+  yhat.boost <- predict (model, newdata = test, n.trees=tree_number)
+  mse <- mean((yhat.boost - (as_tibble(test))$feminist)^2)
+  return (mse)
+}
+# boosting model
+boost <- gbm(feminist ~ female + age + educ + inc, data = data1_train, distribution="gaussian", n.trees = 5000, interaction.depth = 1)
+mse_bst <- mse_boost(boost, data1_test, 5000)
+
+# random forest model
+rf<- randomForest(feminist ~ female + age + educ + inc, data = data1_train, ntree = 500)
+mse_rf <- mse(rf, data1_test)
+```
+
+```{r problem1_4_comparison, echo=FALSE}
+cat('The test MSE of the best KNN model is: ', knn_mse1_2, '\n')
+cat('The test MSE of the best wKNN model is: ', knn_mse1_3, '\n')
+cat('The test MSE of equivalent linear regression model is: ', mse_lm, '\n')
+cat('The test MSE of equivalent decision tree is: ', mse_tree, '\n')
+cat('The test MSE of equivalent boosting method is: ', mse_bst, '\n')
+cat('The test MSE of equivalent random forest is: ', mse_rf, '\n')
+```
+
+  According to the comparison above, the KNN model performs best, with much lower test MSE. And the other five models have very similar test MSEs. Note that the weighted KNN model does not perform better than the other methods. It seems like the traditional KNN model beats the other five models in this case.
+  The traditional KNN model performs better because it relaxes assumptions about the functional form of $f$. It uses the data to estimate $f$ directly, so it could get close to the data points and avoid overcomplexity. But it depends on data whether traditional KNN model or weighted KNN model would perform better.
+
+
+
+## Part 2: Voter turnout and depression
+
+### 1. Read and split data
+
+  The `mental_health` data is imported and splitted as required.
+
+```{r problem2_1, echo=FALSE}
+data2 <- read.csv('mental_health.csv')
+
+# mark the qualitative variables
+data2<-na.omit(data2) #%>%
+  #mutate (vote96 = factor (vote96, levels = 0:1, labels = c("not_voted","voted")),
+#          black = factor (black, levels = 0:1, labels = c("not_black", "black")),
+#         female = factor (female, levels = 0:1, labels = c("male", "female")),
+#          married = factor(married, levels = 0:1, labels = c("not_married", "married"))) %>%
+#  mutate (inc10=as.numeric(inc10), 
+#          mhealth_sum=as.numeric(mhealth_sum))%>%
+  # omit missing values
+#  na.omit()
+
+# data split
+set.seed(1234)
+data2_split <- resample_partition(data2, p = c("test" = .3, "train" = .7))
+data2_train <- as_tibble(data2_split$train)
+data2_test <- as_tibble(data2_split$test)
+```
+
+```{r problem2_1_functions, echo=FALSE}
+# Define the error rate function for trees
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+
+  pred <- predict(model, newdata = data, type = "class") 
+  actual <- data[[response]]
+
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+# Define logit2prob():
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+```
+
+
+### 2. Test error rate for KNN models
+
+  The response variable in this part is `vote96`, and the predictors are `mhealth_sum`, `age`, `educ` and `inc10`. I choose these predictors because they represent important features of individuals. `mhealth_sum` represents mental state that would influence behavior. `age` is a very important demographic feature. `educ` and `inc10` are good explanatory variables to locate individuals' social status.
+
+```{r problem2_2_model, echo=FALSE}
+## estimate the MSE for GLM and KNN models:
+
+# estimate the MSE for GLM
+mh_glm <- glm(vote96 ~ age + inc10 + mhealth_sum + educ, data = data2_train, family = binomial) 
+# estimate the error rate for this model:
+x<- data2_test %>%
+  add_predictions(mh_glm) %>%
+  mutate (pred = logit2prob(pred),
+          prob = pred,
+          pred = as.numeric(pred > 0.5))
+err.rate.glm <-mean(x$vote96 != x$pred)
+
+# estimate the MSE for KNN K=1,2,...,10
+mse_knn <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(data2_train, -vote96),
+                                                test = select(data2_train, -vote96),
+                                                cl = data2_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(data2_train, -vote96),
+                                                test = select(data2_test, -vote96),
+                                                cl = data2_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(data2_test$vote96!= as.logical(.))),
+                      mse_test = map_dbl(knn_test, ~ mean(data2_test$vote96)))
+
+ggplot(mse_knn, aes(k, mse_test)) +
+  geom_line() +
+  geom_hline(yintercept = err.rate.glm, linetype = 2) +
+  labs(x = "K",
+       y = "Test error rate",
+       title = "KNN on Vote Turnout") +
+  expand_limits(y = 0)
+
+#hm_knn_mse<-min(mse_knn$mse_test)
+#hm_knn_mse
+```
+
+
+## Part 3: Colleges
+
+
+## Part 4: Clustering states
