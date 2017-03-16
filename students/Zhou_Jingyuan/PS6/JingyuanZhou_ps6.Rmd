@@ -134,22 +134,7 @@ x_accuracy <- mh_data %>%
 
 mean(x_accuracy$vote96 == x_accuracy$pred, na.rm = TRUE)
 
-# function to calculate PRE for a logistic regression model
-PRE <- function(model){
-  # get the actual values for y from the data
-  y <- model$y
-  
-  # get the predicted values for y from the model
-  y.hat <- round(model$fitted.values)
-  
-  # calculate the errors for the null model and your model
-  E1 <- sum(y != median(y))
-  E2 <- sum(y != y.hat)
-  
-  # calculate the proportional reduction in error
-  PRE <- (E1 - E2) / E1
-  return(PRE)
-}
+C
 
 PRE(log_model)
 
