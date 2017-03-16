@@ -1,0 +1,467 @@
+---
+title: "MACSS 30100 PS#9"
+author: "Alice Mee Seon Chung"
+date: "3/10/2017"
+output: github_document
+
+---
+
+```{r setup, include=FALSE}
+library(modelr)
+library(broom)
+library(tidyverse)
+library(tree)
+library(randomForest)
+library(ggdendro)
+library(forcats)
+library(gbm)
+library(ROCR)
+library(ISLR)
+library(pROC)
+library(FNN)
+library(stringr)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(e1071)
+library(broom)
+library(caret)
+
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      error=FALSE)
+
+options(na.action = na.warn)
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+
+df_feminist<- read.csv('data/feminist.csv')
+
+(df_mental <- read_csv("data/mental_health.csv") %>%
+  mutate_each(funs(as.factor(.)), vote96, black, female, married) %>%
+  na.omit)
+df_college <- read_csv('data/College.csv')
+df_usa <- read_csv('data/USArrests.csv')
+```
+
+# Attitudes towards feminists
+```{r, include=FALSE}
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse_boost <- function(model, data) {
+  pred <- predict(model,newdata = as_tibble(data),n.trees = 500)
+  mean((pred - as_tibble(data)$feminist)**2)
+}
+```
+```{r 1-1, include=FALSE}
+set.seed(1234)
+# split into training and validation set 
+fem_split <- resample_partition(df_feminist, c(test = 0.3, train = 0.7))
+fem_train <- as_tibble(fem_split$train)
+fem_test <- as_tibble(fem_split$test)
+```
+
+```{r, 1-2}
+mse_lm <- lm(feminist ~ female + educ, data = fem_train) %>%
+  mse(fem_test)
+
+mse_knn <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist),
+                                             y = fem_train$feminist,
+                         test = select(fem_test, -feminist), k = .)),
+                mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(title = "KNN for Feminist",
+       x = "K",
+       y = "Test mean squared error") +
+  scale_x_discrete(breaks = seq(5,100,5), limits = seq(5,100,5))
+#mse_knn
+```
+
+2. For KNN for Feminist graph, we can see that as K become larger, the test MSE decreases overall. When KNN models with K = 45 and 100, we get the lowest test MSE, 456. 
+
+
+
+```{r 1-3, weighted KNN}
+mse_lm <- lm(feminist ~ female + educ, data = fem_train) %>%
+  mse(fem_test)
+
+
+mse_kknn <- data_frame(ke = seq(5, 100, by = 5),
+                      knn = map(ke, ~ kknn(feminist ~ female + educ,
+                                          train = fem_train, 
+                                          test = fem_test, k = .)),
+          kmse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+ggplot(mse_kknn, aes(ke, kmse)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(title = "Weighted KNN for Feminist",
+       x = "K",
+       y = "Test mean squared error")+
+  scale_x_discrete(breaks = seq(5,100,5), limits = seq(5,100,5))# +
+  #expand_limits(y = 0)
+#mse_kknn
+```
+
+3. For Weighted KNN models, the trend as similart as previous question, that is as K become larger, the test MSE decreases overall. The weighted KNN models with K = 85 and 100, the test MSE is the lowest, 455. 
+
+```{r, 1-4}
+# linear regression
+fem_lm <- lm(feminist ~ female + educ, data = fem_train) 
+
+# decistion tree
+fem_tree <- tree(feminist ~ female + educ, data = fem_train)
+
+# boosting
+fem_boost <- gbm(feminist ~ female + educ, data = fem_train, 
+                 distribution = 'gaussian', n.trees = 1300)
+
+# random forest
+fem_rf <- randomForest(feminist ~ female + educ, data = fem_train,
+                       importance = TRUE, ntree = 5000)
+
+fem_mse_le <- mse(fem_lm, fem_test)
+fem_mse_tree <- mse(fem_tree, fem_test)
+fem_mse_boost <- mse_boost(fem_boost, fem_test)
+fem_mse_rf <- mse(fem_rf, fem_test)
+
+msecompretable<- data_frame(
+  'measures' = c('MSE'),
+  'linear regression' = c(fem_mse_le),
+  'decision tree' = c(fem_mse_tree),
+  'boosting' = c(fem_mse_boost),
+  'random forest' = c(fem_mse_rf))
+msecompretable
+
+```
+
+4. Comparing to the MSE for the best KNN/ wKNN models to the test MSE for the equivalent models, the test MSE of random forest model is lowest, 450 and it performs the best. However comparing to other models, the differences are still small so it is hard to say explicitely this model is the best model. In this case, randome forest model performs the best. I think this is because random forests intentionally ignores a random set of variables so it reduces the probability that single dominant predictor in the dataset affects the results. So the variable restriction imposed when random forest approach considers splits. So The work process of random forest makes the method performed the best. 
+
+# Voter turnout and depression
+
+```{r, 2-1}
+set.seed(1234)
+# split into training and validation set 
+mh_split <- resample_partition(df_mental, c(test = 0.3, train = 0.7))
+mh_train <- as_tibble(mh_split$train)
+mh_test <- as_tibble(mh_split$test)
+```
+
+```{r, 2-2}
+set.seed(1234)
+err.rate<- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+
+  pred <- predict(model, newdata = data, type = "class") 
+  actual <- data[[response]]
+
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+
+mh_logit <- glm(vote96 ~ ., data =mh_train, family = binomial)
+#mh_logit_mse <- mse.glm(mh_logit, mh_test)
+
+error_knn <- data_frame(ker = 1:10,
+            knn_train = map(ker, ~ class::knn(select(mh_train, -vote96),
+                                      test = select(mh_train, -vote96),
+                                      cl = mh_train$vote96, k = .)),
+            knn_test = map(ker, ~ class::knn(select(mh_train, -vote96),
+                                      test = select(mh_test, -vote96),
+                                      cl = mh_train$vote96, k = .)),
+            mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+            error_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+ggplot(error_knn, aes(ker, error_test)) +
+  geom_line() +
+  #geom_hline(yintercept = mh_logit_mse, linetype = 2) +
+  labs(title = "Test Error rate with KNN for Voter turnout",
+       x = "K",
+       y = "Test error rate") +
+  scale_x_discrete(breaks = seq(1,10,1), limits = seq(1,10,1))
+#error_knn
+```
+
+2. Above graph of test error rate with KNN for different numbers of K, the test error graph draws big differences between at first 5 intervals, but overall we can say that test error decreases as K increses. KNN model with 8 produces the lowest test error rate and the error rate is 0.295.
+ 
+```{r, 2-3}
+set.seed(1234)
+
+error_kknn <- data_frame(ke = seq(1,10, by =1),
+            kknn_test = map(ke, ~ kknn(vote96 ~., train = mh_train,
+                                      test = mh_test, k = .)),
+            #test = mh_test,
+            kmse_test = map_dbl(kknn_test, ~ mean(mh_test$vote96 != .$fitted.values)))
+
+error_kknn %>%
+  ggplot(aes(ke, kmse_test)) +
+    geom_line() +
+    #geom_hline(yintercept = mh_logit_mse, linetype = 2) +
+    labs(title = "Test Error rate with Weighted KNN for Voter turnout",
+         x = "K",
+         y = "Test error rate") +
+    #expand_limits(y = 0)+
+    scale_x_discrete(breaks = seq(1,10,1), limits = seq(1,10,1))
+#error_kknn
+```
+
+3. Above graph of test error rate with Weighted KNN for different numbers of K, the test error graph shows that test error rate decreases as K increses. Weighted KNN model with 10 produces the lowest test error rate and the error rate is 0.278.
+
+```{r, 2-4}
+# logistic regression
+
+mh_glm <- glm(vote96 ~ ., data = mh_train, family = 'binomial') 
+
+mh_test %>%
+  add_predictions(mh_glm) %>%
+  {.} -> mhlogpred
+mh_error_logit <- mean(mhlogpred$vote96 != round(mhlogpred$pred))
+
+
+# decistion tree
+mh_tree <- tree(vote96 ~ ., data = mh_train)
+
+# random forest
+mh_rf <- randomForest(vote96 ~ ., data = mh_train,
+                       importance = TRUE, ntree = 2000)
+# SVM with linear 
+mh_svm <- svm(vote96 ~ ., data=mh_train, kernel="linear", cost=5)
+yhat.svm <- predict(mh_svm, newdata=mh_test)
+err_svm <- mean(yhat.svm != mh_test$vote96)
+
+mh_svm_best <- mh_svm$best.model
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+x<- mh_test %>%
+  add_predictions(mh_glm) %>%
+  mutate (pred = logit2prob(pred),
+          prob = pred,
+          pred = as.numeric(pred > 0.5))
+mh_error_le <- mean(x$vote96 != x$pred)
+mh_error_tree <- err.rate(mh_tree, mh_test)
+test <- mh_test$vote96
+
+# boosting
+mh_boost <- gbm(as.character(vote96) ~ ., data=mh_train, n.trees=500)
+yhat.boost <- predict(mh_boost, newdata=mh_test, n.trees=500)
+yhat.boost_bi <- as.numeric(yhat.boost > .5)
+err_boost <- mean(yhat.boost_bi != mh_test$vote96)
+
+
+mh_error_rf <- err.rate(mh_rf, mh_test)
+#mh_error_svm <- err.rate(mh_svm, mh_test)
+
+mhmsecompretable<- data_frame(
+  'measures' = c('Error rate'),
+  'logistic regression' = c(mh_error_le),
+  'decision tree' = c(mh_error_tree),
+  'boosting' = c(err_boost),
+  'random forest' = c(mh_error_rf),
+  'svm' = c(err_svm))
+mhmsecompretable
+
+mhmsecompretable2<- data_frame(
+  'measures' = c('Error rate'),
+  'logistic regression' = c(0.272),
+  'decision tree' = c(0.304),
+  'boosting' = c(0.298),
+  'random forest' = c(0.301),
+  'svm' = c(0.295))
+mhmsecompretable2
+```
+4. Comparing to the MSE for the best KNN/ wKNN models to the test error rate for the equivalent models, the test error rate of logistic regression model is lowest, 0.272 and it performs the best. However comparing to other models, the differences are still small so it is hard to say explicitely this model is the best model. In this case, logistic regression model performs the best because logistics models the probability that the response belongs to a particular category and here vote96 is binary variables it is more suitable to predict using logistic regression model and also logistics regression performs well when the relationship is curvilinear and through last problem sets we already observed that the predictors and the reponse have curvilinear relationship. 
+
+# 3 College
+```{r, 3-1}
+#pr.out <- prcomp(df_college, scale = TRUE)
+df_college<- read_csv('data/College.csv') %>%
+  mutate(Private = ifelse(Private == 'Yes', 1, 0))
+
+pr_out <- prcomp(df_college, scale = TRUE)
+pr_out$rotation
+biplot(pr_out, scale = 0, cex = .6)
+```
+
+The bi-plot shows that the variable Private locates high in the second principle component. It is hard to see the plot so we have to see princial component more  closely. 
+
+```{r}
+print('First Principal Component')
+pr_out$rotation[, 1]
+print('Second Principal Component')
+pr_out$rotation[, 2]
+#pr_out <- prcomp(df_college[,2:18], scale = TRUE)
+#biplot(pr_out, scale = 0, cex = .8, xlabs=rep(".", nrow(df_college)))
+```
+
+For first principal components table, the variables with high figure are Top10perc, Top25perc, PhD, Terminal, Expend and all these are more than 0.3 level. These vatiabels are seems to locate upeer-right. So it seems that percent of faculty with Ph.D's, percent of faculty with terminal degress, instructuinal expenditure per student, percent of new students from top 10% or 25% of H.S Class are strongly correlated. When we look at the second principal components table, the variabels with high fugure are Apps, Accept, Enroll, F.Undergrad, P.Undergrad and all these variables are lower than -0.29 level. It seems that number of application received, number of application accepted, number of new students enrolled, number of full-time undergraduates and number of parttime undergraduates are stronly correlated. For first components table seems like put more emphasis on the aspects of expenditure of students and performance of students. Second components table seems like put emphasis on population size of colleges because if the population of college is large, than the number of applications received, accpeted, and enrolled full-time or part time studnets would be larger too. 
+
+# Clustering states
+```{r, 4-1}
+usa_pr_out <- prcomp(x = select(df_usa, -State), scale = TRUE)
+usa_pr_out$rotation
+biplot(usa_pr_out, scale = 0, cex = .6)
+```
+```{r, component table}
+print('First Principal Component')
+usa_pr_out$rotation[, 1]
+print('Second Principal Component')
+usa_pr_out$rotation[, 2]
+```
+
+1. The first loading vector has the same size on Muder, Assault and Rape. For UnrbanPop, it is mush longer than other three and it means it lightly weighted.
+Also in the second principal components, UrbanPop has most weights on and the other thress variables hace relatively small weights on. From these fact, we can see that three variables(Murder, Assault, Rape) are crime-related and they are closely correlated. Thus UrbanPop is not related with Murder so its correlation is not significant. 
+
+```{r, 4-2}
+set.seed(1234)
+
+kmean2<- kmeans(select(df_usa, -State), 2, nstart = 1)
+
+ggplot(mapping=aes(x=usa_pr_out$x[,1], y=usa_pr_out$x[,2], 
+                   label=df_usa$State, color=factor(kmean2$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "K-mean clusturing K=2",
+       x = "PC 1",
+       y = "PC 2")
+```
+
+2. K-mean clustering with K=2 graph shows that it divides all states into two group regarding the level of PC1 socres. PC1 scores are related with crime-related variables, so we can say that right side group which includes Maine, West Virginia, Nebraska and so on is safe than left side group which includes Florida, California, Nevada and so on. 
+
+```{r, 4-3}
+set.seed(1234)
+
+kmean4<- kmeans(select(df_usa, -State), 4, nstart = 1)
+
+ggplot(mapping=aes(x=usa_pr_out$x[,1], y=usa_pr_out$x[,2], 
+                   label=df_usa$State, color=factor(kmean4$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "K-mean clusturing K=4",
+       x = "PC 1",
+       y = "PC 2")
+```
+
+3. K-mean clustering with K=4 graph shows that it divides all states into four group regarding level of PC1 socres. PC1 scores are related with crime-related variables, so we can say that first group with Florida, Nevada and California is the least safe cluster group, and the group with Georgia, Alabama, Texas is the third safe group, the group woth Idaho, Virginia , Wyoming is the second safe group and lastrly the right side group with South Dakota, Main, Wiscosin is the safest cluster group.  
+
+```{r, 4-4}
+set.seed(1234)
+
+kmean3<- kmeans(select(df_usa, -State), 3, nstart = 1)
+
+ggplot(mapping=aes(x=usa_pr_out$x[,1], y=usa_pr_out$x[,2], 
+                   label=df_usa$State, color=factor(kmean3$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "K-mean clusturing K=3",
+       x = "PC 1",
+       y = "PC 2")
+```
+4. K-mean clustering with K=4 graph shows that it divides all states into three group regarding level of PC1 socres. PC1 scores are related with crime-related variables, so we can say that first group with Florida, Nevada and California is the least safe cluster group, and second group with Georgia, Colorado, Texas is the second safe group, the third group woth Indiana, Ohio , Wisconsin is the safest cluster group. 
+
+```{r, 4-5}
+set.seed(1234)
+
+kmean32<- kmeans(usa_pr_out$x[,1:2], 3, nstart = 1)
+
+ggplot(mapping=aes(x=usa_pr_out$x[,1], y=usa_pr_out$x[,2], 
+                   label=df_usa$State, color=factor(kmean32$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "K-mean clusturing K=3",
+       x = "PC 1",
+       y = "PC 2")
+```
+5. K-means clustering with K= 3 on the first two principal components score vectors divides all states into three group regarding PC1 and PC2. Unlike 4-4 question, this graphs shows differecnt trend. The first group with Florida, Nevada , California has low PC2 level and PC1 level and it means that those states are highly crime-related and urbanized. The group with South Carolina, Alabama, Alaska is less safe than first group and less urbanized. The last group with South Dakora, Connecticut, Washington is safe and urbanized. Compared to K-mean cluestering with K=3  with raw data, this clustering methods seems to consider PC2 level as well as PC1 level. 
+```{r, 4-6}
+set.seed(1234)
+h<-0
+
+hc.complete <-hclust(dist(df_usa[,2:5]), method = "complete")
+#ggdendrogram((hc.complete))
+
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_usa))),
+                       State = df_usa$State,
+                       cl = as.factor(cutree(hc.complete, h=h))))
+
+# plot dendrogram
+ggdendrogram(hc.complete) +
+  geom_text(data = hclabs,
+            aes(label = State, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+```{r, 4-7}
+set.seed(1234)
+h<-120
+
+hc.complete <-hclust(dist(df_usa[,2:5]), method = "complete")
+#ggdendrogram((hc.complete))
+
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_usa))),
+                       State = df_usa$State,
+                       cl = as.factor(cutree(hc.complete, h=h))))
+
+ggdendrogram(hc.complete) +
+  geom_text(data = hclabs,
+            aes(label = State, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+7. I put a cut-off at 120 and cut the dendrogram into three distinct clusters. First clustrs is unsafe group and Florida, South Carolina, Delaware, Alabama, Luisiana, Alaska, Misissippi, North Carolina, Maryland, New Mexico, California, Illinois, New York, Michigan and Nevada belong to this group. Second cluseter is more safe group and Missouri, Kansas, Tenessee, Georgia, Texas, Rode Island, Wyoming, Oregon, Alabama, Washington, Massachusetts, and New Jersey belong to this group. The last group is the safest group and Ohio, Utah, Conneticut, Pensylvania, Nebraska, Kentucky, Montana, Idaho, Indiana Kansas, Hawaii, Minessota, Wisconsin, Iowa, New Hapshire, West Virginia, Maine, South Dakota, North Dakora, Vermont belong to this group.
+
+```{r, 4-8}
+set.seed(1234)
+
+scale <- scale(select(df_usa, -State))
+
+h <- 4
+hc_47 <- hclust(dist(scale), method="complete")
+
+hcdata48 <- dendro_data(hc_47)
+hclabs48 <- label(hcdata48) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_usa))),
+                       State = df_usa$State,
+                       cl = as.factor(cutree(hc_47, h=h))))
+
+ggdendrogram(hc_47) +
+  geom_text(data=hclabs48,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=h, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+```
+
+8. After the scalling he variables to have standard deviation 1, Murder and Rape, and unrbanized factor have more weights on. So these variables used to have lower values and variance so its effects have more weights on at the same time. As a result, we can see that we obtained very similar to the cluster we input PC1, PC2. In this case I suggest that the variables be scaled before inter-observation dissimilarities are computed. Then each variables will have equal importace in the clustering and we can avoid over-weighting or under-weighting the variables in larger scale. In this dataset, Assault is twice in number than Murder so it can be over-fitted or exaggerated its effect compared to Murder in clustering because it has large variance. Other than just numbers, when we compare two variables, assault and murder, even if the number of murder is small and the number of assault is large, the meaning and effects of murder and assault can be generalized with the numbers. 
