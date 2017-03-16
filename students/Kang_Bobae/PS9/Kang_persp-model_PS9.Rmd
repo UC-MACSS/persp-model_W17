@@ -265,13 +265,15 @@ mhe_test <- mhealth[mhe_split$test$idx]
 ## Test error rate for KNN models
 In this section, I try different sets of predictors to find a KNN model with the least score for test error rate.
   
-First, I use all $p$ predictors with $k = 1,2,3,...,10$. The model with $k=1$ gives the least test error rate (0.370). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+First, I use all $p$ predictors with $k = 1,2,3,...,10$. The model with $k=9$ gives the least test error rate (0.327). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
 ```{r Part 2 KNN p}
-# Use all p predictors, k = 1, err.rate = 0.33238
+# Use all p predictors, k = 9, err.rate = 0.327
 mhe_err_knn <- data_frame(k = seq(1,10),
-                          knn = map(k, ~ knn.reg(select(mhe_train, -vote96), y = mhe_train$vote96,
-                                                 test = select(mhe_test, -vote96), k = .)),
-                          err.rate = map_dbl(knn, ~ mean(.$pred != mhe_test$vote96)))
+                          knn = map(k, ~ knn(select(mhe_train, -vote96), 
+                                             test = select(mhe_test, -vote96),
+                                             cl = mhe_train$vote96,
+                                             k = .)),
+                          err.rate = map_dbl(knn, ~ mean(. != mhe_test$vote96)))
 
 # plot
 ggplot(mhe_err_knn, aes(k, err.rate)) +
@@ -293,9 +295,11 @@ KNN models with $p-1$ predictors. After trying different sets of $p-1$ predictor
 ```{r Part 2 KNN p-1}
 # Use best of p-1 predictors (-mhealth_sum), k = 1, err.rate = 0.12034
 mhe_err_knn1 <- data_frame(k = seq(1,10),
-                          knn = map(k, ~ knn.reg(select(mhe_train, -vote96-mhealth_sum), y = mhe_train$vote96,
-                                                 test = select(mhe_test, -vote96-mhealth_sum), k = .)),
-                          err.rate = map_dbl(knn, ~ mean(.$pred != mhe_test$vote96)))
+                          knn = map(k, ~ knn(select(mhe_train, -vote96-mhealth_sum), 
+                                             test = select(mhe_test, -vote96-mhealth_sum),
+                                             cl = mhe_train$vote96,
+                                             k = .)),
+                          err.rate = map_dbl(knn, ~ mean(. != mhe_test$vote96)))
 
 # plot
 ggplot(mhe_err_knn1, aes(k, err.rate)) +
@@ -312,14 +316,16 @@ kable(mhe_err_knn1 %>% select(-knn) %>% arrange(by=err.rate) %>% head(3))
 
 ***
 
-KNN models with $p-2$ predictors. After trying different sets of $p-2$ predictors, I find that the model using all predictors but `mhealth_sum` and `inc10`, with $k=1$, gives the least test error rate (0.266). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
+KNN models with $p-2$ predictors. After trying different sets of $p-2$ predictors, I find that the model using all predictors but `mhealth_sum` and `inc10`, with $k=9$, gives the least test error rate (0.258). The following plot shows the error rates of models with different $k$ values. Also, the table belowe three the five of the KNN models sorted by test error rates:  
 
 ```{r Part 2 KNN p-2}
-# Use best of p-2 predictors (-mhealth_sum, -inc10), k = 2, err.rate = 0.26648
+# Use best of p-2 predictors (-mhealth_sum, -inc10), k = 9, err.rate = 0.25788
 mhe_err_knn2 <- data_frame(k = seq(1,10),
-                           knn = map(k, ~ knn.reg(select(mhe_train, -vote96-mhealth_sum-inc10), y = mhe_train$vote96,
-                                                  test = select(mhe_test, -vote96-mhealth_sum-inc10), k = .)),
-                           err.rate = map_dbl(knn, ~ mean(.$pred != mhe_test$vote96)))
+                          knn = map(k, ~ knn(select(mhe_train, -vote96-mhealth_sum-inc10), 
+                                             test = select(mhe_test, -vote96-mhealth_sum-inc10),
+                                             cl = mhe_train$vote96,
+                                             k = .)),
+                          err.rate = map_dbl(knn, ~ mean(. != mhe_test$vote96)))
 
 # plot
 ggplot(mhe_err_knn2, aes(k, err.rate)) +
@@ -348,7 +354,9 @@ The weighted KNN model with $k=1$ gives the least test error rate (0.372). The f
 ```{r Part 2 wKNN}
 # wKNN of p-1 predictors (-mhealth_sum), k = 1, err.rate = 0.37249
 mhe_err_wknn1 <- data_frame(k = seq(1,10),
-                            knn = map(k, ~ kknn(vote96 ~ .-mhealth_sum, train = mhe_train, test = mhe_test, k = .)),
+                            knn = map(k, ~ kknn(vote96 ~ .-mhealth_sum,
+                                                train = mhe_train,
+                                                test = mhe_test, k = .)),
                             err.rate = map_dbl(knn, ~ mean(.$fitted.values != mhe_test$vote96)))
 
 # plot

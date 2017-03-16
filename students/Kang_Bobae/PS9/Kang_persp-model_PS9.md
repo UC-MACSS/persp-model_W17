@@ -137,14 +137,14 @@ Test error rate for KNN models
 
 In this section, I try different sets of predictors to find a KNN model with the least score for test error rate.
 
-First, I use all *p* predictors with *k* = 1, 2, 3, ..., 10. The model with *k* = 1 gives the least test error rate (0.370). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+First, I use all *p* predictors with *k* = 1, 2, 3, ..., 10. The model with *k* = 9 gives the least test error rate (0.327). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20KNN%20p-1.png)
 
 |    k|  err.rate|
 |----:|---------:|
-|    1|   0.36963|
-|    2|   0.53295|
-|    3|   0.66189|
+|    9|   0.32665|
+|    3|   0.33524|
+|    8|   0.33811|
 
 ------------------------------------------------------------------------
 
@@ -155,20 +155,20 @@ KNN models with *p* − 1 predictors. After trying different sets of *p* �
 |    k|  err.rate|
 |----:|---------:|
 |    1|   0.12034|
-|    2|   0.26074|
-|    3|   0.40115|
+|    6|   0.12607|
+|    3|   0.12894|
 
 ------------------------------------------------------------------------
 
-KNN models with *p* − 2 predictors. After trying different sets of *p* − 2 predictors, I find that the model using all predictors but `mhealth_sum` and `inc10`, with *k* = 1, gives the least test error rate (0.266). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+KNN models with *p* − 2 predictors. After trying different sets of *p* − 2 predictors, I find that the model using all predictors but `mhealth_sum` and `inc10`, with *k* = 9, gives the least test error rate (0.258). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
 
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20KNN%20p-2-1.png)
 
 |    k|  err.rate|
 |----:|---------:|
-|    1|   0.26648|
-|    2|   0.46418|
-|    3|   0.60172|
+|    9|   0.25788|
+|    8|   0.26074|
+|    7|   0.26361|
 
 We observe that the least possible test error rate with *p* − 2 KNN models is still greater than the least test MSE score with *p* − 1 KNN models. Therefore, I will use all predictors except `mhealth_sum` for modeling for the rest of the Part 2.
 
