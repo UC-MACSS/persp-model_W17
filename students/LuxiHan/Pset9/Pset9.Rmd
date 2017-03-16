@@ -1,0 +1,437 @@
+---
+title: "Problem Set 9"
+author: "MACS 30100 - Perspectives on Computational Modeling<br> Luxi Han 10449918"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      fig_align = "center")
+```
+
+```{r library/data}
+library(memisc)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(modelr)
+library(broom)
+library(purrr)
+library(readr)
+library(modelr)
+library(broom)
+library(pander)
+library(xtable)
+library(stargazer)
+library(gam)
+library(ISLR)
+library(rcfss)
+library(stringr)
+library(forcats)
+library(e1071)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(tree)
+library(randomForest)
+library(gbm)
+library(pROC)
+library(tibble)
+library(rcfss)
+library(FNN)
+library(kknn)
+library(tm)
+library(topicmodels)
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+```
+
+[Note] For Problem 2, the column named 'ter' stands for Test Error Rate.
+
+#Problem 1
+
+##1.
+```{r 1a}
+set.seed(1234)
+femin_table = read_csv('data/feminist.csv')
+femin_split <- resample_partition(femin_table,  c(test = 0.3, train = 0.7))
+femin_train = as_tibble(femin_split$train)
+femin_test = as_tibble(femin_split$test)
+```
+
+##2.
+```{r 1b}
+
+mse_knn <- data_frame(k = seq(5, 100, 5),
+                      knn = map(k, ~ knn.reg(select(femin_train, female, age, dem, rep, educ), y = femin_train$feminist,
+                         test = select(femin_test, female, age, dem, rep, educ), k = .)),
+                      mse = map_dbl(knn, ~ mean((femin_test$feminist - .$pred)^2)))
+print(as_tibble(mse_knn))
+
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "KNN on Feminist Feeling Thermometer data",
+       x = "K",
+       y = "Test mean squared error")
+
+## knn model with the minimum mse
+knn_best <- mse_knn$knn[[which.min(mse_knn$mse)]]
+print('Best K is')
+print(mse_knn$k[[which.min(mse_knn$mse)]])
+```
+
+I select $female, age, dem, rep$ and $educ$ as my predictor variables.
+
+In the above graph, we can see that the test MSE is decreasing when $K$ is increasing. The best K value is 90. But the model performs almost the same for $K$ > 15.
+
+##3.
+
+```{r 1c}
+femin_wknn <- kknn(feminist ~ female + age + dem + rep + educ, train = femin_train, test = femin_test, k = 5)
+
+mse_wknn <- data_frame(k = seq(5, 100, 5),
+                      wknn = map(k, ~ kknn(feminist ~ female + age + dem + rep + educ, train = femin_train, test = femin_test, k = .)),
+                      mse = map_dbl(wknn, ~ mean((femin_test$feminist - .$fitted.values)^2)))
+print(mse_wknn)
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line(aes(color = 'KNN')) +
+  geom_line(aes(k, mse, color = 'Weighted KNN'), data = mse_wknn)+
+  geom_point() +
+  geom_point(aes(k, mse), data = mse_wknn)+
+   scale_color_manual("", values = c("KNN" = "blue", "Weighted KNN" = 'red'))+
+  labs(title = "KNN on Feminist Feeling Thermometer data",
+       x = "K",
+       y = "Test mean squared error")
+
+## wknn model with the minimum mse
+wknn_best <- mse_wknn$wknn[[which.min(mse_wknn$mse)]]
+print('Best K is')
+print(mse_wknn$k[[which.min(mse_wknn$mse)]])
+```
+
+As we can see above, the weighted KNN regression using euclidean distance has larger MSE when $k$ is small. But when k is larger, this usually means that a lot of observations that are really far away from the observation point is also included. Then in this case, weighted KNN regression performs better. The MSE is 435.482 compared to the KNN regression with MSE of 459.
+
+##4.
+
+```{r 1d}
+mse_model<-function(model, data){
+  if(sum(class(model) %in% c('lm', 'randomForest', 'tree', 'svm'))){
+    model_mse = mse(model, data)
+    return(model_mse)
+  }
+  else if(class(model[[1]]) == 'knnReg'){
+    model_mse = mean((data$feminist - model[[1]]$pred)^2)
+    return(model_mse)
+  }
+  else if(class(model) == 'gbm'){
+    boost_perf <- predict(model, new_data = data, n.trees = 1:10000) 
+model_mse = mean((boost_perf - data$feminist)^2)
+return(model_mse)
+  }
+}
+
+models <- list(
+  'KNN' = list(knn_best),
+  'Linear Regression' = lm(feminist ~ female + age + dem + rep + educ, data = femin_train),
+'Random Forest' = randomForest(feminist ~ female + age + dem + rep + educ, data = femin_train,
+                         ntree = 500),
+  'Decision Tree' = tree(feminist ~ female + age + dem + rep + educ, data = femin_train),
+  'Boosting' = gbm(feminist~female + age + dem + rep + educ, data = femin_train, n.tree = 10000, interaction.depth = 4)
+)
+
+model_name <- list('KNN', 'Linear Regression', 'Random Forest', 'Decision Tree', 'Boosting')
+mse_models <- data.frame(mse = map_dbl(models, ~ mse_model(. , femin_test)))
+mse_models
+print('MSE for Weighted KNN is')
+print(mse_wknn$mse[[which.min(mse_wknn$mse)]])
+```
+
+From the above result, we can see that the best model for this problem is random forest method. Decision tree method performs almost as well as the random forest method. In general, tree based method fits the data best. The reason why this is the case is that most of the predictor variables that I choose for this problem are categorical variables. Then a decision tree can perform split on a binary node which tries to minimize RSS, which is just MSE times the number of observations. Thus the tree base methods perform the best.
+
+#Problem 2.
+
+##1.
+```{r 2a}
+set.seed(1234)
+voter_table = read_csv('data/mental_health.csv')
+voter_table <- na.omit(voter_table)
+voter_table <- voter_table%>%
+  mutate(vote96 = as.factor(vote96))
+voter_split <- resample_partition(voter_table,  c(test = 0.3, train = 0.7))
+voter_train = as_tibble(voter_split$train)
+voter_test = as_tibble(voter_split$test)
+
+```
+
+##2.
+```{r 2b}
+logit2prob<-function(x){
+  exp(x)/(1 + exp(x))
+}
+testerr<-function(model, data){
+  if(sum(class(model) %in% c('glm'))){
+        fd_pred <- data%>%
+  add_predictions(model)%>%
+  mutate(prob = logit2prob(pred),
+         pred = as.numeric(prob > 0.5))
+    err = mean(fd_pred$pred != data$vote96)
+    return(err)
+  }
+  else if(sum(class(model) %in% c('lm', 'randomForest', 'tree'))){
+    pred = predict(model, newdata = data, type = 'class')
+    err = mean(pred != data$vote96)
+    return(err)
+  }
+  else if(sum(class(model) %in% c('svm'))){
+    pred = predict(model, newdata = data, type = 'class', decision.values = TRUE)
+    err = mean(pred != data$vote96)
+    return(err)
+  }
+  else if(class(model[[1]]) == 'factor'){
+    model_ter = mean((data$vote96 != model[[1]][1:length(model[[1]])]))
+    return(model_ter)
+  }
+  else if(sum(class(model) %in% c('gbm'))){
+    boost_perf <- round(predict(model, new_data = data, n.trees = 1:10000, type = 'response') )
+model_ter = mean((boost_perf != data$vote96))
+return(model_ter)
+  }  
+  else{
+    fd_pred <- data%>%
+  add_predictions(model)%>%
+  mutate(prob = logit2prob(pred),
+         pred = as.numeric(prob > 0.5))
+    err = mean(fd_pred$pred != data$vote96)
+    return(err)
+  }
+}
+# 
+ter_knn <- data_frame(k = seq(5, 100, 5),
+                      knn = map(k, ~ class::knn(select(voter_train, mhealth_sum, age, educ, black), cl = voter_train$vote96, test = select(voter_test, mhealth_sum, age, educ, black), k = ., prob = TRUE)),
+                      ter = map_dbl(knn, ~ mean(voter_test$vote96 != .[1:length(.)])))
+print(as_tibble(ter_knn))
+
+ggplot(ter_knn, aes(k, ter)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "KNN on Voter Turnout",
+       x = "K",
+       y = "Test error rate")
+
+## knn model with the minimum ter
+knn_best <- ter_knn$knn[[which.min(ter_knn$ter)]]
+print('Best K is')
+print(ter_knn$k[[which.min(ter_knn$ter)]])
+```
+
+For this problem, I choose four varialbes: mental health index, age, education level and whether the person is African American. The best number of k for K Nearest Neighbour Estimation is 45 for my choice of variable. 
+
+
+##3.
+```{r 2c}
+ter_wknn <- data_frame(k = seq(5, 100, 5),
+                      wknn = map(k, ~kknn(vote96 ~ mhealth_sum + age + educ + black, train = voter_train, test = voter_test, k = .)),
+                      ter = map_dbl(wknn, ~mean(.$fitted.values != voter_test$vote96)))
+print(as_tibble(ter_wknn))
+
+
+ggplot(ter_wknn, aes(x = k, y = ter)) +
+  geom_line(aes(color = 'Weighted KNN')) +
+  geom_point() +
+  geom_point(data = ter_knn, aes(k, ter)) +
+  geom_line(data = ter_knn, aes(k, ter, color = 'KNN'))+
+  scale_color_manual("", values = c("KNN" = "blue", "Weighted KNN" = 'red'))+
+  labs(title = "KNN on Voter Turnout",
+       x = "K",
+       y = "Test error rate")
+
+## knn model with the minimum ter
+wknn_best <- ter_wknn$knn[[which.min(ter_wknn$ter)]]
+print('Best K is')
+print(ter_wknn$k[[which.min(ter_wknn$ter)]])
+print('Test Error Rate for Weighted KNN is')
+print(ter_wknn$ter[[which.min(ter_wknn$ter)]])
+```
+
+As we can see, the weighted KNN model produces a relatively lower test error rate compared to the KNN model. The best $k$ is 90. This again tests the relative robustness of the weighted KNN model when the number of predictor variables is large. 
+
+##4.
+```{r 2d}
+set.seed(1234)
+models <- list(
+  'KNN' = list(knn_best),
+  'Logistic Regression' = glm(vote96 ~ mhealth_sum + age + educ + black, data=voter_train, family = binomial),
+'Random Forest' = randomForest(vote96 ~ mhealth_sum + age + educ + black, data = voter_train,
+                         ntree = 500),
+  'Decision Tree' = tree(vote96 ~ mhealth_sum + age + educ + black, data = voter_train),
+  'Boosting' = gbm(vote96 ~ mhealth_sum + age + educ + black, data = voter_train, n.tree = 10000, interaction.depth = 4),
+  'svm' = tune(svm, vote96 ~ mhealth_sum + age + educ + black, data = voter_train, kernel = 'linear', range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))$best.model
+)
+
+model_name <- list('KNN', 'Linear Regression', 'Random Forest', 'Decision Tree', 'Boosting')
+ter_models <- data.frame(ter = map_dbl(models[-5], ~ testerr(. , voter_test)))
+#class(models[-5])
+#testerr(models[[-5]], voter_test)
+ter_models
+print('Test Error Rate for Weighted KNN is')
+print(ter_wknn$ter[[which.min(ter_wknn$ter)]])
+#tt = predict(models[[5]], new_data = voter_test, n.trees = 1:10000, type = 'response')
+#tt
+# models[[1]]
+```
+
+As we can see, the two best models are the logistic regression and weighted KNN. In this case, the parametric method performs a bit better than most of non-parametric methods. This can be a result of the small number of observations. The non-parametric methods spread the observations in several relatively thin sets. This can cause the problem that even points that are far away can affect the classfication results. Thus we can see that the weighted KNN performs as good as the logistic regression. 
+
+
+##Problem 3
+
+```{r 3a}
+col_data <- College%>%
+  mutate(Private = ifelse(Private=='Yes', 1, 0))
+pr.out <- prcomp(col_data, scale = TRUE)
+biplot(pr.out, scale = 0, cex =.6, xlabs = rep('.', nrow(col_data)))
+pr.out$rotation[, 1:2]
+```
+
+As we can see in the biplot, the variables are pointing clearly two two directions. A subset of variables (for example, Private, Apps, Accept, F.Undergrad, P.Undergrad, etc) are pointing in the vertical direction; other variables (for example, Expend, Outstate, GradRate, etc) are pointing in the vertical direction. In general, the first principal component represents the difficulty of getting into a particular school and school types (for example, public university, private university, community college, etc). The second component represents the tuition and the quality of the education. Usually, the difficulty of getting into a particular school is closely related to the school types. For example, all Ivy league colleges are private school and they are all very hard to get into. On the other hand, cost of education and quality of education may be highly correlated and that's why the second principal component reflects that relationship.
+
+##Problem 4
+
+#1.
+
+```{r 4a}
+states <- read_csv('data/USArrests.csv')
+pr.out <- prcomp(states[,2:5], scale = TRUE)
+biplot(pr.out, scale = 0, cex =.6, xlabs = states$State)
+pr.out$rotation[, 1:2]
+```
+
+#2.
+
+```{r 4b}
+state.out <- states %>%
+  mutate(k2 = kmeans(states[,2:5], 2, nstart = 1)[['cluster']],
+         k3 = kmeans(states[,2:5], 3, nstart = 1)[['cluster']],
+         k4 = kmeans(states[,2:5], 4, nstart = 1)[['cluster']])%>%
+  mutate(PC1 = predict(pr.out, states[,2:5])[,1],
+         PC2 = predict(pr.out, states[,2:5])[,2])
+state.out %>%
+  mutate(type = factor(k2, levels = c(1, 2),
+                       labels = c("Type1", "Type2"))) %>%
+  ggplot(aes(PC1, PC2, label = State, color = type)) +
+  geom_text()+
+  scale_color_manual("", values = c("Type1" = "blue", "Type2" = 'red'))+
+  labs(title = "Biplot of Membership: K = 2")
+```
+
+The above graph is the biplot for the K means clustering when k equals to 2. As we can see, the members are clearly divided into two quadrants of the biplot. The first group has high level of urbanization (PC2 value is more negative) and low level of crime rate (PC1 level is low). Notice, the conclusion is wrong in the slide. As indicated by the direction of the graph, we can see that when PC1 is more positive, crime rate is lower; when PC2 is more positive, urbanization rate is lower. (The conlusion in the slide in class says the opposite thing)
+
+#3
+
+```{r 4c}
+state.out %>%
+  mutate(type = factor(k4, levels = c(1, 2, 3, 4),
+                       labels = c("Type1", "Type2", "Type3", "Type4"))) %>%
+  ggplot(aes(PC1, PC2, label = State, color = type)) +
+  geom_text()+
+  scale_color_manual("", values = c("Type1" = "blue", "Type2" = 'red', "Type3" = 'yellow', "Type4" = 'black'))+
+  labs(title = "Biplot of Membership: K = 4")
+```
+
+The above is the bipoot for k means clustering when k equals to 4. The division is less clear especially for type 1 states. Only North Carolina, Florida and Maryland are assigned to this group. But in general, these groups are divided based on PC1, which represents crime rate. Then urbanization plays a less important role when k equals to 4.
+
+#4.
+```{r 4d}
+state.out %>%
+  mutate(type = factor(k3, levels = c(1, 2, 3),
+                       labels = c("Type1", "Type2", "Type3"))) %>%
+  ggplot(aes(PC1, PC2, label = State, color = type)) +
+  geom_text()+
+  scale_color_manual("", values = c("Type1" = "blue", "Type2" = 'red', "Type3" = 'black'))+
+  labs(title = "Biplot of Membership: K = 3")
+```
+
+When k equals to 3, we can see that the first type of states in the second question is divided into two groups.It is divided into two groups which differ on their value of PC1. With the type2 state has higher PC1 value and type3 state has lower PC1 value.
+
+#5.
+```{r 4e}
+state.out %>%
+  mutate(k3_score = kmeans(state.out[,c('PC1', 'PC2')], 3, nstart = 1)[['cluster']],
+    type = factor(k3_score, levels = c(1, 2, 3),
+                       labels = c("Type1", "Type2", "Type3"))) %>%
+  ggplot(aes(PC1, PC2, label = State, color = type)) +
+  geom_text()+
+  scale_color_manual("", values = c("Type1" = "blue", "Type2" = 'red', "Type3" = 'black'))+
+  labs(title = "Biplot of Membership: K = 3 based on PCA score")
+```
+
+The above graph is the k means clustering based on PC1 and PC2. The division is clearer. The states are divided into three quadrants: type 1 states are at the upper right quadrant, where they have negative value of PC1 and positive value of PC2. These represent the more troublesome states where they have lower urbanization rate but higher crime rate; the second type states are at the lower left quadrant. They are states that have negative PC1 value and negative PC2 value. These are the states that have relatively high urbanization rate but higher crime rate. The third type states are at the lower right quadrant. These are the states that have higher urbanization rate but lower crime rate.
+
+This result should be obvious. Since we are clustering only based on the two principal component scores, we should get a clear division in the biplot of the two scores. In contrast, the previous clustering results are clustered based on more types of combinations of different variables. 
+
+#6.
+```{r}
+states<-as.data.frame(states)
+rownames(states) <- states$State
+state.complete <- hclust(dist(states[,2:5]), method = "complete")
+ggdendrogram(state.complete, labels = TRUE)+
+  labs(title = 'Dendrogram for States')
+```
+
+Above is the clustering for different states.
+
+#7.
+```{r}
+h = 160
+hcdata <- dendro_data(state.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = rownames(states),
+                       cl = as.factor(cutree(state.complete, h = 160))))
+
+ggdendrogram(state.complete, height = 3) +
+    geom_text(data = hclabs,
+            aes(label = label, x = x, y = -10, color = cl), angle = 90, hjust = .5 , angle = 90, size = 2.5)+
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")+
+  scale_color_manual("", values = c('1' = "blue", '2' = 'red', '3' = 'black'))+
+  labs(title = 'Dendrogram with Three Groups')
+```
+
+The cut off value I use is 160.
+
+The first group is:
+```{r}
+hclabs[hclabs$cl == 1, c('label')]
+```
+The second gropu is:
+```{r}
+hclabs[hclabs$cl == 2, c('label')]
+```
+The third group is:
+```{r}
+hclabs[hclabs$cl == 1, c('label')]
+```
+
+#8.
+```{r}
+states<-as.data.frame(states)
+rownames(states) <- states$State
+state.complete <- hclust(dist(scale(states[,2:5])), method = "complete")
+ggdendrogram(state.complete, labels = TRUE)+
+  labs(title = 'Dendrogram for Scaling')
+```
+
+The above is the graph for hierarchial clustering after scaling. As we can see, now the y-axis has a smaller scale simply because we have standardized the variables. Also, we can see now we have different grouping result. For example, New York and Massachusetts are assigned to the same branch at the first terminal node before scaling. Now they are on seperate branches at the first terminal node. Additionally, as we can see, the tree height for each branch now is more standardized. In contrast, we have some branches that are much higher than the other before scaling.
+
+I think we should scale the variables before we conduct hierarchial clustering. This is because different variables have different scales. For example, urban population ratio is a percent value. We can also have it take on proportion value. Then this difference will be reflected in the euclidean distance function. In that case, the weight or relative importance of urban population is less important. The difference is generated for no reason other than we change the scale. Furthermore, scaling can standardized the tree height. As shown in graph before scaling, we can see that when we try to split the splitting distance for three and four groups differ for almost 100. This will cause a highly unbalanced tree and cause extra sensitivity of the modeling result to the choice of cut off value. 
+
+To sum up, scaling gives the variables proper weights (equal importance) and generate a more balanced tree.
