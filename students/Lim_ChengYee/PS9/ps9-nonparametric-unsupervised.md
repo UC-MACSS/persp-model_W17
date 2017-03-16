@@ -27,29 +27,58 @@ feminist_test <- as_tibble(feminist_split$test)
 1.  Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
 
 ``` r
-mse_knn <- data_frame(k = seq(5, 15, by = 5),
-                      knn = map(k, ~ knn.reg(select(feminist_train, -feminist), y = feminist_train$feminist,
-                         test = select(feminist_test, -feminist), k = .)),
-                      mse = map_dbl(knn, ~ mean((feminist_test$feminist - .$pred)^2)))
-```
-
-1.  Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
-
-``` r
 mse_knn <- data_frame(k = seq(5, 100, by = 5),
                       knn = map(k, ~ knn.reg(select(feminist_train, -feminist), y = feminist_train$feminist,
                          test = select(feminist_test, -feminist), k = .)),
                       mse = map_dbl(knn, ~ mean((feminist_test$feminist - .$pred)^2)))
 
-ggplot(mse_knn, aes(k, mse)) +
+mse_knn %>% 
+  select(-knn) %>%
+  kable()
+```
+
+|    k|  mse|
+|----:|----:|
+|    5|  550|
+|   10|  496|
+|   15|  490|
+|   20|  488|
+|   25|  482|
+|   30|  482|
+|   35|  481|
+|   40|  479|
+|   45|  480|
+|   50|  479|
+|   55|  478|
+|   60|  477|
+|   65|  476|
+|   70|  477|
+|   75|  478|
+|   80|  476|
+|   85|  476|
+|   90|  477|
+|   95|  478|
+|  100|  478|
+
+The KNN model with *K* = 60 produces the lowest test MSE. The test MSE is 476.
+
+1.  Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
+
+``` r
+mse_kknn <- data_frame(k = seq(5, 100, by = 5),
+                      knn = map(k, ~ kknn(feminist ~ .,
+                                          train = feminist_train, test = feminist_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((feminist_test$feminist - .$fitted.values)^2)))
+
+ggplot(mse_kknn, aes(k, mse)) +
   geom_line() +
   geom_point() + 
-  labs(title = "KNN on feminist data",
+  labs(title = "Weighted KNN on feminist data",
        x = "K",
        y = "Test mean squared error")  
 ```
 
-![](ps9-nonparametric-unsupervised_files/figure-markdown_github/1c-1.png)
+![](ps9-nonparametric-unsupervised_files/figure-markdown_github/1c-1.png) The KNN model with *K* = 85, 90, 95, 100 produces the lowest test MSE. The test MSE is 439.
 
 1.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
@@ -58,7 +87,9 @@ mse <- function(model, data) {
   x <- model - data
   mean(x ^ 2, na.rm = TRUE)
 }
-actual_vals <- feminist_test$feminist
+
+kknn_best <- mse_kknn %>% 
+  filter(k == 85)
 
 feminist_lm <- lm(feminist ~., data = feminist_train)
 feminist_tree <- tree(feminist ~ ., data = feminist_train,
@@ -71,23 +102,28 @@ feminist_boost <- gbm(feminist_train$feminist ~ ., data=feminist_train, n.trees 
     ## Distribution not specified, assuming gaussian ...
 
 ``` r
+actual_vals <- feminist_test$feminist
+mse_kknn <- kknn_best$mse
 mse_lm <- mse(predict(feminist_lm, feminist_test), actual_vals)
 mse_tree <- mse(predict(feminist_tree, feminist_test), actual_vals)
 mse_rf <- mse(predict(feminist_rf, feminist_test), actual_vals)
 mse_boost <- mse(predict(feminist_boost, feminist_test, n.trees=10000), actual_vals)
 
-Methods <- c("Linear model", "Decision Tree", "Random Forests", "Boosting")
-MSE <- c(mse_lm, mse_tree, mse_rf, mse_boost)
+Methods <- c("Weighted KNN", "Linear model", "Decision Tree", "Random Forests", "Boosting")
+MSE <- c(mse_kknn, mse_lm, mse_tree, mse_rf, mse_boost)
 
 kable(data.frame(Methods, MSE))
 ```
 
 | Methods        |  MSE|
 |:---------------|----:|
+| Weighted KNN   |  439|
 | Linear model   |  446|
 | Decision Tree  |  571|
 | Random Forests |  450|
 | Boosting       |  450|
+
+The Weighted KNN model had the lowest test MSE, it suggests that the use of similar data points (nearest neighbors) is good enough to predict the attitude towards feminists. Decision trees are better for classification tasks, thus it is the worst performing model to predict attitudes towards feminists. As expected, random forests and boosting performs better than decision trees as it makes use of resampling to increase prediction accuracy. Linear model is the second best performing model, suggesting that the model is well-captured with a linear relationship, thus test MSE is minimized.
 
 Voter turnout and depression \[2 points\]
 =========================================
@@ -128,19 +164,22 @@ mse_knn %>%
   kable()
 ```
 
-|      k|                                                                                                                                                                       mse\_test|
-|------:|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-|      1|                                                                                                                                                                           0.357|
-|      2|                                                                                                                                                                           0.347|
-|      3|                                                                                                                                                                           0.351|
-|      4|                                                                                                                                                                           0.361|
-|      5|                                                                                                                                                                           0.346|
-|      6|                                                                                                                                                                           0.348|
-|      7|                                                                                                                                                                           0.333|
-|      8|                                                                                                                                                                           0.339|
-|      9|                                                                                                                                                                           0.320|
-|     10|                                                                                                                                                                           0.320|
-|  1. Ca|  lculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?|
+|    k|  mse\_test|
+|----:|----------:|
+|    1|      0.357|
+|    2|      0.347|
+|    3|      0.351|
+|    4|      0.361|
+|    5|      0.346|
+|    6|      0.348|
+|    7|      0.333|
+|    8|      0.339|
+|    9|      0.320|
+|   10|      0.320|
+
+The model that produced the lowest test error rate is *K* = 10. The test MSE is 0.320.
+
+1.  Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?
 
 ``` r
 mse_kknn <- data_frame(k = seq(1, 10, by = 1),
@@ -165,6 +204,8 @@ mse_kknn %>%
 |    9|  0.212|
 |   10|  0.209|
 
+The weighted KNN model that produced the lowest test error rate is also *K* = 10. The test MSE is 0.209.
+
 1.  Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 ``` r
@@ -188,29 +229,6 @@ mhealth_poly_tune <- tune(svm, vote96 ~ ., data = mhealth_train,
                      kernel = "polynomial",
                      range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
 mhealth_best <- mhealth_poly_tune$best.model
-summary(mhealth_best)
-```
-
-    ## 
-    ## Call:
-    ## best.tune(method = svm, train.x = vote96 ~ ., data = mhealth_train, 
-    ##     ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)), 
-    ##     kernel = "polynomial")
-    ## 
-    ## 
-    ## Parameters:
-    ##    SVM-Type:  eps-regression 
-    ##  SVM-Kernel:  polynomial 
-    ##        cost:  1 
-    ##      degree:  3 
-    ##       gamma:  0.143 
-    ##      coef.0:  0 
-    ##     epsilon:  0.1 
-    ## 
-    ## 
-    ## Number of Support Vectors:  259
-
-``` r
 mhealth_tune <- tune(svm, vote96 ~., data = mhealth_train, 
                           kernel = "linear", 
                           range = list(cost = c(.001, 0.01, .1, 1, 5, 10, 100)))
@@ -221,12 +239,6 @@ mse_polysvm <- mse(predict(mhealth_best, mhealth_test, decision.values = TRUE), 
 
 Methods <- c("Logistic model", "Decision Tree", "Random Forests", "Boosting", "Support Vector Machine (Poly)", "Support vector Machine (linear)")
 MSE <- c(mse_glm, mse_tree, mse_rf, mse_boost, mse_polysvm, mse_lmsvm)
-MSE
-```
-
-    ## [1] 2.161 0.332 0.296 2.482 0.264 0.264
-
-``` r
 kable(data.frame(Methods, MSE))
 ```
 
@@ -238,6 +250,8 @@ kable(data.frame(Methods, MSE))
 | Boosting                        |  2.482|
 | Support Vector Machine (Poly)   |  0.264|
 | Support vector Machine (linear) |  0.264|
+
+Weighted KNN model has the lowest test MSE, followed by support vector machine model, and then random forests, and then the decision trees. It seems that weighted KNN model is classification/regression agnostic, and does well in predicting as it does not impose a functional form on the predictor.
 
 Colleges \[2 points\]
 =====================
