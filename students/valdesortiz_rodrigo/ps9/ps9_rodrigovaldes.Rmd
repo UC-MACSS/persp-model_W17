@@ -1,0 +1,585 @@
+---
+title: "PA9"
+author: "Rodrigo Valdes"
+date: "March 15, 2017"
+output:
+    github_document:
+      toc: true
+---
+
+```{r include = FALSE, cache = FALSE}
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(e1071)
+library(stringr)
+library(FNN)
+library(kknn)
+library(tm)
+
+options(digits = 4)
+set.seed(007)
+
+setwd("/Users/ruy/Documents/UChicago/Winter_2017/pcm/persp-model/students/valdesortiz_rodrigo/ps9")
+```
+
+```{r cache = FALSE}
+#--Dfs
+df_feminist <- read_csv("data/feminist.csv")
+df_feministF <- read_csv("data/feminist.csv") %>%
+  mutate_each(funs(as.factor(.)), female, dem, rep)
+
+df_mental <- read_csv("data/mental_health.csv") %>% drop_na()
+df_mentalF <- read_csv("data/mental_health.csv") %>%
+  drop_na() %>% 
+  mutate_each(funs(as.factor(.)), vote96, black, female, married)
+
+df_college <- read_csv("data/College.csv") %>%
+  mutate(Private = as.numeric(as.factor(Private)))
+
+df_arrest <- read_csv("data/USArrests.csv")
+
+
+#--Functions
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+Cols <- function(vec){
+  cols=rainbow(length(unique(vec)))
+  
+  return (cols[as.numeric(as.factor(vec))])
+}
+
+```
+
+
+# Feminism
+
+## 1.Split the data
+
+
+```{r}
+
+set.seed(007)
+#--Split data
+dfs_feminist <- resample_partition(df_feminist, c(test = 0.3, train = 0.7))
+df_feminist_tr <- as_tibble(dfs_feminist$train)
+df_feminist_te <- as_tibble(dfs_feminist$test)
+
+#--Split data with factor
+dfs_feministF <- resample_partition(df_feministF, c(test = 0.3, train = 0.7))
+df_feministF_tr <- as_tibble(dfs_feministF$train)
+df_feministF_te <- as_tibble(dfs_feministF$test)
+
+```
+
+## 2. Calculate the test MSE for KNN models with K = 5, 10, 15,.., 100.
+
+First, I will analyse which variables fit with the model. 
+```{r}
+test_varibles <- lm(formula = feminist ~ ., data = df_feminist_te)
+
+summary(test_varibles)
+```
+
+Based on the above results, I will select female, income, democrat and republican.
+
+```{r}
+set.seed(007)
+
+#--KNN and mse
+KNN_1 <- data_frame(k = seq(5, 100, by=5),
+                    knn = map(k, ~ knn.reg(select(df_feminist_tr, -feminist, -age, -educ),
+                                           y=df_feminist_tr$feminist,
+                                           test=select(df_feminist_te, -feminist, -age, -educ),
+                                           k=.)
+                    ),
+                    mse = map_dbl(knn, ~ mean((df_feminist_te$feminist - .$pred)^2)))
+
+KNN_1
+```
+
+```{r}
+ggplot(KNN_1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test mean squared error")
+```
+
+The lowest MSE is produced by the model with 50 k. After 50, MSE increases again. 
+
+## 3. Calculate the test MSE for weighted KNN models with 5, 10, 15,.., 100, using the same combination of variables as before. 
+
+```{r}
+set.seed(007)
+
+#--wKNN and mse
+wKNN_1 <- data_frame(k = seq(5, 100, by=5),
+                    knn = map(k, ~ kknn(feminist ~ female + income + dem + rep,
+                                        train=df_feminist_tr,
+                                        test=df_feminist_te, k =.)
+                    ),
+                    mse = map_dbl(knn, ~ mean((df_feminist_te$feminist - .$fitted.values)^2)))
+
+wKNN_1
+```
+
+```{r}
+ggplot(wKNN_1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test mean squared error")
+```
+
+The lowest MSE is when k = 95, which contrast with the k = 50 of the former model.
+
+## 4.Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before.
+
+Linear regression.
+```{r}
+set.seed(007)
+
+#--Linear regression
+lm_1 <- lm(feminist ~ female + income + dem + rep, data=df_feminist_tr)
+summary(lm_1)
+
+mse_lm1 <- mse(lm_1, df_feminist_te)
+mse_lm1
+```
+
+Decision tree
+```{r}
+tree_1 <- tree(feminist ~ female + income + dem + rep, data=df_feminist_tr)
+summary(tree_1)
+
+mse_tree1 <- mse(tree_1, df_feminist_te)
+mse_tree1
+```
+
+Boosting
+```{r}
+boost_1 <- gbm(feminist ~ female + income + dem + rep , data=df_feminist_tr, n.trees=500)
+
+summary(boost_1)
+```
+
+```{r}
+yhat.boost = predict(boost_1, newdata=df_feminist_te, n.trees=500)
+mse_boost_1 <- mean((yhat.boost - df_feminist_te$feminist)^2)
+mse_boost_1
+```
+
+Random Forest
+
+```{r}
+rf_1 <- randomForest(feminist ~ female + income + dem + rep, data=df_feminist_tr, ntree=500)
+summary(rf_1)
+
+mse_rf1 <- mse(rf_1, df_feminist_te)
+mse_rf1
+```
+
+
+```{r}
+# Linear
+mse_lm1
+# Tree
+mse_tree1
+# Boosting
+mse_boost_1
+# Random Forest
+mse_rf1
+```
+
+The best model, according to the MSEs, is the linear one. There are three possible reasons; the first one is that the data generation process is linear, then, the best model must be linear. The second is that I selected the variables for this part of the assignment based on a linear model, then, the selection of the variables can affect the outcome. Finally, the non-parametric methods can be overfitting with small samples, and those may not perform well when it is difficult to classify element inside "clusters." That is to say when people with similar characteristics have opposite views regarding feminism. Those observations can be better analyzed in the linear model, due to each independent variable has an independent effect.
+
+# Voter turnout and depression
+
+## 1. Split the data
+```{r}
+set.seed(007)
+
+#--Split data
+dfs_mental <- resample_partition(df_mental, c(test = 0.3, train = 0.7))
+df_mental_tr <- as_tibble(dfs_mental$train)
+df_mental_te <- as_tibble(dfs_mental$test)
+
+#--Split data with factor
+dfs_mentalF <- resample_partition(df_mentalF, c(test = 0.3, train = 0.7))
+df_mentalF_tr <- as_tibble(dfs_mentalF$train)
+df_mentalF_te <- as_tibble(dfs_mentalF$test)
+```
+
+## 2. Calculate the test error rate for KNN models with K = 1, 2,.., 10, using whatever combination of variables you see fit. Which model produces the lowest test error rate?
+
+```{r}
+set.seed(007)
+
+#--KNN and err
+KNN_2 <- data_frame(k = 1:10,
+                    knn = map(k, ~ knn(train=select(df_mental_tr, -vote96),
+                                       test=select(df_mental_te, -vote96),
+                                       cl=df_mental_tr$vote96,
+                                       k=.)),
+                    err = map_dbl(knn, ~ mean(df_mental_te$vote96 != .))
+                    )
+KNN_2
+```
+
+```{r}
+ggplot(KNN_2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate")
+```
+
+The lowest MSE is when k = 9.
+
+## 3. Calculate the test MSE for weighted KNN models with K = 1, 2,.., 10 using the same combination of variables as before. Which model produces the lowest test error rate?
+
+```{r}
+set.seed(007)
+
+#--wKNN and err
+wKNN_2 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ .,
+                                         train=df_mentalF_tr,
+                                         test=df_mentalF_te, k =.)
+                     ),
+                     err = map_dbl(knn, ~ mean(df_mentalF_te$vote96 != .$fitted.values)))
+
+wKNN_2
+```
+
+```{r}
+ggplot(wKNN_2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate")
+```
+
+The lowest MSE is when k = 10.
+
+## 4.Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+Logistic regression
+
+```{r}
+set.seed(007)
+
+#--Linear regression
+logis_2 <- glm(vote96 ~ ., data=df_mentalF_tr, family=binomial)
+
+summary(logis_2)
+```
+
+```{r}
+logistic_2 <- df_mentalF_te %>%
+  add_predictions(logis_2) %>%
+  mutate(prob = exp(pred) / (1 + exp(pred))) %>%
+  mutate(pred_bi = as.numeric(prob > .5))
+
+err_logistic2 <- mean(df_mentalF_te$vote96 != logistic_2$pred_bi)
+err_logistic2
+```
+
+Decision tree
+
+```{r}
+tree_2 <- tree(vote96 ~ ., data=df_mentalF_tr)
+summary(tree_2)
+```
+
+```{r}
+err_tree2 <- err.rate.tree(tree_2, df_mentalF_te)
+err_tree2
+```
+
+Boosting
+
+```{r}
+boost_2 <- gbm(as.character(vote96) ~ ., data=df_mentalF_tr, n.trees=500)
+
+summary(boost_2)
+```
+
+```{r}
+yhat.boost <- predict(boost_2, newdata=df_mentalF_te, n.trees=500)
+yhat.boost_bi <- as.numeric(yhat.boost > .5)
+err_boost_2 <- mean(yhat.boost_bi != df_mentalF_te$vote96)
+err_boost_2
+```
+
+Random forest
+
+```{r}
+rf_2 <- randomForest(vote96 ~ ., data=df_mentalF_tr, ntree=500)
+summary(rf_2)
+
+err_rf2 <- err.rate.tree(rf_2, df_mentalF_te)
+err_rf2
+```
+
+SVM
+
+```{r}
+svmlin_2 <- svm(vote96 ~ ., data=df_mentalF_tr, kernel="linear", cost=5)
+summary(svmlin_2)
+```
+
+```{r}
+yhat.svm <- predict(svmlin_2, newdata=df_mentalF_te)
+err_svm_2 <- mean(yhat.svm != df_mentalF_te$vote96)
+err_svm_2
+```
+
+Comparison
+
+```{r}
+# Logistic
+err_logistic2
+# Tree
+err_tree2
+# Boosting
+err_boost_2
+# Random Forest
+err_rf2
+# SVM
+err_svm_2
+```
+
+The best models are logistic regression and random forest. However, those are very close followed by KNN, decision trees, boosting, SVMs, and wKNNN. All the models have similar results, and those might depend on the precise specifications of each one. In this case, there are good results for parametric and non-parametric approaches. On the other hand, maybe random forest is appropriate to predict this kind of behaviour (dummy and which depends on human actions) because it is possible to identify characteristics that easily defined the outcomes.
+
+# Colleges
+
+## Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+
+```{r}
+set.seed(007)
+
+pca_3 <- prcomp(df_college, scale = TRUE)
+pca_3$rotation
+```
+
+```{r}
+biplot(pca_3, scale = 0, cex = .6)
+
+```
+
+The variables positive related with the first principal component are part-time undergrads, personal, and student-faculty ratio. The variables positive correlated with the second principal component are private, top 10%, outstate, room board, percent alumni who donate, expend, and graduation rate. Then, apparently, it is possible to name the first principal component of "big state university," and the second one as "elite private university." As depicted in the graph, those more elite and "positive" features are related to the PC2, and the more regular ones to the PC1. 
+
+# Clustering states
+
+## 1.Perform PCA on the dataset and plot the observations on the first and second principal components.
+```{r}
+set.seed(007)
+
+pca_4 <- prcomp(select(df_arrest, -State), scale = TRUE)
+pca_4$rotation
+```
+
+```{r}
+biplot(pca_4, scale = 0, cex = .6, xlabs=df_arrest$State)
+```
+
+## 2.Perform K-means clustering with K = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+set.seed(007)
+
+kmean_4_2 <- kmeans(select(df_arrest, -State), centers=2, nstart=1)
+kmean_4_2
+```
+
+```{r}
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_2$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+```
+
+Apparently, the green cluster corresponds to southern states, and the orange cluster to midwest and northern states (take into account that I am not American). Until I know, southern states tend to be more dangerous, depicted by the clusters.
+
+
+## 3.Perform K-means clustering with K = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+set.seed(007)
+
+kmean_4_4 <- kmeans(select(df_arrest, -State), centers=4, nstart=1)
+kmean_4_4
+```
+
+```{r}
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_4$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+```
+
+The classification became tricky. Now, the clusters are not intuitive, and there is overlapping among them. 
+
+## 4.Perform K-means clustering with K = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+set.seed(007)
+
+kmean_4_3 <- kmeans(select(df_arrest, -State), centers=3, nstart=1)
+kmean_4_3
+```
+
+```{r}
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_3$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+```
+
+There is less overlap between clusters. Then, apparently, an adequate number of groups can be two or three.
+
+## 5.Perform K-means clustering with K = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with K = 3 based on the raw data.
+
+```{r}
+set.seed(1234)
+
+kmean_4_3p <- kmeans(pca_4$x[,1:2], centers=3, nstart=1)
+kmean_4_3p
+```
+
+
+```{r}
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_3p$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+```
+
+Use the score vectors helps to define clearly the clusters against the former implementation. The classification is intuitive.
+
+## 6.Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r}
+set.seed(007)
+
+h <- 0
+hc_4 <- hclust(dist(select(df_arrest, -State)), method="complete")
+
+#--Extract dendro data
+hcdata <- dendro_data(hc_4)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_arrest))),
+                       State = df_arrest$State,
+                       cl = as.factor(cutree(hc_4, h=h))))
+```
+
+```{r}
+#--Plot
+ggdendrogram(hc_4) +
+  geom_text(data=hclabs,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+```
+
+## 7.Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r}
+set.seed(1234)
+
+h <- 150
+hc_4 <- hclust(dist(select(df_arrest, -State)), method="complete")
+
+#--Extract dendro data
+hcdata <- dendro_data(hc_4)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_arrest))),
+                       State = df_arrest$State,
+                       cl = as.factor(cutree(hc_4, h=h))))
+```
+
+```{r}
+ggdendrogram(hc_4) +
+  geom_text(data=hclabs,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=h, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+```
+
+First unsafe cluster, includes FL, SC, DE, AL, LA, AK, MS, NC, MD, AZ, NM, CA, IL, NY, MI, and NV.
+
+Second cluster not safe or unsafe, includes MS, AR, TN, GA, TX, RI, WY, OR, OK, VA, WA, MA, and NJ.
+
+Third cluster, safe, includes OH, UT, CT, PA, NE, KY, MT, IN, AR, HI, MN, WI, IA, NH, WV, ME, ND, SD, and VT.
+
+## 8.Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+```{r}
+set.seed(1234)
+
+#--Scaling (standardization)
+df_arrest_s <- scale(select(df_arrest, -State))
+
+h <- 4.41
+hc_42 <- hclust(dist(df_arrest_s), method="complete")
+
+#--Extract dendro data
+hcdata <- dendro_data(hc_42)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_arrest))),
+                       State = df_arrest$State,
+                       cl = as.factor(cutree(hc_42, h=h))))
+```
+
+```{r}
+#--Plot
+ggdendrogram(hc_42) +
+  geom_text(data=hclabs,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=h, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+```
+
+Scaling the variables to a standard deviation of one have effects on the distribution of clusters. First of all, there is not possible to cut the tree in three clusters now. If we believe that all variables have the same importance for clustering, then, we must standarize to prevent that the size of the variables defines the outcomes of our analysis.
