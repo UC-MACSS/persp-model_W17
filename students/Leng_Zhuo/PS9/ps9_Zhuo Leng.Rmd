@@ -1,0 +1,463 @@
+---
+title: "Problem set #9:  nonparametric methods and unsupervised learning"
+author: "Zhuo Leng"
+output:
+  github_document:
+  toc: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,cache = TRUE,warning=FALSE)
+```
+
+```{r packages, message = FALSE, warning = FALSE, cache = FALSE}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(ggdendro)
+library(tidytext)
+library(tree)
+library(e1071)
+library(ggdendro)
+library(randomForest)
+library(gbm)
+
+
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+
+
+```
+
+## Part 1: Attitudes towards feminists [3 points] ##
+
+# Question 1 #
+
+Split the data into a training and test set (70/30%).
+
+```{r q1_1, include = FALSE}
+set.seed(1234)
+
+fem_df <- read_csv("feminist.csv") %>%
+  na.omit()
+
+fem.split <- resample_partition(fem_df, c(test = .3, train = .7))
+fem_train <- as_tibble(fem.split$train)
+fem_test <- as_tibble(fem.split$test)
+```
+# Question 2 #
+
+Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+```{r q1_2,include=TRUE}
+set.seed(1234)
+
+# MSE() function
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+# estimate test MSE for LM and KNN models
+mse_lm <- lm(feminist ~ educ + income + female + age, data = fem_train) %>%
+  mse(.,fem_test)
+
+mse_knn <- data_frame(k = seq(5, 100, 5), 
+                      knn = map(k, ~ knn.reg(select(fem_train, educ, income, female, age), y = fem_train$feminist, test = select(fem_test, educ,income, female, age), k = .)), 
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2))) 
+
+mse_knn$mse
+
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+```
+For KNN model, I use educ, income, female, age as my predictors in the model. From the test mean squared error plot, we could know with the increase of K, the MSE decreases. When k = 100, the MSE = 457 is the lowest.
+
+# Question 3 #
+Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
+
+```{r q1_3, include=TRUE}
+
+# estimate test MSE for LM and WKNN models
+
+mse_wknn <- data_frame(k = seq(5, 100, 5), 
+                      knn = map(k, ~ kknn(feminist ~ educ + income + female + age,
+                                          train = fem_train,test = fem_test, k = .)), 
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2))) 
+
+mse_wknn$mse
+
+ggplot(mse_wknn, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = mse_lm, linetype = 2) +
+  labs(title = "Weighted KNN for fem",
+       x = "K",
+       y = "Test mean squared error") +
+  expand_limits(y = 0)
+
+```
+For weighted KNN model, I also use educ, income, female, age as my predictors in the model. From the test mean squared error plot, we could know with the increase of K, the MSE decreases. When k = 100, the MSE = 450 is the lowest.
+
+# Question 4 #
+Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r q1_4, include=TRUE}
+
+set.seed(1234)
+
+tree_fit <- tree(feminist ~ educ + income + female + age, data = fem_train, control = tree.control(nobs = nrow(fem_train), mindev = 0))
+rf_fit <- randomForest(feminist ~ educ + income + female + age, data = fem_train, ntree = 500)
+boosting <- gbm(feminist ~ educ + income + female + age, data = fem_train, n.trees = 10000, interaction.depth = 1)
+
+mse_lm
+mse(tree_fit, fem_test)
+mse(rf_fit, fem_test)
+
+mse_boost <-function(model, test, tree_number) {
+  yhat.boost <- predict (model, newdata = test, n.trees=tree_number)
+  mse <- mean((yhat.boost - (as_tibble(test))$feminist)^2)
+  return (mse)
+}
+
+mse_boost(boosting, fem_test, 10000)
+
+```
+So by comapre the test MSE for the best KNN/WKNN model, which equal to 457, 450 respectively, to the MSE for the quicalent linear regression(mse = 448), decision tree(mse = 551), random forest (mse = 551), boosting(mse = 445), the boosting method can generate the lowest MSE, so it performs the best.
+
+Actually, all non-parametric methods could release really low MSE because they do not assume a global structure to the data and it could relaxing the non-linearity assumption in linear regression.
+
+Now, I only use partial predictors. Maybe in further when I add more predictors in the model, I could see certain pattern of MSE more clearly.
+
+## Part 2: Voter turnout and depression [2 points] ##
+
+# Question 1 #
+
+Split the data into a training and test set (70/30%).
+
+```{r q2_1, include = FALSE}
+set.seed(1234)
+
+mh_df <- read_csv("mental_health.csv") %>%
+   na.omit()
+mh_df
+
+mh.split <- resample_partition(mh_df, c(test = .3, train = .7))
+mh_train <- as_tibble(mh.split$train)
+mh_test <- as_tibble(mh.split$test)
+```
+# Question 2 #
+
+Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+```{r q2_2,include=TRUE}
+set.seed(1234)
+
+logit2prob <- function(x){
+  exp(x) / (1 + exp(x))
+}
+
+# estimate test err for LM and KNN models
+glm <- glm(vote96 ~ ., data = mh_train, family = binomial)
+
+x<- mh_test %>%
+  add_predictions(glm) %>%
+  mutate (pred = logit2prob(pred),
+          prob = pred,
+          pred = as.numeric(pred > 0.5))
+
+err_glm <-mean(x$vote96 != x$pred)
+
+
+err_knn <- data_frame(k = 1:10,
+                      knn= map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_train, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      err = map_dbl(knn, ~ mean(mh_test$vote96 != .))) 
+err_knn$err
+
+ggplot(err_knn, aes(k, err_knn$err)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = err_glm, linetype = 2) +
+  labs(x = "K",
+       y = "test error rate") +
+  expand_limits(y = 0)
+
+```
+For KNN model, I all variables as my predictors in the model. From the test error rate plot, we could know with the increase of K, the test error rate does not have clear pattern. When k = 5, the test error rate = 0.409 is the lowest.
+
+# Question 3 #
+Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
+
+```{r q2_3, include=TRUE}
+
+# estimate test MSE for LM and WKNN models
+err_wknn <- data_frame(k = 1:10,
+                      knn= map(k, ~ kknn(vote96 ~., train = mh_train, test = mh_test, k =.)),
+                      err = map_dbl(knn, ~ mean(mh_test$vote96 != .$fitted.values))) 
+err_wknn$err
+
+ggplot(err_wknn, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = err_glm, linetype = 2) +
+  labs(title = "Weighted KNN for fem",
+       x = "K",
+       y = "Test error rate") +
+  expand_limits(y = 0)
+
+```
+For weighted KNN model, I also all possible variables as my predictors in the model. From the test error rate plot, we could know with the increase of K, the test error rate will increase. When k = 1, the err = 0.358 is the lowest.
+
+# Question 4 #
+Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r q4_4, include=TRUE}
+
+set.seed(1234)
+
+# Define the error rate function for trees
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+##decision tree
+tree_mh <- tree(vote96 ~ ., data = mh_train, control = tree.control(nobs = nrow(mh_train), mindev = .001))
+
+#err.rate.tree(tree_mh, mh_test)
+
+
+#random forest
+
+err.rate.rf <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "response")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+
+rf_mh<- randomForest(vote96 ~ ., data = mh_train, ntree = 500)
+err.rate.rf(rf_mh, mh_test)
+
+#boosting
+boost_mh = gbm (vote96 ~ ., data = mh_train, n.trees = 5000, interaction.depth = 2, distribution = 'gaussian')  
+
+err_boost <-function(model, test, tree_number) {
+  yhat.boost <- predict (model, newdata = test, n.trees=tree_number)
+  err <- mean(round(yhat.boost)!= mh_test$vote96)
+  return (err)
+}
+
+err_boost(boost_mh, mh_test, 5000)
+
+#logit
+err_glm
+
+##SVM
+mh_lin_tune <- tune(svm, vote96 ~ ., data = mh_train,
+                    kernel = "linear",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+summary(mh_lin_tune)
+
+mh_lin <- mh_lin_tune$best.model
+summary(mh_lin)
+
+
+
+```
+So by comapre the test error rate for the best KNN/WKNN model, which equal to 0.409, 0.358 respectively, to the test error rate for the quicalent logistic regression(err = 0.272), for best svm linear kernal model is 0.264.
+
+From the comparision above, the SVM with linear kernal is the best performance model.This is because SVM has a regularisation parameter, which could acoid over-fitting, also SVM use efficient methods(not local minima) approximation to a bound on the test error rate.
+
+##part 3:Colleges [2 points]##
+# Question 1 #
+Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+
+```{r col_1, include=TRUE}
+
+col_df <- read_csv('College.csv') %>%
+  mutate(Private = ifelse (Private =="Yes",1,0))
+
+pr_out <- prcomp(col_df, scale = TRUE)
+biplot(pr_out, scale = 0, cex = .6)
+```
+The biplot visualizes the relationship between the first two principal components for the dataset, however, we could not know the first two principal components clearly because there are lots of variables. We need to take further step by loadings of the first and second principal components.
+
+```{r col_2, include=TRUE}
+pr_out$rotation[, 1]
+pr_out$rotation[, 2]
+```
+From the table of first principal components, the highest magnitude variables are perc.alumni, Outsate, Grad.Rate, Expend, Top10perc,Top25perc,Room.board, Terminal, PhD. We can tell this because these vectors??? length on the first principal component dimension are roughly the same. Other variables seems not that important. 
+
+From the table of second principal components, the second principal component (the vertical axis) places more emphasis on F.undergrad,P.Undergrad, Apps, Accept, Enroll, F.undergrad.Intuitively this makes sense because first components seems all about student quality and it makes sense that they should be correlated with one another.
+
+We can also interpret the plot for individual states based on their positions along the two dimensions. University with large positive values on the first principal component have higher graduation rate, tuition and room cost; University with large positive values on the second principal component have more student size and acception rate. 
+
+##part 4:Clustering states [3 points]##
+# Question 1 #
+Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+```{r cs_1, include=TRUE}
+crime <- read_csv("USArrests.csv") %>%
+  na.omit
+
+# perform PCA
+pr.out <- prcomp(x = select(crime, -State), scale = TRUE)
+# plot PC1 v PC2
+biplot(pr.out, scale = 0, cex = .6, xlabs = crime$State)
+
+```
+So from the plot of first and second principal components, we could make conclusion that first principal components put more emphsis on Assault, Murder, and Rape, while the second roughly put weight on Urban Population.
+
+
+# Question 2 #
+
+Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r cs_2, include=TRUE}
+set.seed(1234)
+
+kmean_4_2 <- factor(kmeans(select(crime, -State), 2)$cluster)
+PC1 = as.data.frame(pr.out$x)$PC1
+PC2 = as.data.frame(pr.out$x)$PC2
+PC1
+PC2
+
+ggplot(mapping=(aes(PC1, PC2, label=crime$State, color=kmean_4_2)))+
+  geom_point() +
+  geom_text() + 
+  labs(title = "K-means clustering with K = 2 on Original Data")
+
+
+```
+The two cluster are mainly different from their PC1 magnitude. The left cluster has lower PC1, which are mainly North East States. Another cluster at the right with higher PC1, with lower rate of crime.
+
+# Question 3 #
+
+Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r cs_3, include=TRUE}
+set.seed(1234)
+
+kmean_4_4 <- factor(kmeans(select(crime, -State), 4)$cluster)
+PC1 = as.data.frame(pr.out$x)$PC1
+PC2 = as.data.frame(pr.out$x)$PC2
+PC1
+PC2
+
+ggplot(mapping=(aes(PC1, PC2, label=crime$State, color=kmean_4_4)))+
+  geom_point() +
+  geom_text() + 
+  labs(title = "K-means clustering with K = 4 on Original Data")
+
+```
+
+This graph shows 4 roughly distinct clusters. The differences among cluster mainly on their PC1 score. The groups are have similar y value.
+# Question 4 #
+
+Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r cs_4, include=TRUE}
+set.seed(1234)
+kmean_4_3 <- factor(kmeans(select(crime, -State), 3)$cluster)
+PC1 = as.data.frame(pr.out$x)$PC1
+PC2 = as.data.frame(pr.out$x)$PC2
+PC1
+PC2
+
+ggplot(mapping=(aes(PC1, PC2, label=crime$State, color=kmean_4_3)))+
+  geom_point() +
+  geom_text() + 
+  labs(title = "K-means clustering with K = 3 on Original Data")
+```
+ From the graph, the 3 distinct clusters are mainly different by their PC1 values. 
+
+# Question 5 #
+Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+```{r cs_5, include=TRUE}
+
+kmean_4_3_pc <- factor(kmeans(pr.out$x[,1:2], 3)$cluster)
+       
+PC1 = as.data.frame(pr.out$x)$PC1
+PC2 = as.data.frame(pr.out$x)$PC2
+
+ggplot(mapping=(aes(PC1, PC2, label=crime$State, color=kmean_4_3_pc)))+
+  geom_point() +
+  geom_text() + 
+  labs(title = "K-means clustering with K = 3 on PC1&2 score vectors")
+```
+
+This graph is really different from the last graph although it still show 3 sidtict clusters. The three cluster different on PC1 values and PC2 values. This graph use PC1&2 values instead of raw data seems could explain mroe.
+
+# Question 6 #
+Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+```{r cs_6, include=TRUE}
+set.seed(1234)
+
+hc_dat <- as.matrix(select(crime, -State))
+rownames(hc_dat) <- crime$State
+
+hc_cpt <- hclust(dist(hc_dat), method="complete")
+
+ggdendrogram(hc_cpt, labels = TRUE) + 
+  labs(title = '50 States Hierarchical Clustering',
+       y = 'Euclidean Distance')
+
+```
+
+# Question 7 #
+Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+```{r cs_7, include=TRUE}
+
+# cluster = 3
+cut <- cutree(hc_cpt, k = 3) %>% 
+  data_frame(State = names(.), Cluster = .)
+
+arrange(cut, Cluster)
+
+cut$State[cut$Cluster==1]
+cut$State[cut$Cluster==2]
+cut$State[cut$Cluster==3]
+```
+From the table, we could know how states and cluster are aranged. 
+
+# Question 8 #
+
+Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+```{r cs_8, include=TRUE}
+# Scaling
+hc_dat_new <- scale(as.matrix(select(crime, -State)))
+hc_new_cpt <- hclust(dist(hc_dat_new), method = 'complete')
+
+ggdendrogram(data = hc_new_cpt, labels = TRUE) + 
+  geom_text() + 
+  labs(title = '50 States Hierarchical Clustering',
+       y = 'Euclidean Distance')
+
+```
+
+After we scaling all the variables to have standard deviation of 1, the states in these three group not change a lot. However, when scaled some cluseter seems merge with each other, this means the weight of variables has been changed. I think the varibales should be scaled before creating the cluster. After scaling, the weight of variables can be distributed much evenly and they will not increase or decrease their own effect during clustering. 
