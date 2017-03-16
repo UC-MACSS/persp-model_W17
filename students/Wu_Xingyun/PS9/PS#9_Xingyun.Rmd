@@ -349,6 +349,7 @@ summary(mh_lin)
 ## Part 3: Colleges
 
   In the `College` dataset, only the variable `Private` is a factor variable. And it prevents the PCA analysis from running. So I set it as a numeric variable and test whether it is strongly correlated with other variables.
+  It turns out that `Private is not strongly correlated with other variables. However, I could not delete variables or data at will, so I still keep it in the model.
 
 ```{r problem3_data, echo=FALSE}
 # to run PCA, treat the variable "Private" as numerical variable
@@ -356,14 +357,6 @@ data3 <- read.csv("College.csv")%>%
   mutate(Private = as.numeric(Private))
 
 pr.out <- prcomp(data3, scale = TRUE)
-biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(data3)))
-#pr.out$rotation
-```
-
-  It turns out that `Private is not strongly correlated with other variables. To make my PCA result more precise, I have to ignore it and run PCA with other varialbs in the following analysis. The first two principal components are shown in the plot below.
-  
-```{r problem3_model, echo=FALSE}
-pr.out <- prcomp(data3[, 2:18], scale = TRUE)
 biplot(pr.out, scale = 0, cex = .8, xlabs=rep(".", nrow(data3)))
 pr.out$rotation
 ```
