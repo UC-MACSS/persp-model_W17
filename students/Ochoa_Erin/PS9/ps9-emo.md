@@ -8,7 +8,7 @@ Erin M. Ochoa
     -   [Split the data into a training and test set (70/30%)](#split-the-data-into-a-training-and-test-set-7030)
     -   [Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?](#calculate-the-test-mse-for-knn-models-with-k-5-10-15-dots-100-using-whatever-combination-of-variables-you-see-fit.-which-model-produces-the-lowest-test-mse)
     -   [Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?](#compare-the-test-mse-for-the-best-knnwknn-models-to-the-test-mse-for-the-equivalent-linear-regression-decision-tree-boosting-and-random-forest-methods-using-the-same-combination-of-variables-as-before.-which-performs-the-best-why-do-you-think-this-method-performed-the-best-given-your-knowledge-of-how-it-works)
--   [Voter turnout and depression \[2 points\]](#voter-turnout-and-depression-2-points)
+-   [Voter turnout and depression](#voter-turnout-and-depression)
     -   [Split the data into a training and test set (70/30).](#split-the-data-into-a-training-and-test-set-7030.)
     -   [Calculate the test error rate for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?](#calculate-the-test-error-rate-for-knn-models-with-k-12dots10-using-whatever-combination-of-variables-you-see-fit.-which-model-produces-the-lowest-test-mse)
     -   [Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?](#calculate-the-test-error-rate-for-weighted-knn-models-with-k-12dots10-using-the-same-combination-of-variables-as-before.-which-model-produces-the-lowest-test-error-rate)
@@ -216,6 +216,8 @@ fem_w_knn = data_frame(k = seq(5, 100, by = 5),
 
 ![](ps9-emo_files/figure-markdown_github/fem_w_knn_plot-1.png)
 
+Weighted KNN produces the lowest MSE, just below 440 for 90 &lt; K &lt;= 100.
+
 #### Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 ``` r
@@ -333,19 +335,8 @@ mse_fem_rf = mse(fem_rf, fem_test30)
 
 Boosting with a depth of 4 produces the lowest MSE (431.643). This is because this boosted model relies on trees with four splits, representing the complex relationship between the predictor variables and the outcome.
 
-Voter turnout and depression \[2 points\]
-=========================================
-
-The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
-
--   `age` - age of the respondent
--   `educ` - Number of years of formal education completed by the respondent
--   `black` - 1 if the respondent is black, 0 otherwise
--   `female` - 1 if the respondent is female, 0 if male
--   `married` - 1 if the respondent is currently married, 0 otherwise
--   `inc10` - Family income, in $10,000s
-
-Estimate a series of models explaining/predicting voter turnout.
+Voter turnout and depression
+============================
 
 #### Split the data into a training and test set (70/30).
 
@@ -375,15 +366,22 @@ mh_knn = data_frame(k = 1:10,
                     mse_train = map_dbl(knn_train, ~ mean(mh_test30$vote96 != .)),
                     mse_test = map_dbl(knn_test, ~ mean(mh_test30$vote96 != .)))
 
-ggplot(mh_knn, aes(k, mse_test)) +
-  geom_line() +
+ggplot(mh_knn, aes(k, mse_test)) + 
+  geom_line(color='deeppink',size=1.5) +
+  geom_point(color='darkturquoise', size=2) +
   labs(x = "K Nearest Neighbors",
        y = "MSE",
        title = "MSE for K Nearest Neigbors",
-       subtitle = "Voting Behavior (1996) Based on Age, Income, Education, & Depression Index Score")
+       subtitle = "Voting Behavior (1996) Based on Age, Income, Education, & Depression Index Score") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_x_continuous(breaks = seq(0,10,by=2)) +
+       scale_y_continuous(breaks = seq(0,.3,by=.05))
 ```
 
 ![](ps9-emo_files/figure-markdown_github/mh_knn-1.png)
+
+The K=1 model produces the lowest MSE (0). This is because, of course, for each observation, its nearest neighbor is itself. The next lowest MSE is 0.166, for K=3.
 
 #### Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?
 
@@ -399,19 +397,24 @@ mh_wknn_error = mh_wknn %>%
                 left_join(mh_knn, by = as.factor("k")) %>%
                 select(k, mse_test_wknn, mse_test) %>%
                 gather(method, mse, -k) %>%
-                mutate(method = factor(method, levels =c("mse_test_wknn","mse_test"), labels = c("Weighted KNN","KNN")))
+                mutate(Method = factor(method, levels =c("mse_test_wknn","mse_test"), labels = c("Weighted KNN","KNN")))
 
-ggplot(mh_wknn_error,aes(k, mse, color = method)) +
+ggplot(mh_wknn_error,aes(k, mse, color = Method)) +
        geom_line() +
        geom_point() +
        labs(title = "MSE for KNN and Weighted KNN",
        subtitle = "Voting Behavior (1996) Based on Age, Income, Education, & Depression Index Score",
        x = "K",
-       y = "MSE",
-       method = NULL)
+       y = "MSE") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1)) +
+       scale_x_continuous(breaks = seq(0,10,by=2)) +
+       scale_y_continuous(breaks = seq(0,.3,by=.05))
 ```
 
 ![](ps9-emo_files/figure-markdown_github/mh_wknn-1.png)
+
+Again, the model with the lowest MSE is the K=1 model with an MSE of 0.0, but this is the trivial case. The useful model with the lowest MSE is the KNN model with K=3, with an MSE of 0.166
 
 #### Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
@@ -426,6 +429,33 @@ voted_all_accuracy = mh_test30 %>%
 
 logit_mh_error = mean(voted_all_accuracy$vote96 != voted_all_accuracy$pred)
 ```
+
+``` r
+mh_tree = tree(vote96 ~ age + inc10 + educ + mhealth_sum, data = mh_train70)
+tree_data = dendro_data(mh_tree)
+
+mse_mh_tree = mse(mh_tree,mh_test30)
+```
+
+``` r
+mh_rf = randomForest(vote96 ~ age + inc10 + educ + mhealth_sum , data = mh_train70, ntree = 500)
+
+mse_mh_rf = mse(mh_rf, mh_test30)
+```
+
+``` r
+mh_svm2 = tune(svm, vote96 ~ ., data = mh_train70,
+          kernel = "linear",
+          range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mh_lin2 = mh_svm2$best.model
+
+mse_mh_svm = mse(mh_lin2,mh_test30)
+```
+
+![](ps9-emo_files/figure-markdown_github/mh_compare_methods_plot-1.png)
+
+Again, the model with the lowest MSE is the trivial KNN model with K=1 (and an MSE of 0). This is because in the model, each observation is its own closest neighbor. The second-best model is the KNN model with K=3 and an MSE of 0.166.
 
 Colleges
 ========
@@ -519,10 +549,14 @@ arrests_PC2 = as.data.frame(arrests_pca$x)$PC2
 Cluster = as.factor(arrests_kmeans_2$cluster)
 arrests_pca_name = data.frame(x=arrests_PC1, y=arrests_PC2, name=state_name)
 ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
-       geom_text() + labs(title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
+       geom_text() + labs(x="PC1", y="PC2",title = "States in 2 Clusters, plotted by PC2 vs. PC1 score") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
 ![](ps9-emo_files/figure-markdown_github/arrests_kmeans_2-1.png)
+
+The clusters seem reasonable, with the exceptions of Missouri and Delaware, and perhaps Arkansas.
 
 #### Perform *K*-means clustering with *K* = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -533,10 +567,14 @@ arrests_kmeans_4 = kmeans(arrests_df, 4, nstart = 20)
 Cluster = as.factor(arrests_kmeans_4$cluster)
 
 ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
-       geom_text() + labs(title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
+       geom_text() + labs(x="PC1", y="PC2",title = "States in 4 Clusters, plotted by PC2 vs. PC1 score") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
 ![](ps9-emo_files/figure-markdown_github/arrests_kmeans_4-1.png)
+
+These clusters are not intuititive; there is a lot of overlap between clusters 2 & 3 and clusters 2 & 4. Delaware seems misclassified, as do Georgia, Tennessee, Colorado, Texas, Hawaii, and others.
 
 #### Perform *K*-means clustering with *K* = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -547,10 +585,14 @@ arrests_kmeans_3 = kmeans(arrests_df, 3, nstart = 20)
 Cluster = as.factor(arrests_kmeans_3$cluster)
 
 ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
-       geom_text() + labs(title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
+       geom_text() + labs(x="PC1", y="PC2",title = "States in 3 Clusters, plotted by PC2 vs. PC1 score") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
 ![](ps9-emo_files/figure-markdown_github/arrests_kmeans_3-1.png)
+
+These clusters are not much better than the K=4 clusters; there is a lot of overlap and the divisions are not clear.
 
 #### Perform *K*-means clustering with *K* = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with *K* = 3 based on the raw data.
 
@@ -560,11 +602,15 @@ arrests_pca_1_2 = data.frame(v1 = arrests_PC1, v2 = arrests_PC2)
 arrests_kmeans_pca3 = kmeans(arrests_pca_1_2, 3, nstart = 20)
 Cluster = as.factor(arrests_kmeans_pca3$cluster)
 
-ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
-       geom_text() + labs(title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
+ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) + geom_point(aes(color=Cluster, alpha=.5)) +
+       geom_text() + labs(x="PC1", y="PC2",title = "States in 3 Clusters based on PC1 & PC2, plotted by PC2 vs. PC1 score") +
+       theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+             panel.border = element_rect(linetype = "solid", color = "grey70", fill=NA, size=1.1))
 ```
 
 ![](ps9-emo_files/figure-markdown_github/arrests_kmeans_pca3-1.png)
+
+These clusters are very clear compared to the K=3 and K=4 plots shown earlier. The boundaries seemed a little fuzzy until we added points, which make the state names less readable, but the boundaries between clusters clearer. These are the best clusters we've seen so far.
 
 #### Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
 
@@ -584,10 +630,10 @@ hclabs = label(hcdata) %>%
          left_join(data_frame(label = as.factor(seq.int(nrow(arrests_df))),
                    cluster = as.factor(cutree(arrests_hierarchical, h = 150))))
 
-ggdendrogram(arrests_hierarchical, labels = FALSE) +
+ggdendrogram(arrests_hierarchical) +
              geom_text(data = hclabs,
-             aes(label = label, x = x, y = 0, color = cluster),
-                 vjust = .5, angle = 90) +
+             aes(label = state_name, x = x, y = 0, color = cluster),
+                 vjust = .5, hjust = 0, angle = 90) +
              geom_hline(yintercept = 150, linetype = 4, color = 'deeppink', size=2) +
              theme(axis.text.x = element_blank(),
              legend.position = "none")
@@ -595,13 +641,22 @@ ggdendrogram(arrests_hierarchical, labels = FALSE) +
 
 ![](ps9-emo_files/figure-markdown_github/arrests_hierarchical_chop-1.png)
 
+The plot shows which states are in which clusters.
+
 #### Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
 
 ``` r
 scaled_arrests = scale(arrests_df)
 arrests_hierarchical_scaled = hclust(dist(scaled_arrests), method = "complete")
 
-ggdendrogram(arrests_hierarchical_scaled) + labs(title = 'Arrests:  Hierarchical Clustering, Standardized')
+ggdendrogram(arrests_hierarchical_scaled) + geom_text(data = hclabs,color='deeppink',
+             aes(label = state_name, x = x, y = 0),
+                 vjust = .5, hjust = 0, angle = 90) +
+            labs(title = 'Arrests:  Hierarchical Clustering, Standardized')
 ```
 
 ![](ps9-emo_files/figure-markdown_github/arrests_hierarchical_scaled-1.png)
+
+We can't cut this tree into three clusters; we can cut it into two or four clusters, but not three. This changes the distribution of states across clusters.
+
+Based on K-means clustering using PC1 & PC2, we found that the states clustered very well into three groups. Given that result, it seems like the better approach here is to not scale the data before applying hierarchical clustering. However, we do not wish to proclaim that one should never take such an approach.
