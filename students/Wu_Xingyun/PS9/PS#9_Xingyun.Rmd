@@ -1,5 +1,5 @@
 ---
-title: "PS#9_Xingyun"
+title: "Perspectives on Computational Modeling: Problem Set #9"
 author: "Xingyun Wu"
 date: "2017/3/15"
 output: html_document
