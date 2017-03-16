@@ -291,7 +291,7 @@ d <- data.frame(x=PC1, y=PC2, name=arrests_label)
 p <- ggplot(d, aes(x, y, label=name, color=state_group))
 p +  geom_text() + labs(x="PC1",y="PC2",title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
 ```
-The clustering appears to be based mostly on PC1 scores. Roughly,with negative PC1 scores form one cluster, while those with positive PC1 scores form the other.
+The clustering appears to be based mostly on PC1 scores. Roughly,with negative PC1 scores form one cluster, while those with positive PC1 scores form the other. Violent crime (murder, assault, rape) rates are correlated with PC1 while urban population seems to be correlated with PC2, implying that the clustering here, is taking place based roughly on the rates of violent crime.
 
 [3] Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
