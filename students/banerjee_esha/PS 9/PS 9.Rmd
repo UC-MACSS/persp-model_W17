@@ -37,7 +37,7 @@ library(knitr)
 fm = read_csv('feminist.csv')
 mh = read_csv('mental_health.csv')
 clg = read_csv('College.csv')
-usa = read_csv('USArrests.csv')
+arrests = read_csv('USArrests.csv')
 ```
 
 
@@ -212,6 +212,11 @@ mse_2
 mse_4 = mse(fm_boost_4,fm_test)
 mse_4
 
+Methods <- c("Linear model", "Decision Tree", "Random Forests", "Boosting", "KNN")
+MSE <- c(mse_lm, mse_tree, mse_rf, mse_2, knn_mse_fem)
+MSE
+kable(data.frame(Methods, MSE))
+
 
 
 ```
@@ -251,7 +256,7 @@ x<- mh_test %>%
 err.rate.glm <-mean(x$vote96 != x$pred)
 
 # estimate the MSE for KNN K=1,2,...,10
-mse_knn <- data_frame(k = 1:10,
+mse_knn <- data_frame(k = seq(1, 10, by = 1),
                       knn_train = map(k, ~ class::knn(select(mh_train, -vote96),
                                                 test = select(mh_train, -vote96),
                                                 cl = mh_train$vote96, k = .)),
@@ -260,6 +265,7 @@ mse_knn <- data_frame(k = 1:10,
                                                 cl = mh_train$vote96, k = .)),
                       mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
                       mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
 
 ggplot(mse_knn, aes(k, mse_test)) +
   geom_line() +
@@ -275,7 +281,7 @@ hm_knn_mse<-min(mse_knn$mse_test)
 
 ```{r}
 set.seed(111)
-mse_wknn <- data_frame(k = 1:10,
+mse_wknn <- data_frame(k = seq(1, 10, by = 1),
                       wknn = map(k, ~ kknn(vote96 ~., train = mh_train, test = mh_test, k =.)),
                       mse_test_wknn = map_dbl(wknn, ~ mean(mh_test$vote96 != as.numeric(.$fitted.values > 0.5))))
 
@@ -303,7 +309,33 @@ err %>%
 
 #### Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 ```{r}
+set.seed(111)
+mh_tree <- tree(vote96 ~ ., data = mh_train,
+     control = tree.control(nobs = nrow(mh),
+                            mindev = 0))
+mh_rf <- randomForest(vote96 ~., data = mh_train, ntree = 500)
+mh_boost <- gbm(mh_train$vote96 ~ ., data=mh_train, n.trees = 10000, interaction.depth = 2)
+mh_tune <- tune(svm, vote96 ~., data = mh_train, 
+                          kernel = "linear", 
+                          range = list(cost = c(.001, 0.01, .1, 1, 5, 10, 100)))
+mh_lm_best <- mh_tune$best.model
+mh_poly_tune <- tune(svm, vote96 ~ ., data = mh_train,
+                     kernel = "polynomial",
+                     range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_best <- mh_poly_tune$best.model
 
+
+mse_lmsvm <- mse(mh_best, mh_test)
+mse_glm <- mse(mh_glm, mh_test)
+mse_tree <- mse(mh_tree, mh_test)
+mse_rf <- mse(mh_rf, mh_test)
+mse_boost <- mse(mh_boost, mh_test)
+mse_polysvm <- mse(mh_best, mh_test)
+
+Methods <- c("Logistic model", "Decision Tree", "Random Forests", "Boosting", "Support Vector Machine (Poly)", "Support vector Machine (linear)", "Weighted KNN")
+Errors <- c(mse_glm, mse_tree, mse_rf, mse_boost, mse_polysvm, mse_lmsvm, mse_wknn_mh)
+
+kable(data.frame(Methods, Errors))
 ```
 
 
