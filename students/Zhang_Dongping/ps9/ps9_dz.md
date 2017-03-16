@@ -651,7 +651,9 @@ ggplot(aes(PC1, PC2, color = cluster_id, label = State), data = kmeans2.df) +
   theme(legend.position="none")
 ```
 
-![](ps9_dz_files/figure-markdown_github/kmeans2-1.png) According to the k-means clustering with K = 2 plot above, it seems the above plot cluster all states by PC1, which is the crime rate or the relatively safety of the state. The states cluster in the right-hand side are states with high crime-rate, while the states cluster in the left-hand side are states with low crime-rate. The plot exhibits a clear clustering pattern.
+![](ps9_dz_files/figure-markdown_github/kmeans2-1.png)
+
+According to the k-means clustering with K = 2 plot above, it seems the above plot cluster all states by PC1, which is the crime rate or the relatively safety of the state. The states cluster in the right-hand side are states with high crime-rate, while the states cluster in the left-hand side are states with low crime-rate. The plot exhibits a clear clustering pattern.
 
 **3. Perform K-means clustering with K = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
 
@@ -669,7 +671,9 @@ ggplot(aes(PC1, PC2, color = cluster_id, label = State), data = kmeans4.df) +
   theme(legend.position="none")
 ```
 
-![](ps9_dz_files/figure-markdown_github/kmeans4-1.png) According to the k-means clustering with K = 4 plot above, the clustering patterns seems predominantly governed by PC1 again, which is similar by the previous plot except the number of clusters increased to 4.
+![](ps9_dz_files/figure-markdown_github/kmeans4-1.png)
+
+According to the k-means clustering with K = 4 plot above, the clustering patterns seems predominantly governed by PC1 again, which is similar by the previous plot except the number of clusters increased to 4.
 
 **4. Perform K-means clustering with K = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
 
@@ -687,7 +691,9 @@ ggplot(aes(PC1, PC2, color = cluster_id, label = State), data = kmeans3.df) +
   theme(legend.position="none")
 ```
 
-![](ps9_dz_files/figure-markdown_github/kmeans3-1.png) According to the k-means clustering with K = 3 plot above, the clusters is still, predominantly governed by PC1 -- the crime rate, in three different clusters. The green cluster consistes of states with the highest crime rate. The blue cluster consistes of states with the medium crime rate. The red cluster consistes of states with the lowest crime rate.
+![](ps9_dz_files/figure-markdown_github/kmeans3-1.png)
+
+According to the k-means clustering with K = 3 plot above, the clusters is still, predominantly governed by PC1 -- the crime rate, in three different clusters. The green cluster consistes of states with the highest crime rate. The blue cluster consistes of states with the medium crime rate. The red cluster consistes of states with the lowest crime rate.
 
 **5. Perform K-means clustering with K = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with K = 3 based on the raw data.**
 
@@ -706,7 +712,9 @@ ggplot(aes(PC1, PC2, color = cluster_id, label = State), data = kmeans32.df) +
   theme(legend.position="none")
 ```
 
-![](ps9_dz_files/figure-markdown_github/unnamed-chunk-1-1.png) According to the k-means clustering on the first two principle components score vector with K = 3 plot above, there are three different clusters. From the perspective of PC1, blue clusters on the far right of the plot seems to be the states that have the highest crime rate. At the same time, the red and green clusters seem to be the states that have relatively lower crime rate. From the perspective of PC2, green cluster are the states with large positive values on the second principal component so they have relatively high levels of urbanization while states in red and blue clusters with large negative values have low levels of urbanization.
+![](ps9_dz_files/figure-markdown_github/unnamed-chunk-1-1.png)
+
+According to the k-means clustering on the first two principle components score vector with K = 3 plot above, there are three different clusters. From the perspective of PC1, blue clusters on the far right of the plot seems to be the states that have the highest crime rate. At the same time, the red and green clusters seem to be the states that have relatively lower crime rate. From the perspective of PC2, green cluster are the states with large positive values on the second principal component so they have relatively high levels of urbanization while states in red and blue clusters with large negative values have low levels of urbanization.
 
 **6. Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.**
 
@@ -750,7 +758,9 @@ ggdendrogram(hight_cut) +
         legend.position="none")
 ```
 
-![](ps9_dz_files/figure-markdown_github/unnamed-chunk-3-1.png) According to the plot above, after cutting the dendrogram at a height that results in three distinct clusters, the blue cluster seems to consist of states that are really safe, the green cluster seems to consist of states that are relatively safe, and the red cluster seems to consist of states that are not safe.
+![](ps9_dz_files/figure-markdown_github/unnamed-chunk-3-1.png)
+
+According to the plot above, after cutting the dendrogram at a height that results in three distinct clusters, the blue cluster seems to consist of states that are really safe, the green cluster seems to consist of states that are relatively safe, and the red cluster seems to consist of states that are not safe.
 
 **8. Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.**
 
