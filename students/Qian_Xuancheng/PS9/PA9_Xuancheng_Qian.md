@@ -340,7 +340,7 @@ mse_mh_knn_w<-min(mse_knn$mse_test)
 mse_mh_knn_w_p <-which.min(mse_knn$mse_test)
 ```
 
--   Here we calculated the test MSE for weighted KNN models with *K* = 1, 2, 3, …, 10 using the same combination of variables as before. From the plot, we can see that the test MSE achieves the minimum when k=0.278, which is 10.
+-   Here we calculated the test MSE for weighted KNN models with *K* = 1, 2, 3, …, 10 using the same combination of variables as before. From the plot, we can see that the test MSE achieves the minimum when k=10, which is 0.278.
 
 1.  Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
