@@ -31,7 +31,8 @@ Test MSE for KNN models
 
 In this section, I try different sets of predictors to find a KNN model with the least score for test mean squared error (MSE).
 
-First, I use all *p* predictors with *k* = 5, 10, 15, …, 100. I find that the model with *k* = 85 has the lowest test MSE (503.87). The following plot shows the MSE scores of models with different *k* values. Also, the table below shows the three of the KNN models sorted by test MSE scores:
+First, I use all *p* predictors with *k* = 5, 10, 15, ..., 100. I find that the model with *k* = 85 has the lowest test MSE (503.87). The following plot shows the MSE scores of models with different *k* values. Also, the table below shows the three of the KNN models sorted by test MSE scores:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%201%20KNN%20p-1.png)
 
 |    k|     mse|
@@ -43,6 +44,7 @@ First, I use all *p* predictors with *k* = 5, 10, 15, …, 100. I fi
 ------------------------------------------------------------------------
 
 Then I fit KNN models with *p* − 1 predictors. Among different sets of *p* − 1 predictors,the model using all predictors but `age` with *k* = 45, gives the least test MSE score. The following plot compares the MSE scores of all-but-`age` models with different *k* values. Also, the table below shows the three of the KNN models sorted by test MSE scores:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%201%20KNN%20p-1-1.png)
 
 |    k|     mse|
@@ -54,6 +56,7 @@ Then I fit KNN models with *p* − 1 predictors. Among different sets of *p*
 ------------------------------------------------------------------------
 
 KNN models with *p* − 2 predictors. After trying many different sets of *p* − 2 predictors, I find that and the model using all predictors but `age` and `educ`, with *k* = 35, gives the least test MSE score. The following plot shows the MSE scores of models with different *k* values. Also, the table below shows the three of the KNN models sorted by test MSE scores:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%201%20KNN%20p-2-1.png)
 
 |    k|     mse|
@@ -65,6 +68,7 @@ KNN models with *p* − 2 predictors. After trying many different sets of *p
 ------------------------------------------------------------------------
 
 KNN models with *p* − 3 predictors. After trying many different sets of *p* − 2 predictors, I find that the model excluding `age`, `educ` and `income` variables, with *k* = 35, gives the least test MSE score (464.54). The following plot shows the MSE scores of models with different *k* values. Also, the table below shows the three of the KNN models sorted by test MSE scores:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%201%20KNN%20p-3-1.png)
 
 |    k|     mse|
@@ -76,6 +80,7 @@ KNN models with *p* − 3 predictors. After trying many different sets of *p
 ------------------------------------------------------------------------
 
 KNN models with *p* − 4 predictors. After trying many different sets of *p* − 4 predictors, I find that the model excluding `age`, `educ`, `income` and `female` variables, with *k* = 25, gives the least test MSE score (476.55). The following plot shows the MSE scores of models with different *k* values. Also, the table below shows the three of the KNN models sorted by test MSE scores:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/unnamed-chunk-1-1.png)
 
 |    k|     mse|
@@ -92,6 +97,7 @@ Test MSE for weighted KNN model
 Then, I fit a weighted KNN model using the same combination of predictors as the previous KNN model with the least test MSE.
 
 The weighted KNN model with *k* = 45 gives the least test MSE (475.24). The following plot shows the MSE scores of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test MSE scores:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%201%20wKNN-1.png)
 
 |    k|     mse|
@@ -131,7 +137,7 @@ Test error rate for KNN models
 
 In this section, I try different sets of predictors to find a KNN model with the least score for test error rate.
 
-First, I use all *p* predictors with *k* = 1, 2, 3, …, 10. The model with *k* = 1 gives the least test error rate (0.370). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+First, I use all *p* predictors with *k* = 1, 2, 3, ..., 10. The model with *k* = 1 gives the least test error rate (0.370). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20KNN%20p-1.png)
 
 |    k|  err.rate|
@@ -143,6 +149,7 @@ First, I use all *p* predictors with *k* = 1, 2, 3, …, 10. The mod
 ------------------------------------------------------------------------
 
 KNN models with *p* − 1 predictors. After trying different sets of *p* − 1 predictors, I find that the model using all predictors but `mhealth_sum`, with *k* = 1, gives the least test error rate (0.120). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20KNN%20p-1-1.png)
 
 |    k|  err.rate|
@@ -154,6 +161,7 @@ KNN models with *p* − 1 predictors. After trying different sets of *p* �
 ------------------------------------------------------------------------
 
 KNN models with *p* − 2 predictors. After trying different sets of *p* − 2 predictors, I find that the model using all predictors but `mhealth_sum` and `inc10`, with *k* = 1, gives the least test error rate (0.266). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20KNN%20p-2-1.png)
 
 |    k|  err.rate|
@@ -170,6 +178,7 @@ Test error rate for weighted KNN models
 Then, I fit a weighted KNN model using the same combination of predictors as the previous KNN model with the least test error rate.
 
 The weighted KNN model with *k* = 1 gives the least test error rate (0.372). The following plot shows the error rates of models with different *k* values. Also, the table belowe three the five of the KNN models sorted by test error rates:
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%202%20wKNN-1.png)
 
 |    k|  err.rate|
@@ -260,30 +269,35 @@ K-means clustering (k=2)
 ------------------------
 
 Now I use K-means clustering with *k* = 2 and divide states into two clusters. The following plot shows that the K-means clustering divides the states into two groups approximately by their first principal component scores. In other words, overall, states that have negative scores on the first principal component are in one cluster and states that have positive scores on the first principal component are in the other cluster.
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20K-means%202-1.png)
 
 K-means clustering (k=4)
 ------------------------
 
 How about four clusters? The following plot shows that the first principal component is still the most critical aspect with respect to dividing the observations into clusters. That is, the clusters are divided alongside the horisontal axis that is the first principal component.
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20K-means%204-1.png)
 
 K-means clustering (k=3)
 ------------------------
 
 Now I try K-means clustering with *k* = 3. The following plot shows that, again, the first principal component is the most critical aspect with respect to clustering the observations.
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20K-means%203-1.png)
 
 K-means clustering (k=3, on principal component score vectors)
 --------------------------------------------------------------
 
 I try another K-means clustering with *k* = 3--this time, however, on the first two principal components score vectors, rather than the raw data. I observe that the new clusters are more clearly separated from one another. That is, some of the states that were near the border between two different clusters in the previous clustering now belong to the other side of the border. Examples of such states are: Georgia, Tennessee, Texas, Colorado Missouri, Ohio, Penssylvania, Connecticut, Hawaii, Indiana, Nebraska, Kansas, and Utah.
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20K-means%203-2-1.png)
 
 Hierarchical clustering
 -----------------------
 
 Now I apply hierarchical clustering to the current dataset with complete linkage and Euclidean distance. Observations that have smalle the pairwise differences are merged into a single cluster early in the process. At the end of the process, all observations are merged into a single cluster. As the plot shows, it is possible to choose different number of clusters based on the cutoff point.
+
 ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20HC-1.png)
 
 For example, with the cutoff point at height = 150, we get three different clusters of states. In the following plot, the vertical dashed line marks the cutoff height. At the bottom of the dendrogram, state names are colored according to their membership in one of the three clusters.
@@ -292,6 +306,8 @@ For example, with the cutoff point at height = 150, we get three different clust
 Hierarchical clustering, after scaling
 --------------------------------------
 
-In the previous hierarchical clustering attempt, I have disregarded the fact that different variables are on different scales. This may result in disproportionately weighing the importance of each variable when the algorithm calcuates the pairwise dissimilarities between observations. The use of unscaled data, therefore, may misrepresent the actual clustering of observations. To control for this, in this second attempt of hiearchical clustering, I first standardize the variables so that all variable have standard deviation of 1. The following dendrogram shows that the clustering of observations has changed significantly due to the scaling. ![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20HC%20scaling-1.png)
+In the previous hierarchical clustering attempt, I have disregarded the fact that different variables are on different scales. This may result in disproportionately weighing the importance of each variable when the algorithm calcuates the pairwise dissimilarities between observations. More specifically, variables with larger range can outweight others with smaller range. The use of unscaled data, therefore, may misrepresent the actual contribution of each variable to the clustering of observations. To control for this, in this second attempt of hiearchical clustering, I first standardize the variables so that all variable have standard deviation of 1. The following dendrogram shows that the clustering of observations has changed significantly due to the scaling.
 
-It is my view that standardizing variables to have the common scale is generally an improvement with respect to clustering based on pairwise dissimilarities. This is because, as I have stated above, scaling prevents certain variables that have singificantly larger numeric values than others merely due to their units from distroting the clustering outcome.
+![](Kang_persp-model_PS9_files/figure-markdown_github/Part%204%20HC%20scaling-1.png)
+
+It is my view that standardizing variables to have the common scale is generally an improvement with respect to clustering based on pairwise dissimilarities. This is because, as I have stated above, scaling prevents certain variables that have singificantly larger variability than others merely due to the unit from distroting the clustering outcome.
