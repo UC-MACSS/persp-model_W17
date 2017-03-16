@@ -1,0 +1,524 @@
+---
+title: "Problem set #9: nonparametric methods and unsupervised learning"
+author: "Ningyin Xu"
+date: "3/11/2017"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      cache = TRUE,
+                      warning = FALSE,
+                      include = TRUE)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(titanic)
+library(rcfss)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(FNN)
+library(kknn)
+library(ggdendro)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(tree)
+library(randomForest)
+library(gbm)
+library(stargazer)
+library(e1071)
+
+options(digits = 3)
+set.seed(1234)
+
+```
+
+# Part 1: Attitudes towards feminists
+## Problem 1. Split the data
+```{r fem_1, include = FALSE}
+femdata <- read_csv('data/feminist.csv')
+
+set.seed(1234)
+fem_split <- resample_partition(femdata, c(valid = 0.3, train = 0.7))
+femtrain <- slice(femdata, fem_split$train$idx)
+femvalid <- slice(femdata, fem_split$valid$idx)
+```
+
+## Problem 2. KNN
+```{r fem_2}
+knn_result1 <- data_frame(
+  k = seq(5, 100, by = 5),
+  knn = map(k, ~ knn.reg(select(femtrain, -feminist), 
+                         test = select(femvalid, -feminist), 
+                         y = femtrain$feminist, 
+                         k = .)),
+  MSE = map_dbl(knn, ~mean((femvalid$feminist - .$pred)^2))
+  )
+
+ggplot(knn_result1, aes(k, MSE)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = knn_result1$k[which.min(knn_result1$MSE)],
+             linetype = 2) +
+  labs(title = "Comparing the effect of K",
+       subtitle = "K-nearest neighbors",
+       x = "K: chosen number of training observations nearest to the prediction point",
+       y = "Test MSE") +
+  scale_x_discrete(limits = c(5, 25, 45, 65, 85, 100))
+```
+
+Choosing all the variables except $feminist$ in the dataset as predictors, the lowest test MSE from KNN model is obtained when K = `r knn_result1$k[which.min(knn_result1$MSE)]`. The test MSE is `r min(knn_result1$MSE)`.
+
+## Problem 3. Weighted KNN
+```{r fem_3}
+knn_result2 <- data_frame(
+  k = seq(5, 100, by = 5),
+  knn = map(k, ~ kknn(feminist ~ .,
+                      femtrain, 
+                      femvalid, 
+                      k = .)),
+  MSE = map_dbl(knn, ~mean((femvalid$feminist - .$fitted.values)^2))
+  )
+
+ggplot(knn_result2, aes(k, MSE)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = knn_result2$k[which.min(knn_result2$MSE)],
+             linetype = 2) +
+  labs(title = "Comparing the effect of K",
+       subtitle = "Weighted KNN",
+       x = "K: chosen number of training observations nearest to the prediction point",
+       y = "Test MSE") +
+  scale_x_discrete(limits = c(5, 25, 45, 65, 85, 100))
+```
+
+The lowest test MSE from weighted KNN model is obtained when K = `r knn_result2$k[which.min(knn_result2$MSE)]`. The test MSE is `r min(knn_result2$MSE)`.
+
+## Problem 4. Compare different methods
+```{r fem_4}
+knnmse <- min(knn_result1$MSE)
+kknnmse <- min(knn_result2$MSE)
+
+# lm
+femlm <- lm(feminist ~., femtrain)
+lmmse <- mse(femlm, femvalid)
+
+# tree
+femtree <- tree(feminist ~ .,
+                data = femtrain,
+                control = tree.control(
+                  nobs = nrow(femtrain),
+                  mindev = 0))
+tree_results <- data_frame(
+                terms = 2:25,
+                model = map(terms, ~ prune.tree(
+                  femtree, k = NULL, best = .)),
+                MSE = map_dbl(model, mse, data = femvalid))
+besttree <- tree_results$terms[which.min(tree_results$MSE)]
+treemse <- min(tree_results$MSE)
+
+# boosting
+bstmse_func <- function(traindata, testdata, shrinkage, num_trees, depth) {
+  fembst <- gbm(feminist ~ ., 
+                 distribution = 'gaussian',
+                 data = traindata, 
+                 shrinkage = shrinkage,
+                 n.trees = num_trees,
+                 interaction.depth = depth)
+  yhat_fem <- predict(fembst, 
+                      newdata = testdata,
+                      n.trees = num_trees)
+  mean((yhat_fem - testdata$feminist)^2)
+}
+
+bst_results <- data_frame(
+          terms = seq(0.001, .05, length.out = 50),
+          MSE = map_dbl(terms, ~ bstmse_func(
+             traindata = femtrain, 
+             testdata = femvalid,
+             shrinkage = ., num_trees = 1000, depth = 1)))
+bstlambda <- bst_results$terms[which.min(bst_results$MSE)]
+bst_results2 <- data_frame(
+          terms = seq(100, 10000, by = 100),
+          MSE = map_dbl(terms, ~ bstmse_func(
+             traindata = femtrain, 
+             testdata = femvalid,
+             shrinkage = bstlambda, num_trees = ., depth = 1)))
+bstb <- bst_results2$terms[which.min(bst_results2$MSE)]
+
+fembst <- gbm(feminist ~.,
+              distribution = 'gaussian',
+              data = femtrain,
+              n.trees = bstb,
+              shrinkage = bstlambda)
+bstmse <- bstmse_func(femtrain, femvalid, bstlambda, bstb, 1)
+
+# random forest
+set.seed(1234)
+rf_result <- data_frame(
+  terms = 1:6, 
+  model = map(terms, ~ randomForest(feminist ~ .,
+                                    data = femtrain,
+                                    ntree = 500,
+                                    mtry = .,
+                                    importance = TRUE)),
+  MSE = map_dbl(model, mse, data=femvalid)
+)
+rfmse <- min(rf_result$MSE)
+
+# Wrap-up
+fem_mse_result <- data_frame(
+  'methods' = c('test MSE'),
+  'KNN' = c(knnmse),
+  'wKNN' = c(kknnmse),
+  'LM' = c(lmmse),
+  'Tree' = c(treemse),
+  'Boosting' = c(bstmse),
+  'Random Forest' = c(rfmse)
+)
+knitr::kable(fem_mse_result, align = 'c')
+```
+
+For every method above, I use cross validation (based on the test and train datasets I got from the first problem) to determine the values of parameters in order to make sure the test MSE is the lowest this method could give.
+The best test MSE I got among these methods is from boosting, its value is `r bstmse`. The advantage of this approach is that it grows trees sequentially, using information from previously tree. The process is additive and slow, so the prediction is relatively more accurate. However, test MSEs from other methods are very close to `r bstmse`.
+
+# Part 2: Voter turnout and depression
+## Problem 1. Split the data
+```{r mh_1, include = FALSE}
+read_csv('data/mental_health.csv') %>%
+  na.omit() %>%
+  {.} -> mhdata
+
+set.seed(1234)
+mh_split <- resample_partition(mhdata, c(valid = 0.3, train = 0.7))
+mhtrain <- slice(mhdata, mh_split$train$idx)
+mhvalid <- slice(mhdata, mh_split$valid$idx)
+```
+
+## Problem 2. KNN
+```{r mh_2}
+mhknn_result1 <- data_frame(
+  k = seq(5, 100, by = 5),
+  knn = map(k, ~ knn.reg(select(mhtrain, -vote96), 
+                         test = select(mhvalid, -vote96), 
+                         y = mhtrain$vote96, 
+                         k = .)),
+  err = map_dbl(knn, ~mean(mhvalid$vote96 != round(.$pred)))
+  )
+
+ggplot(mhknn_result1, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = mhknn_result1$k[which.min(mhknn_result1$err)],
+             linetype = 2) +
+  labs(title = "Comparing the effect of K",
+       subtitle = "K-nearest neighbors",
+       x = "K: chosen number of training observations nearest to the prediction point",
+       y = "Test Error") +
+  scale_x_discrete(limits = c(5, 25, 45, 65, 85, 100, mhknn_result1$k[which.min(mhknn_result1$err)]))
+```
+
+Choosing all the variables except $vote96$ in the dataset as predictors, the lowest test error rate from KNN model is obtained when K = `r mhknn_result1$k[which.min(mhknn_result1$err)]`. The test MSE is `r min(mhknn_result1$err)`.
+
+## Problem 3. Weighted KNN
+```{r mh_3}
+mhknn_result2 <- data_frame(
+  k = seq(5, 100, by = 5),
+  knn = map(k, ~ kknn(vote96 ~ .,
+                      mhtrain, 
+                      mhvalid, 
+                      k = .)),
+  err = map_dbl(knn, ~mean(mhvalid$vote96 != round(.$fitted.values)))
+  )
+
+ggplot(mhknn_result2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = mhknn_result2$k[which.min(mhknn_result2$err)],
+             linetype = 2) +
+  labs(title = "Comparing the effect of K",
+       subtitle = "Weighted KNN",
+       x = "K: chosen number of training observations nearest to the prediction point",
+       y = "Test Error Rate") +
+  scale_x_discrete(limits = c(5, 25, 45, 65, 85, 100, mhknn_result2$k[which.min(mhknn_result2$err)]))
+```
+
+The lowest test MSE from weighted KNN model is obtained when K = `r mhknn_result2$k[which.min(mhknn_result2$err)]`. The test MSE is `r min(mhknn_result2$err)`.
+
+## Problem 4. Compare different methods
+```{r mh_4}
+mhknnerr <- min(mhknn_result1$err)
+mhkknnerr <- min(mhknn_result2$err)
+
+# logistic
+mh_log <- glm(vote96 ~ ., data = mhtrain, family = 'binomial')
+mhvalid %>%
+  add_predictions(mh_log) %>%
+  {.} -> mhlogpred
+mhlogerr <- mean(mhlogpred$vote96 != round(mhlogpred$pred))
+
+err.rate <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  pred <- predict(model, newdata = data)
+  actual <- data[[response]]
+  return(mean(round(pred) != actual, na.rm = TRUE))
+}
+
+# tree
+mhtree <- tree(vote96 ~.,
+               data = mhtrain,
+               control = tree.control(
+                  nobs = nrow(mhtrain),
+                  mindev = 0))
+mhtree_results <- data_frame(
+                terms = 2:25,
+                model = map(terms, ~ prune.tree(
+                  mhtree, k = NULL, best = .)),
+                err = map_dbl(model, ~ err.rate(., data = mhvalid)))
+mhbesttree <- mhtree_results$terms[which.min(mhtree_results$err)]
+mhtreeerr <- min(mhtree_results$err)
+
+# boosting
+bsterr_func <- function(traindata, testdata, shrinkage, num_trees, depth) {
+  mhbst <- gbm(vote96 ~ ., 
+                 distribution = 'gaussian',
+                 data = traindata, 
+                 shrinkage = shrinkage,
+                 n.trees = num_trees,
+                 interaction.depth = depth)
+  yhat_vote <- predict(mhbst, 
+                      newdata = testdata,
+                      n.trees = num_trees)
+  mean(round(yhat_vote) != testdata$vote96)
+}
+
+mhbst_results <- data_frame(
+          terms = seq(0.001, .05, length.out = 50),
+          err = map_dbl(terms, ~ bsterr_func(
+             traindata = mhtrain, 
+             testdata = mhvalid,
+             shrinkage = ., num_trees = 1000, depth = 1)))
+mhbstlambda <- mhbst_results$terms[which.min(mhbst_results$err)]
+mhbst_results2 <- data_frame(
+          terms = seq(100, 10000, by = 100),
+          err = map_dbl(terms, ~ bsterr_func(
+             traindata = mhtrain, 
+             testdata = mhvalid,
+             shrinkage = mhbstlambda, num_trees = ., depth = 1)))
+mhbstb <- mhbst_results2$terms[which.min(mhbst_results2$err)]
+
+mhbsterr <- min(min(mhbst_results$err), min(mhbst_results2$err))
+
+# random forest
+mhtrain %>%
+  mutate(vote96 = factor(vote96), black = factor(black),
+         female = factor(female), married = factor(married)) %>%
+         {.} -> mhtrain1
+mhvalid %>%
+  mutate(vote96 = factor(vote96), black = factor(black),
+         female = factor(female), married = factor(married)) %>%
+         {.} -> mhvalid1
+err.rate1 <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  pred <- predict(model, newdata = data, type='class')
+  actual <- data[[response]]
+  return(mean(pred != actual, na.rm = TRUE))
+}
+mhrf_results <- data_frame(terms = 2:7,
+           model = map(terms, ~ randomForest(vote96 ~ .,
+                         data = mhtrain1, ntree=500,
+                         mtry = ., importance=TRUE)), 
+           error = map_dbl(model, ~ err.rate1(., data = mhvalid1)))
+
+mh_rf <- randomForest(vote96 ~.,
+                       data = mhtrain1,
+                       mtry = mhrf_results$terms[which.min(mhrf_results$error)],
+                       importance = TRUE)
+mhrferr <- err.rate1(mh_rf, mhvalid1)
+
+# SVM - 3 degree polynomial
+mhpolytune <- tune(svm, vote96 ~ ., data = as_tibble(mhtrain),
+                  kernel = "polynomial",
+                  range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mhpoly <- mhpolytune$best.model
+mhsvmerr <- err.rate(mhpoly, mhvalid)
+
+# Wrap-up
+mherr_result <- data_frame(
+  'methods' = c('Test Error Rate'),
+  'KNN' = c(mhknnerr),
+  'wKNN' = c(mhkknnerr),
+  'Logistic' = c(mhlogerr),
+  'Tree' = c(mhtreeerr),
+  'Boosting' = c(mhbsterr),
+  'Random Forest' = c(mhrferr),
+  'SVM' = c(mhsvmerr)
+)
+knitr::kable(mherr_result, align = 'c')
+```
+
+For every method above, I use cross validation (based on the test and train datasets I got from the first problem) to determine the values of parameters in order to make sure the test MSE is the lowest this method could give.
+
+The best test MSE I got among these methods is from weighted K-nearest Neighbors, its value is `r mhkknnerr`. As a nonparametric method, weighted K-nearest method could well classifies an object by assigning differently weighted vote to its neighbors. I guess this method it's better here because this dataset contains relatively more categorical variables, so if we look at other variables one by one (like what tree-based models do), it's hard to capture the influence caused by multiple variables together.
+
+
+# Part 3: Colleges
+```{r col_1}
+read_csv('data/college.csv') %>%
+  na.omit() %>%
+  mutate(Private = as.numeric(factor(Private))-1) %>%
+  {.} -> coldata
+
+pr.col <- prcomp(coldata, scale = TRUE)
+biplot(pr.col, scale=0, cex=.6)
+```
+
+Since this dataset has many variables, the graph we got is messy and hard to interpret. We'll look at loading vectors for each variable for first/second principal component respectively.
+
+```{r col_2}
+pr.col$rotation[,1]
+```
+
+For the first principal component, one could tell from the loading values that $Top10perc$, $Top25perc$, $Outstate$, $PhD$, $Terminal$, and $Expend$ appear to be strongly correlated on the first principal component. Since they're loading vectors are all around (-3, -3.5).
+
+```{r col_3}
+pr.col$rotation[,2]
+```
+
+For the second principal component, one could tell that $Accept$, $F.Undergrad$, and $Enroll$ appear to be strongly correlated on the second principal component. Since they're loading vectors are all around -4. In addition, the second principal component roughly corresponds to a measure of if the school is private/public. Because the second loading vector places most of its weight on $Private$ and less weight on other features.
+
+
+# Part 4: Clustering states
+## Problem 1. PCA
+```{r arr_1}
+arrdata <- read.csv('data/USArrests.csv')
+arr.k <- select(arrdata, -State)
+pr.arr <- prcomp(x = arr.k, scale = TRUE)
+biplot(pr.arr, scale=0, cex=.6)
+pr.data <- select(as_data_frame(pr.arr$x), PC1:PC2) %>%
+  mutate(State = arrdata$State)
+```
+
+One can tell from the biplot, the first principal component places approximately equal weight on murder, assault, and rape, so it's roughly correlated with violent crimes. The second principal component places more emphasis on urban population, which depicts the level of urbanization.
+
+## Problem 2. K-means (K = 2)
+```{r arr_2}
+pr.data %>%
+  add_column(., k.2 = factor(kmeans(arr.k,2)$cluster)) %>%
+  ggplot(aes(PC1, PC2, color = k.2, label = State)) +
+  geom_text()+
+  labs(title = "K-means clustering with K = 2",
+       color = "Clusters")
+```
+
+When k = 2, the cluster seems to be generated based on the first component vector, from the graph one can tell states in red letters have relatively lower rates of violent crimes than states in blue.
+
+## Problem 3. K-means (K = 4)
+```{r arr_3}
+pr.data %>%
+  add_column(., k.4 = factor(kmeans(arr.k,4)$cluster)) %>%
+  ggplot(aes(PC1, PC2, color = k.4, label = State)) +
+  geom_text()+
+  labs(title = "K-means clustering with K = 4",
+       color = "Clusters")
+```
+
+When k = 4, the clusters are still depicting difference of first component vector. The plot seems more accurate/detailed when spliting comparing to when k = 2.
+
+## Problem 4. K-means (K = 3)
+```{r arr_4}
+pr.data %>%
+  add_column(., k.3 = factor(kmeans(arr.k,3)$cluster)) %>%
+  ggplot(aes(PC1, PC2, color = k.3, label = State)) +
+  geom_text()+
+  labs(title = "K-means clustering with K = 3",
+       color = "Clusters")
+```
+
+Similarly, when k = 3, states are divided into three clusters based on their first component vector.
+
+## Problem 5. K-means on components score
+```{r arr_5}
+pr.data %>%
+  add_column(., k.3.2 = factor(kmeans(select(., -State),3)$cluster)) %>%
+  ggplot(aes(PC1, PC2, color = k.3.2, label = State)) +
+  geom_text() +
+  labs(title = "K-means clustering with K = 3 on 1st and 2nd Component Vectors",
+       color = "Clusters")
+```
+
+Using first and second component vectors as the criteria for clustering, the graph seems to distinct 3 different culsters well based on both first and second components. One can interpret the graph as: the red cluster have lower violent crime rate, the blue one has higher crime rate but lower level of urbanization, the green cluster have both high crime rate and urbanization.
+
+## Problem 6. Hierarchical Clustering
+```{r arr_6}
+arrdata1 <- column_to_rownames(arrdata, var = "State")
+hc_complete <- hclust(dist(arrdata1), method = "complete")
+ggdendrogram(hc_complete, labels = TRUE) + 
+  labs(title = 'Hierarchical Clustering',
+       y = 'Euclidean Distance')
+```
+
+
+## Problem 7. Cut to 3 distinct clusters
+```{r arr_7}
+hcdata <- dendro_data(hc_complete)
+cl <- as.data.frame(as.matrix(cutree(hc_complete, k = 3))) %>%
+  rownames_to_column(var = "State") %>%
+  mutate('cl' = factor(V1)) %>%
+  select(-V1)
+
+hclabs <- label(hcdata) %>%
+  left_join(cl, by = c('label' = 'State'))
+
+# plot dendrogram
+ggdendrogram(hc_complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(x = x, y = 0, label = label, color = cl),
+            vjust = .5, angle = 90) +
+  theme(axis.text.x = element_blank(),
+    legend.position = "none")
+```
+
+From the above graph, one can tell states in each cluster.
+
+## Problem 8. Scaling
+```{r arr_8}
+hc_complete1 <- hclust(dist(scale(arrdata1)), method = "complete")
+ggdendrogram(hc_complete1, labels = TRUE) + 
+  labs(title = 'Hierarchical Clustering on Scaled Variables',
+       y = 'Euclidean Distance')
+
+hcdata1 <- dendro_data(hc_complete1)
+cl1 <- as.data.frame(as.matrix(cutree(hc_complete1, h = 3))) %>%
+  rownames_to_column(var = "State") %>%
+  mutate('cl' = factor(V1)) %>%
+  select(-V1)
+
+hclabs1 <- label(hcdata1) %>%
+  left_join(cl1, by = c('label' = 'State'))
+
+# plot dendrogram
+ggdendrogram(hc_complete1, labels = FALSE) +
+  geom_text(data = hclabs1,
+            aes(x = x, y = 0, label = label, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = 3, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+    legend.position = "none")
+```
+
+After scaling, the euclidean distance is much smaller (from (0, 300) to (0, 6)), which makes the height of tree makes more sense. The above graph is cutting the tree at a height of 3, which generated 6 groups. Members of some groups changed after scaling, like Alaska, becoming a single-member group in the 3rd level leaf instead of 5th level before scaling. In a certain sense, I think this makes more sense, since Alaska is kind of a special state in the US from our intuition. 
+
+Statistically speaking, scaling makes more sense as well. Before scaling, variables may have different levels of standard deviations. Under complete linkage, this would affect their dissimilarity measure. However, these standard deviations in reality have different effects on the variables regarding to different scale of those variables. Thus, I think variables should be scaled before the inter-observation dissimilarities are computed.
+
+
+
