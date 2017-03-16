@@ -1,3 +1,53 @@
+    library(ISLR)
+    library(class)
+    library(FNN)
+
+    ## 
+    ## Attaching package: 'FNN'
+
+    ## The following objects are masked from 'package:class':
+    ## 
+    ##     knn, knn.cv
+
+    library(kknn)
+    library(tree)
+    library(randomForest)
+
+    ## randomForest 4.6-12
+
+    ## Type rfNews() to see new features/changes/bug fixes.
+
+    library(gbm)
+
+    ## Loading required package: survival
+
+    ## Loading required package: lattice
+
+    ## Loading required package: splines
+
+    ## Loading required package: parallel
+
+    ## Loaded gbm 2.1.1
+
+    library(boot)
+
+    ## 
+    ## Attaching package: 'boot'
+
+    ## The following object is masked from 'package:lattice':
+    ## 
+    ##     melanoma
+
+    ## The following object is masked from 'package:survival':
+    ## 
+    ##     aml
+
+    library(e1071)
+
+    fem = read.csv("feminist.csv")
+    mh = read.csv("mental_health.csv")
+    arrest = read.csv("USArrests.csv")
+
 1
 
     set.seed(1)

@@ -3,7 +3,7 @@ title: "nonparametric methods and unsupervised learning"
 author: "Huanye Liu"
 output: md_document
 ---
-```{r load library, include=FALSE}
+```{r load library, echo=T}
 library(ISLR)
 library(class)
 library(FNN)
@@ -15,7 +15,7 @@ library(boot)
 library(e1071)
 ```
      
-```{r read file, include=FALSE}
+```{r read file, echo=T}
 fem = read.csv("feminist.csv")
 mh = read.csv("mental_health.csv")
 arrest = read.csv("USArrests.csv")
