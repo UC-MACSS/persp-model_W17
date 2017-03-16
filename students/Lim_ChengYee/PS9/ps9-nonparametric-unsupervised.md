@@ -11,9 +11,7 @@ March 14, 2017
 Attitudes towards feminists \[3 points\]
 ========================================
 
-Estimate a series of models explaining/predicting attitudes towards feminists.
-
-1.  Split the data into a training and test set (70/30%).
+**Estimate a series of models explaining/predicting attitudes towards feminists.** **Split the data into a training and test set (70/30%).**
 
 ``` r
 feminist <- read.csv("./data/feminist.csv") %>%
@@ -24,7 +22,7 @@ feminist_train <- as_tibble(feminist_split$train)
 feminist_test <- as_tibble(feminist_split$test)
 ```
 
-1.  Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+**Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?**
 
 ``` r
 mse_knn <- data_frame(k = seq(5, 100, by = 5),
@@ -32,37 +30,19 @@ mse_knn <- data_frame(k = seq(5, 100, by = 5),
                          test = select(feminist_test, -feminist), k = .)),
                       mse = map_dbl(knn, ~ mean((feminist_test$feminist - .$pred)^2)))
 
-mse_knn %>% 
-  select(-knn) %>%
-  kable()
+ggplot(mse_knn, aes(k, mse)) +
+  geom_line() +
+  geom_point() + 
+  labs(title = "KNN on feminist data",
+       x = "K",
+       y = "Test mean squared error")
 ```
 
-|    k|  mse|
-|----:|----:|
-|    5|  550|
-|   10|  496|
-|   15|  490|
-|   20|  488|
-|   25|  482|
-|   30|  482|
-|   35|  481|
-|   40|  479|
-|   45|  480|
-|   50|  479|
-|   55|  478|
-|   60|  477|
-|   65|  476|
-|   70|  477|
-|   75|  478|
-|   80|  476|
-|   85|  476|
-|   90|  477|
-|   95|  478|
-|  100|  478|
+![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-1-1.png)
 
 The KNN model with *K* = 60 produces the lowest test MSE. The test MSE is 476.
 
-1.  Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
+**Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?**
 
 ``` r
 mse_kknn <- data_frame(k = seq(5, 100, by = 5),
@@ -80,7 +60,7 @@ ggplot(mse_kknn, aes(k, mse)) +
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/1c-1.png) The KNN model with *K* = 85, 90, 95, 100 produces the lowest test MSE. The test MSE is 439.
 
-1.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+**Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?**
 
 ``` r
 mse <- function(model, data) {
@@ -128,20 +108,9 @@ The Weighted KNN model had the lowest test MSE, it suggests that the use of simi
 Voter turnout and depression \[2 points\]
 =========================================
 
-The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
+**Estimate a series of models explaining/predicting voter turnout.**
 
--   `vote96` - 1 if the respondent voted in the 1996 presidential election, 0 otherwise
--   `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)[1]
--   `age` - age of the respondent
--   `educ` - Number of years of formal education completed by the respondent
--   `black` - 1 if the respondent is black, 0 otherwise
--   `female` - 1 if the respondent is female, 0 if male
--   `married` - 1 if the respondent is currently married, 0 otherwise
--   `inc10` - Family income, in $10,000s
-
-Estimate a series of models explaining/predicting voter turnout.
-
-1.  Split the data into a training and test set (70/30).
+**Split the data into a training and test set (70/30).**
 
 ``` r
 mhealth <- read.csv("./data/mental_health.csv") %>%
@@ -151,7 +120,7 @@ mhealth_train <- as_tibble(mhealth_split$train)
 mhealth_test <- as_tibble(mhealth_split$test)
 ```
 
-1.  Calculate the test error rate for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+**Calculate the test error rate for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?**
 
 ``` r
 mse_knn <- data_frame(k = 1:10,
@@ -179,7 +148,7 @@ mse_knn %>%
 
 The model that produced the lowest test error rate is *K* = 10. The test MSE is 0.320.
 
-1.  Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?
+**Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?**
 
 ``` r
 mse_kknn <- data_frame(k = seq(1, 10, by = 1),
@@ -206,7 +175,7 @@ mse_kknn %>%
 
 The weighted KNN model that produced the lowest test error rate is also *K* = 10. The test MSE is 0.209.
 
-1.  Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+**Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?**
 
 ``` r
 mhealth_glm <- glm(vote96 ~ ., family = binomial, data = mhealth_train)
@@ -256,28 +225,7 @@ Weighted KNN model has the lowest test MSE, followed by support vector machine m
 Colleges \[2 points\]
 =====================
 
-The `College` dataset in the `ISLR` library contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
-
--   `Private` - A factor with levels `No` and `Yes` indicating private or public university.
--   `Apps` - Number of applications received.
--   `Accept` - Number of applications accepted.
--   `Enroll` - Number of new students enrolled.
--   `Top10perc` - Percent of new students from top 10% of H.S. class.
--   `Top25perc` - Percent of new students from top 25% of H.S. class.
--   `F.Undergrad` - Number of fulltime undergraduates.
--   `P.Undergrad` - Number of parttime undergraduates.
--   `Outstate` - Out-of-state tuition.
--   `Room.Board` - Room and board costs.
--   `Books` - Estimated book costs.
--   `Personal` - Estimated personal spending.
--   `PhD` - Percent of faculty with Ph.D.'s.
--   `Terminal` - Percent of faculty with terminal degrees.
--   `S.F.Ratio` - Student/faculty ratio.
--   `perc.alumni` - Percent of alumni who donate.
--   `Expend` - Instructional expenditure per student.
--   `Grad.Rate` - Graduation rate.
-
-Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+**Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?**
 
 ``` r
 df<-College
@@ -313,20 +261,12 @@ college.pca$rotation %>%
 | Expend      |  0.292|  -0.753|  -0.585|   0.009|  -0.019|   0.006|  -0.036|   0.052|  -0.008|  -0.002|   0.001|   0.000|   0.001|   0.000|   0.000|   0.000|   0.000|
 | Grad.Rate   |  0.000|  -0.001|   0.002|  -0.001|  -0.002|  -0.001|  -0.001|  -0.003|   0.005|  -0.002|  -0.248|   0.433|   0.824|   0.265|  -0.031|   0.016|  -0.002|
 
-Biplot is rather difficult to interpret and messy, thus we cannot identify the highly correlated variables. Instead, we looked at the exact makeups of PC1 and PC2. `Apps`, `F.Undergrad`, `Accept` and `Enroll` are strongly correlated with the first principal component. The variables are all related to university admissions. Schools that have large positive values on the first principal component have a larger student population size
-`Outstate` and `Expend` are strongly correlated with the second principal component. The variables are related ot budgeting of the universities. Logically, the more the university spends on each student, the higher out-of-state tuition students have to pay.
+Biplot is rather difficult to interpret and messy, thus we cannot identify the highly correlated variables. Instead, we looked at the exact makeups of PC1 and PC2. `Apps`, `F.Undergrad`, `Accept` and `Enroll` are strongly correlated with the first principal component. The variables are all related to university admissions. Schools that have large positive values on the first principal component have a larger student population size. `Outstate` and `Expend` are strongly correlated with the second principal component. The variables are related ot budgeting of the universities. Logically, the more the university spends on each student, the higher out-of-state tuition students have to pay.
 
 Clustering states \[3 points\]
 ==============================
 
-The `USArrests` dataset contains 50 observations (one for each state) from 1973 with variables on crime statistics:
-
--   `Murder` - Murder arrests (per 100,000)
--   `Assault` - Assault arrests (per 100,000)
--   `Rape` - Rape arrests (per 100,000)
--   `UrbanPop` - Percent urban population
-
-1.  Perform PCA on the dataset and plot the observations on the first and second principal components.
+**Perform PCA on the dataset and plot the observations on the first and second principal components.**
 
 ``` r
 pr.out <- prcomp(USArrests, scale = TRUE)
@@ -345,7 +285,7 @@ biplot(pr.out, scale = 0, cex = .6)
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-4-1.png) The first principal component is related to measures of violent crimes. The second principal component is related to urban population.
 
-1.  Perform *K*-means clustering with *K* = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+**Perform *K*-means clustering with *K* = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
 
 ``` r
 PC1 <- as.data.frame(pr.out$x)$PC1
@@ -370,7 +310,7 @@ PCA %>%
 
 With the plot, we can clearly visualize that the states are clustered by the first principal component. States with positive first principal component are one cluster, whereas states with negative first principal component are another cluster. Thus, states are clustered by the high and low violent crime rates.
 
-1.  Perform *K*-means clustering with *K* = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+**Perform *K*-means clustering with *K* = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
 
 ``` r
 kmean.out <- kmeans(USArrests, 4, nstart = 1)
@@ -389,7 +329,7 @@ PCA %>%
 
 From the graph, we can clearly visualize 4 clusters which are separated mainly based on their first principal component values. Thus, states are clustered based on the level of violent crime rates.
 
-1.  Perform *K*-means clustering with *K* = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+**Perform *K*-means clustering with *K* = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
 
 ``` r
 kmean.out <- kmeans(USArrests, 3, nstart = 1)
@@ -425,7 +365,7 @@ PCA %>%
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-8-1.png) From the graph, we can clearly visualize 3 clusters. The cluster in blue has negative first and sceond princpal components. The green cluster has mostly negative second principal component, but positive principal component. The third cluster in red has very positive second principal components.
 
-1.  Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+**Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.**
 
 ``` r
 hc.complete <- hclust(dist(USArrests), method = "complete")
@@ -435,7 +375,7 @@ ggdendrogram(hc.complete) +
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
-1.  Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+**Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?**
 
 ``` r
 states3tree <- cutree(hc.complete, k = 3)
@@ -517,78 +457,17 @@ ggdendrogram(hc.complete) +
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
-1.  Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+**Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.**
 
 ``` r
 USA_st <- scale(USArrests)
 hc.complete <- hclust(dist(USA_st), method = "complete")
-ggdendrogram(hc.complete)
+ggdendrogram(hc.complete) +
+  labs(title = "Scaled Hierarchial Cluster")
 ```
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-11-1.png)
 
-``` r
-states3tree <- cutree(hc.complete, k = 3)
-states3tree <- as.data.frame(states3tree) %>% 
-  set_names("cluster")
+After scaling the variables, the dendrogram showed that there is another cluster of states that are more different from the others. In the previous dendrogram drawn, there were three clusters at the second split from the top of the tree. Now there is four.
 
-states3tree %>% 
-  bind_cols(as.data.frame(names)) %>% 
-  arrange(cluster) %>% 
-  kable()
-```
-
-|  cluster| names          |
-|--------:|:---------------|
-|        1| Alabama        |
-|        1| Alaska         |
-|        1| Georgia        |
-|        1| Louisiana      |
-|        1| Mississippi    |
-|        1| North Carolina |
-|        1| South Carolina |
-|        1| Tennessee      |
-|        2| Arizona        |
-|        2| California     |
-|        2| Colorado       |
-|        2| Florida        |
-|        2| Illinois       |
-|        2| Maryland       |
-|        2| Michigan       |
-|        2| Nevada         |
-|        2| New Mexico     |
-|        2| New York       |
-|        2| Texas          |
-|        3| Arkansas       |
-|        3| Connecticut    |
-|        3| Delaware       |
-|        3| Hawaii         |
-|        3| Idaho          |
-|        3| Indiana        |
-|        3| Iowa           |
-|        3| Kansas         |
-|        3| Kentucky       |
-|        3| Maine          |
-|        3| Massachusetts  |
-|        3| Minnesota      |
-|        3| Missouri       |
-|        3| Montana        |
-|        3| Nebraska       |
-|        3| New Hampshire  |
-|        3| New Jersey     |
-|        3| North Dakota   |
-|        3| Ohio           |
-|        3| Oklahoma       |
-|        3| Oregon         |
-|        3| Pennsylvania   |
-|        3| Rhode Island   |
-|        3| South Dakota   |
-|        3| Utah           |
-|        3| Vermont        |
-|        3| Virginia       |
-|        3| Washington     |
-|        3| West Virginia  |
-|        3| Wisconsin      |
-|        3| Wyoming        |
-
-[1] The variable is an index which combines responses to four different questions: "In the past 30 days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.
+In my opinion, variables should be scaled before clustering so that every variable is given an equal weightage, and variables with a larger absolute range will not be given overly weighted.
