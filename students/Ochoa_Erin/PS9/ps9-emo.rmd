@@ -67,13 +67,17 @@ predict.gbm = function (object, newdata, n.trees, type = "link", single.tree = F
     gbm::predict.gbm(object, newdata, n.trees, type, single.tree, ...)
   }
 }
+
+logit2prob = function(x){
+  exp(x) / (1 + exp(x))
+}
 ```
 
 
 # Attitudes towards feminists
 
 
-## Split the data into a training and test set (70/30%)
+#### Split the data into a training and test set (70/30%)
 
 We read in the data:
 
@@ -95,7 +99,7 @@ fem_test30 = fem_split7030$test %>%
              tbl_df()
 ```
 
-## Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+#### Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
 
 Using female, education, income, Democrat, and Republican, we calculate the test MSE for KNN models with K ranging from [5,100] in 5-point increments:
 
@@ -122,7 +126,7 @@ ggplot(fem_knn, aes(k, mse)) +
        scale_x_continuous(breaks = seq(0,100,by=10)) +
        scale_y_continuous(breaks = seq(440,510,by=10))
 ```
-## Calculate the test MSE for weighted KNN models with K = 5, 10, 15, \dots, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
+#### Calculate the test MSE for weighted KNN models with K = 5, 10, 15, \dots, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
 
 ```{r fem_weighted_knn}
 fem_w_knn = data_frame(k = seq(5, 100, by = 5), 
@@ -150,7 +154,7 @@ ggplot(fem_w_knn, aes(k, mse, color = Method)) +
        scale_y_continuous(breaks = seq(420,510,by=10))
 ```
 
-## Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+#### Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
 ```{r fem_lm}
 lm_fem = lm(feminist ~ female + educ + income + dem + rep, data=fem_train70)
@@ -245,9 +249,6 @@ Boosting with a depth of 4 produces the lowest MSE (`r mse_fem_boost4`).  This i
 
 The 1998 General Social Survey included several questions about the respondent's mental health. `mental_health.csv` reports several important variables from this survey.
 
-* `vote96` - 1 if the respondent voted in the 1996 presidential election, 0 otherwise
-* `mhealth_sum` - index variable which assesses the respondent's mental health, ranging from 0 (an individual with no depressed mood) to 9 (an individual with the most severe depressed mood)^[The variable is an index which combines responses to four different questions: "In the past 30
-days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.]
 * `age` - age of the respondent
 * `educ` - Number of years of formal education completed by the respondent
 * `black` - 1 if the respondent is black, 0 otherwise
@@ -257,35 +258,92 @@ days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless,
 
 Estimate a series of models explaining/predicting voter turnout.
 
-1. Split the data into a training and test set (70/30).
-1. Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
-1. Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
-1. Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+#### Split the data into a training and test set (70/30).
 
+```{r mh_read_split}
+mh = read_csv('data/mental_health.csv')
+
+mh = mh %>%
+     select(vote96, age, inc10, educ, mhealth_sum)%>%
+     na.omit()
+
+set.seed(1234)
+mh_split7030 = resample_partition(mh, c(test = 0.3, train = 0.7))
+mh_train70 = as_tibble(mh_split7030$train)
+mh_test30 = as_tibble(mh_split7030$test)
+```
+
+
+#### Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+```{r mh_knn}
+
+mh_knn = data_frame(k = 1:10,
+                    knn_train = map(k, ~ class::knn(select(mh_train70, -vote96),
+                                                test = select(mh_train70, -vote96),
+                                                cl = mh_train70$vote96, k = .)),
+                    knn_test = map(k, ~ class::knn(select(mh_test30, -vote96),
+                                               test = select(mh_test30, -vote96),
+                                               cl = mh_test30$vote96, k = .)),
+                    mse_train = map_dbl(knn_train, ~ mean(mh_test30$vote96 != .)),
+                    mse_test = map_dbl(knn_test, ~ mean(mh_test30$vote96 != .)))
+
+ggplot(mh_knn, aes(k, mse_test)) +
+  geom_line() +
+  labs(x = "K Nearest Neighbors",
+       y = "MSE",
+       title = "MSE for K Nearest Neigbors",
+       subtitle = "Voting Behavior (1996) Based on Age, Income, Education, & Depression Index Score")
+```
+
+#### Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
+
+```{r mh_wknn}
+set.seed(1234)
+mh_wknn = data_frame(k = 1:10,
+                     wknn = map(k, ~ kknn(vote96 ~., train = mh_train70, test = mh_test30, k =.)),
+                     mse_test_wknn = map_dbl(wknn, ~ mean(mh_test30$vote96 != as.numeric(.$fitted.values > 0.5))))
+
+mse_wknn_mh = min(mh_wknn$mse_test_wknn)
+
+mh_wknn_error = mh_wknn %>%
+                left_join(mh_knn, by = as.factor("k")) %>%
+                select(k, mse_test_wknn, mse_test) %>%
+                gather(method, mse, -k) %>%
+                mutate(method = factor(method, levels =c("mse_test_wknn","mse_test"), labels = c("Weighted KNN","KNN")))
+
+ggplot(mh_wknn_error,aes(k, mse, color = method)) +
+       geom_line() +
+       geom_point() +
+       labs(title = "MSE for KNN and Weighted KNN",
+       subtitle = "Voting Behavior (1996) Based on Age, Income, Education, & Depression Index Score",
+       x = "K",
+       y = "MSE",
+       method = NULL)
+```
+
+
+#### Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r mh_logistic}
+logit_voted_all = glm(vote96 ~ age + inc10 + educ + mhealth_sum, data = mh_train70, family = binomial) 
+
+
+voted_all_accuracy = mh_test30 %>%
+                     add_predictions(logit_voted_all) %>%
+                     mutate(pred = logit2prob(pred),
+                            pred = as.numeric(pred > .5))
+
+logit_mh_error = mean(voted_all_accuracy$vote96 != voted_all_accuracy$pred)
+```
+
+
+```{r mh_tree}
+
+```
 # Colleges
 
-The `College` dataset in the `ISLR` library contains statistics for a large number of U.S. colleges from the 1995 issue of U.S. News and World Report.
-
-* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
-* `Apps` - Number of applications received.
-* `Accept` - Number of applications accepted.
-* `Enroll` - Number of new students enrolled.
-* `Top10perc` - Percent of new students from top 10% of H.S. class.
-* `Top25perc` - Percent of new students from top 25% of H.S. class.
-* `F.Undergrad` - Number of fulltime undergraduates.
-* `P.Undergrad` - Number of parttime undergraduates.
-* `Outstate` - Out-of-state tuition.
-* `Room.Board` - Room and board costs.
-* `Books` - Estimated book costs.
-* `Personal` - Estimated personal spending.
-* `PhD` - Percent of faculty with Ph.D.'s.
-* `Terminal` - Percent of faculty with terminal degrees.
-* `S.F.Ratio` - Student/faculty ratio.
-* `perc.alumni` - Percent of alumni who donate.
-* `Expend` - Instructional expenditure per student.
-* `Grad.Rate` - Graduation rate.
-
-Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+#### Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
 
 We assign the dataframe (imported via the ISLR library) to a new object and recode the Private variable to be numeric:
 
@@ -303,30 +361,9 @@ college_pca_1_2 = as.data.frame(college_pca$rotation)[1:2]
 college_pca_1_2
 ```
 
-Because 
-
 For the first component, Top10perc and Top25perc load very negatively, suggesting that schools with high scores for PC1 will have low proportions of students in the top 10% or top 25% of their high-school classes.  Similarly, Outstate, Expend, PhD, and Terminal also load very negatively, indicating that schools with high scores for PC1 will have high proportions of in-state students, low per-student expenditure, and low proportions of faculty with PhDs or terminal degrees.
 
 For the second component, F.Undergrad loads highly negatively, suggesting that schools with high scores for PC2 will have low enrollment of full-time undergraduates.  Private loads positively, suggesting that schools with high scores for this component will tend to be private.  Enroll, Accept, and Apps load very negatively; schools with high scores for PC2 should enroll few new students, accept few applications, and receive few applications.
-
-* `Private` - A factor with levels `No` and `Yes` indicating private or public university.
-* `Apps` - Number of applications received.
-* `Accept` - Number of applications accepted.
-* `Enroll` - Number of new students enrolled.
-* `Top10perc` - Percent of new students from top 10% of H.S. class.
-* `Top25perc` - Percent of new students from top 25% of H.S. class.
-* `F.Undergrad` - Number of fulltime undergraduates.
-* `P.Undergrad` - Number of parttime undergraduates.
-* `Outstate` - Out-of-state tuition.
-* `Room.Board` - Room and board costs.
-* `Books` - Estimated book costs.
-* `Personal` - Estimated personal spending.
-* `PhD` - Percent of faculty with Ph.D.'s.
-* `Terminal` - Percent of faculty with terminal degrees.
-* `S.F.Ratio` - Student/faculty ratio.
-* `perc.alumni` - Percent of alumni who donate.
-* `Expend` - Instructional expenditure per student.
-* `Grad.Rate` - Graduation rate.
 
 
 ```{r college_biplot, echo=FALSE}
@@ -338,7 +375,7 @@ biplot(college_pca, scale = 0, cex = c(.1,.6))
 
 
 
-# Clustering states [3 points]
+# Clustering states
 
 The `USArrests` dataset contains 50 observations (one for each state) from 1973 with variables on crime statistics:
 
@@ -347,13 +384,119 @@ The `USArrests` dataset contains 50 observations (one for each state) from 1973 
 * `Rape` - Rape arrests (per 100,000)
 * `UrbanPop` - Percent urban population
 
-1. Perform PCA on the dataset and plot the observations on the first and second principal components.
-1. Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
-1. Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
-1. Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
-1. Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
-1. Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
-1. Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
-1. Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+#### Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+```{r read_arrests}
+arrests = read_csv("data/USArrests.csv")
+```
+
+We perform PCA on the dataset and review the loadings for the first two components:
+```{r arrests_pca}
+state_name = arrests$State
+arrests_df = arrests[c("Murder", "Assault", "UrbanPop", "Rape")]
+arrests_pca = prcomp(arrests_df, scale = TRUE)
+arrests_pca_1_2 = as.data.frame(arrests_pca$rotation)[1:2]
+arrests_pca_1_2
+```
+
+Next, we review the biplot for the first two components:
+```{r arrests_pca_biplot,echo=FALSE}
+biplot(arrests_pca, scale = 0, cex = .6)
+```
+
+#### Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r arrests_kmeans_2}
+set.seed(1234)
+arrests_kmeans_2 = kmeans(arrests_df, 2, nstart = 20)
+
+arrests_PC1 = as.data.frame(arrests_pca$x)$PC1
+arrests_PC2 = as.data.frame(arrests_pca$x)$PC2
+
+Cluster = as.factor(arrests_kmeans_2$cluster)
+arrests_pca_name = data.frame(x=arrests_PC1, y=arrests_PC2, name=state_name)
+ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
+       geom_text() + labs(title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
+```
 
 
+
+#### Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+
+```{r arrests_kmeans_4}
+set.seed(1234)
+arrests_kmeans_4 = kmeans(arrests_df, 4, nstart = 20)
+
+Cluster = as.factor(arrests_kmeans_4$cluster)
+
+ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
+       geom_text() + labs(title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
+```
+
+
+
+#### Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+
+```{r arrests_kmeans_3}
+set.seed(1234)
+arrests_kmeans_3 = kmeans(arrests_df, 3, nstart = 20)
+
+Cluster = as.factor(arrests_kmeans_3$cluster)
+
+ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
+       geom_text() + labs(title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
+```
+
+#### Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+
+```{r arrests_kmeans_pca3}
+set.seed(1234)
+arrests_pca_1_2 = data.frame(v1 = arrests_PC1, v2 = arrests_PC2)
+arrests_kmeans_pca3 = kmeans(arrests_pca_1_2, 3, nstart = 20)
+Cluster = as.factor(arrests_kmeans_pca3$cluster)
+
+ggplot(arrests_pca_name, aes(x, y, label=name, color=Cluster)) +
+       geom_text() + labs(title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
+```
+
+
+
+#### Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r arrests_hierarchical}
+arrests_hierarchical = hclust(dist(arrests_df), method = 'complete')
+
+ggdendrogram(arrests_hierarchical) + labs(title = "Arrests:  Hierarchical Clustering")
+```
+
+#### Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r arrests_hierarchical_chop}
+
+hcdata = dendro_data(arrests_hierarchical)
+hclabs = label(hcdata) %>%
+         left_join(data_frame(label = as.factor(seq.int(nrow(arrests_df))),
+                   cluster = as.factor(cutree(arrests_hierarchical, h = 150))))
+
+ggdendrogram(arrests_hierarchical, labels = FALSE) +
+             geom_text(data = hclabs,
+             aes(label = label, x = x, y = 0, color = cluster),
+                 vjust = .5, angle = 90) +
+             geom_hline(yintercept = 150, linetype = 4, color = 'deeppink', size=2) +
+             theme(axis.text.x = element_blank(),
+             legend.position = "none")
+```
+
+#### Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+
+
+```{r arrests_hierarchical_scaled}
+
+scaled_arrests = scale(arrests_df)
+arrests_hierarchical_scaled = hclust(dist(scaled_arrests), method = "complete")
+
+ggdendrogram(arrests_hierarchical_scaled) + labs(title = 'Arrests:  Hierarchical Clustering, Standardized')
+```
