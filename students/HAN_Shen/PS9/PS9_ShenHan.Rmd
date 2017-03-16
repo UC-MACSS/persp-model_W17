@@ -1,0 +1,364 @@
+---
+title: 'Problem set 9: nonparametric methods and unsupervised learning'
+author: 'Shen Han'
+date: 'Mar 15, 2017'
+output:   
+  html_document:
+    toc: True
+    toc_float: True
+    code_folding: show
+    fig_width: 6.5
+    fig_height: 4
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(forcats)
+library(class)
+library(varhandle)
+library(kknn)
+library(tree)
+library(randomForest)
+library(gbm)
+library(e1071)
+
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+# Attitudes towards feminists
+
+## 1. Split the data into a training and test set (70/30%).
+```{r}
+set.seed(1234)
+
+feminist <- read_csv("data/feminist.csv")
+feminist_split <- resample_partition(feminist, p=c(test = 0.3, train = 0.7))
+
+feminist_train <- feminist_split$train %>%
+  tbl_df()
+feminist_test <- feminist_split$test %>%
+  tbl_df()
+```
+
+
+## 2. Calculate the test MSE for KNN models
+```{r}
+test_label <- feminist_test$feminist
+train_label <- feminist_train$feminist
+
+train_data <- feminist_train[c("female", "age", "educ", "income", "dem", "rep")]
+test_data <- feminist_test[c("female", "age", "educ", "income", "dem", "rep")]
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+prediction_int <- unfactor(prediction)
+
+mse(prediction_int, test_label)
+
+mses <- list()
+for(i in 1:20){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i*5)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(seq(5, 100, 5), mses, type="b", 
+     xlab="k",
+     ylab="MSE",
+     main="MSE for KNN Models",
+     pch=20, cex=2)
+```
+
+As the MSE plot shown above, the general trend is, the more clusters we have, the lower the MSE. The model with k = 65 produces the lowest test MSE, which is 523.309.
+
+
+## 3. Calculate the test MSE for weighted KNN models
+```{r}
+model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, 2)
+
+mses <- list()
+for(i in 1:20){
+  model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, k=i*5)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+plot(seq(5, 100, 5), mses, type="b", 
+     xlab="k",
+     ylab="MSE",
+     main="MSE for Weighted KNN Models",
+     pch=20, cex=2)
+```
+
+We observed a smoother plot of MSE for weighted KNN models, comparing with the last question. The model with k = 100 yields the lowest MSE of 437.366.
+
+
+## 4. Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods
+```{r}
+lm_fit <- lm(feminist_train$feminist ~ ., data=feminist_train)
+tree_fit <- tree(feminist_train$feminist ~ ., data=feminist_train, control = tree.control(nobs = nrow(feminist_train), mindev = 0))
+rf_fit <- randomForest(feminist_train$feminist ~ ., data=feminist_train, ntree = 500)
+boosting <- gbm(feminist_train$feminist ~ ., data=feminist_train, n.trees = 10000, interaction.depth = 2)
+
+mse(predict(lm_fit, feminist_test), test_label)
+mse(predict(tree_fit, feminist_test), test_label)
+mse(predict(boosting, feminist_test, n.trees=10000), test_label)
+mse(predict(rf_fit, feminist_test), test_label)
+```
+
+Among linear regression, decision tree, boosting, and random forest methods, boosting yields the lowest MSE of 430.48, though other results are pretty close.
+
+As a non-parametric method, boosting firstly assign equal weight to each observation, then iterate the learning algorithm in consideration of the observations having prediction error, until it reached the limit or certain accuracy level. Here it performs the best partly because I set a relatively high depth and iteration limit. It can also due to the lack of function form of the data. However, given the unsatisfying outcome of other non-parametric methods, our non-function form hypothesis could be wrong.
+
+# Voter turnout and depression
+
+## 1. Split the data into a training and test set (70/30).
+```{r}
+set.seed(1234)
+mh <- read_csv("data/mental_health.csv")
+
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+
+mh <- delete.na(mh)
+
+mh_split <- resample_partition(mh, p=c(test = 0.3, train = 0.7))
+
+mh_train <- mh_split$train %>%
+  tbl_df()
+mh_test <- mh_split$test %>%
+  tbl_df()
+
+test_label <- mh_test$vote96
+train_label <- mh_train$vote96
+
+train_data <- mh_train[c("mhealth_sum", "age", "educ", "black", "female", "married", "inc10")]
+test_data  <- mh_test[c("mhealth_sum", "age", "educ", "black", "female", "married", "inc10")]
+```
+
+
+## 2. Calculate the test error rate for KNN models
+```{r}
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+prediction_int <- unfactor(prediction)
+mse(prediction_int, test_label)
+
+mses <- list()
+for(i in 1:10){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(seq(1, 10, 1), mses, type="b", 
+     xlab="k",
+     ylab="MSE",
+     main="MSE for KNN Models",
+     pch=20, cex=2)
+mses
+```
+
+As we can tell from the graph above, MSE for KNN model for this dataset in general also kind of decreases as the number of cluster increases. With k = 3 we got the lowest MSE of 0.3095, but it's pretty close with the MSEs under k = 4 and k = 8.
+
+
+## 3. Calculate the test error rate for weighted KNN models
+```{r}
+model <- kknn(mh_train$vote96 ~ ., train=mh_train, test=mh_test, 2)
+
+mses <- list()
+for(i in 1:10){
+  model <- kknn(mh_train$vote96 ~ ., train=mh_train, test=mh_test, k=i)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+ks <- seq(1, 10, 1)
+plot(ks, mses, type="b", 
+     xlab="k",
+     ylab="MSE",
+     main="MSE for Weighted KNN Models",
+     pch=20, cex=2)
+mses
+```
+
+From the weighted KNN models we got a smoother line of MSE. With k = 10 we have the lowest MSE of 0.2056.
+
+
+## 4. Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods
+```{r}
+glm_fit <- glm(mh_train$vote96 ~ ., data=mh_train, family=binomial)
+tree_fit <- tree(mh_train$vote96 ~ ., data=mh_train, control = tree.control(nobs = nrow(mh_train), mindev = 0))
+rf_fit <- randomForest(mh_train$vote96 ~ ., data=mh_train, ntree = 500)
+boosting_fit <- gbm(mh_train$vote96 ~ ., data=mh_train, n.trees = 10000, interaction.depth = 2)
+svm_fit <- svm(mh_train$vote96 ~ ., data=mh_train, kernel = "linear", range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse(predict(glm_fit, mh_test), test_label)
+mse(predict(tree_fit, mh_test), test_label)
+mse(predict(rf_fit, mh_test), test_label)
+mse(predict(svm_fit, mh_test), test_label)
+mse(predict(boosting_fit, mh_test, n.trees=1000), test_label)
+```
+Among logistic regression, decision tree, boosting, random forest, and SVM, the random forest model yields the lowest MSE, 0.1943. Here it performs well because lots of variables in this dataset are classification problems. While other three non-parametric methods have similar outcomes, they may suffer from overfitting problems.
+
+
+# Colleges
+```{r}
+college_df <- read_csv('data/College.csv') %>%
+  mutate(Private = ifelse(Private == 'Yes', 1, 0))
+
+pr_out <- prcomp(college_df, scale = TRUE)
+biplot(pr_out, scale = 0, cex = .6)
+
+pr_out$rotation[, 1]
+pr_out$rotation[, 2]
+```
+
+From the bi-plot we can see lots of arrows are pointed to the negative side of PC1 and PC2. The first principal component shows `PhD`, `Terminal`, `Top10perc`, `Top25perc`, `Outstate`, `Expend` and `Grad.Rate` seem to be correlated, while the second principal component suggests `Private`, `Apps`, `Accept`, `Enroll`, `F.Undergrad`, and `P.Undergrad` may be correlated.
+
+
+# Clustering states
+
+## 1. Perform PCA on the dataset and plot the observations on the first and second principal components.
+```{r}
+crime_df <- read_csv('data/USArrests.csv')
+
+pr_out <- prcomp(x = select(crime_df, -State), scale = TRUE)
+
+biplot(pr_out, scale = 0, cex = .6)
+```
+
+
+## 2. Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+set.seed(1234)
+
+add_kmeans_clusters <- function(df, num_clusters, orig_data, on_orig = TRUE){
+  if (on_orig){
+    orig_data <- select(orig_data, -State)
+    cluster_ids <- factor(kmeans(orig_data, num_clusters)$cluster)
+  } else { 
+    cluster_ids <- factor(kmeans(select(df, -State), num_clusters)$cluster)
+  }
+  return(mutate(df, cluster_id = cluster_ids))
+}
+
+
+pca2_df <- select(as_data_frame(pr_out$x), PC1:PC2) %>%
+  mutate(State = crime_df$State)
+num_clusters <- 2
+
+pca2_df %>% add_kmeans_clusters(num_clusters, crime_df) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = 2'),
+         color = 'Cluster ID')
+```
+
+The plot shows two relatively separated groups of States. They are mainly separated by PC1, which is about rates of `Rape`, `Murder`, and `Assault`.
+
+
+## 3. Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r}
+num_clusters <- 4
+
+pca2_df %>% add_kmeans_clusters(num_clusters, crime_df) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = %d', num_clusters),
+         color = 'Cluster ID')
+```
+
+With 4 clusters, the graph lost its clarity a little bit, comparing with the previous graph. Again, those 4 groups are mainly separated by PC1, which is about the rate of `Murder`, `Rape`, and `Assault`.
+
+
+## 4. Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r}
+num_clusters <- 3
+
+pca2_df %>% add_kmeans_clusters(num_clusters, crime_df) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = %d', num_clusters),
+         color = 'Cluster ID')
+```
+
+This graph is better than the previous one in terms of the States on the right hand side, though the States in the middle is still a little bit vague. Again, they are mainly separated by different rates of `Murder`, `Rape`, and `Assault` from PC1.
+
+
+## 5. Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+
+```{r}
+num_clusters <- 3
+
+pca2_df %>% add_kmeans_clusters(num_clusters, crime_df, FALSE) %>%
+  ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
+    geom_text() + 
+    labs(title = sprintf('K-means clustering with K = %d on First 2 PCs', num_clusters),
+         color = 'Cluster ID')
+```
+
+Comparing with the one with raw data above, our graph with the first 2 principle components enjoys better clarity. While it has about the same difference in PC2, it do have a clearer separation in terms of PC1.
+
+
+## 6. Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r}
+state_names <- select(crime_df, State)$State
+crime_dat <- as.matrix(select(crime_df, - State))
+rownames(crime_dat) <- state_names
+
+hc_complete <- hclust(dist(crime_dat), method = 'complete')
+
+hc1 <- ggdendrogram(hc_complete, labels = TRUE) + 
+  labs(title = '50 States Hierarchical Clustering with Complete Linkage',
+       y = 'Euclidean Distance')
+
+hc1
+```
+
+
+## 7. Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r}
+cutree(hc_complete, k = 3) %>%
+  data_frame(State = names(.), clust_id = .)
+```
+
+
+## 8. Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+```{r}
+hc_complete <- hclust(dist(scale(crime_dat)), method = 'complete')
+
+hc2 <- ggdendrogram(hc_complete, labels = TRUE) + 
+  labs(title = '50 States Hierarchical Clustering with Scaling',
+       y = 'Euclidean Distance')
+
+hc2
+```
+
+Our outcome with scaling have a lower Euclidean distance than the outcome of record linkage, and yields a different clustering scheme.
+
+I think we should scale the variables to have standard deviation 1 before the inter-observation dissimilarities are computed, since it will compensate for the effect of unbalanced dissimilarity measures due to different standard deviation of the variables.
