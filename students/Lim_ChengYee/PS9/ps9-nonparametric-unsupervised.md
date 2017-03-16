@@ -313,6 +313,9 @@ college.pca$rotation %>%
 | Expend      |  0.292|  -0.753|  -0.585|   0.009|  -0.019|   0.006|  -0.036|   0.052|  -0.008|  -0.002|   0.001|   0.000|   0.001|   0.000|   0.000|   0.000|   0.000|
 | Grad.Rate   |  0.000|  -0.001|   0.002|  -0.001|  -0.002|  -0.001|  -0.001|  -0.003|   0.005|  -0.002|  -0.248|   0.433|   0.824|   0.265|  -0.031|   0.016|  -0.002|
 
+Biplot is rather difficult to interpret and messy, thus we cannot identify the highly correlated variables. Instead, we looked at the exact makeups of PC1 and PC2. `Apps`, `F.Undergrad`, `Accept` and `Enroll` are strongly correlated with the first principal component. The variables are all related to university admissions. Schools that have large positive values on the first principal component have a larger student population size
+`Outstate` and `Expend` are strongly correlated with the second principal component. The variables are related ot budgeting of the universities. Logically, the more the university spends on each student, the higher out-of-state tuition students have to pay.
+
 Clustering states \[3 points\]
 ==============================
 
@@ -340,7 +343,7 @@ pr.out$rotation
 biplot(pr.out, scale = 0, cex = .6)
 ```
 
-![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-4-1.png)
+![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-4-1.png) The first principal component is related to measures of violent crimes. The second principal component is related to urban population.
 
 1.  Perform *K*-means clustering with *K* = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -365,6 +368,8 @@ PCA %>%
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
+With the plot, we can clearly visualize that the states are clustered by the first principal component. States with positive first principal component are one cluster, whereas states with negative first principal component are another cluster. Thus, states are clustered by the high and low violent crime rates.
+
 1.  Perform *K*-means clustering with *K* = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
 ``` r
@@ -381,6 +386,8 @@ PCA %>%
 ```
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-6-1.png)
+
+From the graph, we can clearly visualize 4 clusters which are separated mainly based on their first principal component values. Thus, states are clustered based on the level of violent crime rates.
 
 1.  Perform *K*-means clustering with *K* = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -399,7 +406,9 @@ PCA %>%
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-7-1.png)
 
-1.  Perform *K*-means clustering with *K* = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with *K* = 3 based on the raw data.
+From the graph, we can clearly visualize 3 clusters which are separated mainly based on their first principal component values. Thus, states are clustered based on the level of violent crime rates.
+
+**Perform *K*-means clustering with *K* = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with *K* = 3 based on the raw data.**
 
 ``` r
 kmean.out <- kmeans(pr.out$x, 3, nstart = 1)
@@ -414,7 +423,7 @@ PCA %>%
   geom_text(aes(label = names), check_overlap = TRUE)
 ```
 
-![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-8-1.png) From the graph, we can clearly visualize 3 clusters. The cluster in blue has negative first and sceond princpal components. The green cluster has mostly negative second principal component, but positive principal component. The third cluster in red has very positive second principal components.
 
 1.  Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
 
@@ -429,8 +438,71 @@ ggdendrogram(hc.complete) +
 1.  Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
 
 ``` r
-h <- 150
+states3tree <- cutree(hc.complete, k = 3)
+states3tree <- as.data.frame(states3tree) %>% 
+  set_names("cluster")
 
+states3tree %>% 
+  bind_cols(as.data.frame(names)) %>% 
+  arrange(cluster) %>%
+  kable()
+```
+
+|  cluster| names          |
+|--------:|:---------------|
+|        1| Alabama        |
+|        1| Alaska         |
+|        1| Arizona        |
+|        1| California     |
+|        1| Delaware       |
+|        1| Florida        |
+|        1| Illinois       |
+|        1| Louisiana      |
+|        1| Maryland       |
+|        1| Michigan       |
+|        1| Mississippi    |
+|        1| Nevada         |
+|        1| New Mexico     |
+|        1| New York       |
+|        1| North Carolina |
+|        1| South Carolina |
+|        2| Arkansas       |
+|        2| Colorado       |
+|        2| Georgia        |
+|        2| Massachusetts  |
+|        2| Missouri       |
+|        2| New Jersey     |
+|        2| Oklahoma       |
+|        2| Oregon         |
+|        2| Rhode Island   |
+|        2| Tennessee      |
+|        2| Texas          |
+|        2| Virginia       |
+|        2| Washington     |
+|        2| Wyoming        |
+|        3| Connecticut    |
+|        3| Hawaii         |
+|        3| Idaho          |
+|        3| Indiana        |
+|        3| Iowa           |
+|        3| Kansas         |
+|        3| Kentucky       |
+|        3| Maine          |
+|        3| Minnesota      |
+|        3| Montana        |
+|        3| Nebraska       |
+|        3| New Hampshire  |
+|        3| North Dakota   |
+|        3| Ohio           |
+|        3| Pennsylvania   |
+|        3| South Dakota   |
+|        3| Utah           |
+|        3| Vermont        |
+|        3| West Virginia  |
+|        3| Wisconsin      |
+
+``` r
+h <- 150
 # extract dendro data
 hcdata <- dendro_data(hc.complete)
 hclabs <- label(hcdata) %>%
@@ -454,5 +526,69 @@ ggdendrogram(hc.complete)
 ```
 
 ![](ps9-nonparametric-unsupervised_files/figure-markdown_github/unnamed-chunk-11-1.png)
+
+``` r
+states3tree <- cutree(hc.complete, k = 3)
+states3tree <- as.data.frame(states3tree) %>% 
+  set_names("cluster")
+
+states3tree %>% 
+  bind_cols(as.data.frame(names)) %>% 
+  arrange(cluster) %>% 
+  kable()
+```
+
+|  cluster| names          |
+|--------:|:---------------|
+|        1| Alabama        |
+|        1| Alaska         |
+|        1| Georgia        |
+|        1| Louisiana      |
+|        1| Mississippi    |
+|        1| North Carolina |
+|        1| South Carolina |
+|        1| Tennessee      |
+|        2| Arizona        |
+|        2| California     |
+|        2| Colorado       |
+|        2| Florida        |
+|        2| Illinois       |
+|        2| Maryland       |
+|        2| Michigan       |
+|        2| Nevada         |
+|        2| New Mexico     |
+|        2| New York       |
+|        2| Texas          |
+|        3| Arkansas       |
+|        3| Connecticut    |
+|        3| Delaware       |
+|        3| Hawaii         |
+|        3| Idaho          |
+|        3| Indiana        |
+|        3| Iowa           |
+|        3| Kansas         |
+|        3| Kentucky       |
+|        3| Maine          |
+|        3| Massachusetts  |
+|        3| Minnesota      |
+|        3| Missouri       |
+|        3| Montana        |
+|        3| Nebraska       |
+|        3| New Hampshire  |
+|        3| New Jersey     |
+|        3| North Dakota   |
+|        3| Ohio           |
+|        3| Oklahoma       |
+|        3| Oregon         |
+|        3| Pennsylvania   |
+|        3| Rhode Island   |
+|        3| South Dakota   |
+|        3| Utah           |
+|        3| Vermont        |
+|        3| Virginia       |
+|        3| Washington     |
+|        3| West Virginia  |
+|        3| Wisconsin      |
+|        3| Wyoming        |
 
 [1] The variable is an index which combines responses to four different questions: "In the past 30 days, how often did you feel: 1) so sad nothing could cheer you up, 2) hopeless, 3) that everything was an effort, and 4) worthless?" Valid responses are none of the time, a little of the time, some of the time, most of the time, and all of the time.

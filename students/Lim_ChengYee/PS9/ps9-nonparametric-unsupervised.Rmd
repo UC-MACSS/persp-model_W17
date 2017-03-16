@@ -230,6 +230,10 @@ college.pca$rotation %>%
 
 ```
 
+Biplot is rather difficult to interpret and messy, thus we cannot identify the highly correlated variables. 
+Instead, we looked at the exact makeups of PC1 and PC2.
+`Apps`, `F.Undergrad`, `Accept` and `Enroll` are strongly correlated with the first principal component. The variables are all related to university admissions. Schools that have large positive values on the first principal component have a larger student population size  
+`Outstate` and `Expend` are strongly correlated with the second principal component. The variables are related ot budgeting of the universities. Logically, the more the university spends on each student, the higher out-of-state tuition students have to pay.
 
 # Clustering states [3 points]
 
@@ -246,6 +250,7 @@ pr.out <- prcomp(USArrests, scale = TRUE)
 pr.out$rotation
 biplot(pr.out, scale = 0, cex = .6)
 ```
+The first principal component is related to measures of violent crimes. The second principal component is related to urban population. 
 
 1. Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 ```{r}
@@ -265,9 +270,9 @@ PCA %>%
   ggplot(aes(PC1, PC2, color = as.factor(value))) +
   theme(legend.position = "none") + 
   geom_text(aes(label = names), check_overlap = TRUE)
-
-
 ```
+
+With the plot, we can clearly visualize that the states are clustered by the first principal component. States with positive first principal component are one cluster, whereas states with negative first principal component are another cluster. Thus, states are clustered by the high and low violent crime rates. 
 
 1. Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 ```{r}
@@ -284,6 +289,8 @@ PCA %>%
 
 ```
 
+From the graph, we can clearly visualize 4 clusters which are separated mainly based on their first principal component values. Thus, states are clustered based on the level of violent crime rates. 
+
 1. Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 ```{r}
 kmean.out <- kmeans(USArrests, 3, nstart = 1)
@@ -299,7 +306,10 @@ PCA %>%
 
 ```
 
-1. Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+From the graph, we can clearly visualize 3 clusters which are separated mainly based on their first principal component values. Thus, states are clustered based on the level of violent crime rates. 
+
+**Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.**
+
 ```{r}
 kmean.out <- kmeans(pr.out$x, 3, nstart = 1)
 
@@ -313,6 +323,7 @@ PCA %>%
   geom_text(aes(label = names), check_overlap = TRUE)
 
 ```
+From the graph, we can clearly visualize 3 clusters. The cluster in blue has negative first and sceond princpal components. The green cluster has mostly negative second principal component, but positive principal component. The third cluster in red has very positive second principal components. 
 
 1. Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
 ```{r}
@@ -324,8 +335,16 @@ ggdendrogram(hc.complete) +
 
 1. Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
 ```{r}
-h <- 150
+states3tree <- cutree(hc.complete, k = 3)
+states3tree <- as.data.frame(states3tree) %>% 
+  set_names("cluster")
 
+states3tree %>% 
+  bind_cols(as.data.frame(names)) %>% 
+  arrange(cluster) %>%
+  kable()
+
+h <- 150
 # extract dendro data
 hcdata <- dendro_data(hc.complete)
 hclabs <- label(hcdata) %>%
@@ -341,10 +360,21 @@ ggdendrogram(hc.complete) +
 
 1. Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
 
-
 ```{r}
 USA_st <- scale(USArrests)
 hc.complete <- hclust(dist(USA_st), method = "complete")
 ggdendrogram(hc.complete)
+
+states3tree <- cutree(hc.complete, k = 3)
+states3tree <- as.data.frame(states3tree) %>% 
+  set_names("cluster")
+
+states3tree %>% 
+  bind_cols(as.data.frame(names)) %>% 
+  arrange(cluster) %>% 
+  kable()
+
 ```
+
+
 
