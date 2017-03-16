@@ -1,0 +1,554 @@
+---
+title: "PS#9: nonparametric methods and unsupervised learning"
+author: |
+  | Chih-Yu Chiang
+  | UCID 12145146
+date: "Mar. 13, 2017"
+output: github_document
+---
+```{r setup, include=FALSE}
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(tree)
+library(randomForest)
+library(ISLR)
+library(gridExtra)
+library(grid)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(e1071)
+library(stringr)
+library(FNN)
+library(kknn)
+library(tm)
+
+options(digits = 4)
+set.seed(1234)
+
+
+#--Dfs
+df_feminist <- read_csv("data/feminist.csv")
+df_feministF <- read_csv("data/feminist.csv") %>%
+  mutate_each(funs(as.factor(.)), female, dem, rep)
+
+df_mental <- read_csv("data/mental_health.csv") %>% drop_na()
+df_mentalF <- read_csv("data/mental_health.csv") %>%
+  drop_na() %>% 
+  mutate_each(funs(as.factor(.)), vote96, black, female, married)
+
+df_college <- read_csv("data/College.csv") %>%
+  mutate(Private = as.numeric(as.factor(Private)))
+
+df_arrest <- read_csv("data/USArrests.csv")
+
+
+#--Functions
+mse <- function(model, data) {
+  x <- modelr:::residuals(model, data)
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+err.rate.tree <- function(model, data) {
+  data <- as_tibble(data)
+  response <- as.character(model$terms[[2]])
+  
+  pred <- predict(model, newdata = data, type = "class")
+  actual <- data[[response]]
+  
+  return(mean(pred != actual, na.rm = TRUE))
+}
+
+Cols <- function(vec){
+  cols=rainbow(length(unique(vec)))
+  
+  return (cols[as.numeric(as.factor(vec))])
+}
+
+```
+
+## Attitudes towards feminists
+### 1.Split the data into a training and test set (70/30%).
+```{r 1-1}
+set.seed(1234)
+
+#--Split data
+dfs_feminist <- resample_partition(df_feminist, c(test = 0.3, train = 0.7))
+df_feminist_tr <- as_tibble(dfs_feminist$train)
+df_feminist_te <- as_tibble(dfs_feminist$test)
+
+#--Split data with factor
+dfs_feministF <- resample_partition(df_feministF, c(test = 0.3, train = 0.7))
+df_feministF_tr <- as_tibble(dfs_feministF$train)
+df_feministF_te <- as_tibble(dfs_feministF$test)
+
+```
+
+Two versions of the data is split. One takes all variables cardinal (`dfs_feminist`); one takes `female`, `dem`, and `rep` as factors (`dfs_feministF`). The factor model will be applied with a priority as long as the algorithm accept non-numeric inputs.  
+  
+
+
+
+### 2.Calculate the test MSE for KNN models with K = 5, 10, 15,.., 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+```{r 1-2}
+set.seed(1234)
+
+#--KNN and mse
+KNN_1 <- data_frame(k = seq(5, 100, by=5),
+                    knn = map(k, ~ knn.reg(select(df_feminist_tr, -feminist),
+                                           y=df_feminist_tr$feminist,
+                                           test=select(df_feminist_te, -feminist),
+                                           k=.)
+                    ),
+                    mse = map_dbl(knn, ~ mean((df_feminist_te$feminist - .$pred)^2)))
+
+KNN_1
+
+ggplot(KNN_1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test mean squared error")
+
+```
+
+I apply all variables except `feminist` in the predicting task whereas `feminist` can be intuitively explained by any of the other variables. With the KNN method of different ks, the lowest test MSE (455.7) occurs at k = 45. The test MSE goes down very quickly from 5 to 25, and generally stabalized at 450-460 afterward.  
+  
+
+
+
+### 3.Calculate the test MSE for weighted KNN models with 5, 10, 15,.., 100, using the same combination of variables as before. Which model produces the lowest test MSE?
+```{r 1-3}
+set.seed(1234)
+
+#--wKNN and mse
+wKNN_1 <- data_frame(k = seq(5, 100, by=5),
+                    knn = map(k, ~ kknn(feminist ~ .,
+                                        train=df_feminist_tr,
+                                        test=df_feminist_te, k =.)
+                    ),
+                    mse = map_dbl(knn, ~ mean((df_feminist_te$feminist - .$fitted.values)^2)))
+
+wKNN_1
+
+ggplot(wKNN_1, aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test mean squared error")
+
+```
+
+With the weighted KNN method of different ks, the lowest MSE (437.4) occurs at k = 100. While weighted by distance, the test MSE curve is less jagged and goes down smoothly from 5 to 100, and could keep going down afterwards.  
+
+
+
+
+### 4.Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+```{r 1-4}
+set.seed(1234)
+
+#--Linear regression
+lm_1 <- lm(feminist ~ ., data=df_feminist_tr)
+summary(lm_1)
+
+mse_lm1 <- mse(lm_1, df_feminist_te)
+mse_lm1
+
+
+#--Decision tree
+tree_1 <- tree(feminist ~ ., data=df_feminist_tr)
+summary(tree_1)
+
+mse_tree1 <- mse(tree_1, df_feminist_te)
+mse_tree1
+
+
+#--Boosting
+boost_1 <- gbm(feminist ~ ., data=df_feminist_tr, n.trees=500)
+summary(boost_1)
+
+yhat.boost = predict(boost_1, newdata=df_feminist_te, n.trees=500)
+mse_boost_1 <- mean((yhat.boost - df_feminist_te$feminist)^2)
+mse_boost_1
+
+
+#--Random forest
+rf_1 <- randomForest(feminist ~ ., data=df_feminist_tr, ntree=500)
+summary(rf_1)
+
+mse_rf1 <- mse(rf_1, df_feminist_te)
+mse_rf1
+
+```
+
+With the same variables of previous models, regarding test MSE, linear regression acquires 435.1, decision tree 436.2, boosting 448.8, and random forest 437.8. Among all, the linear regression performs the best even compared to the KNN models. This is probably because the general relation between the predictor and respondent variables is close to linear; this linear relationship allows the linear model captures the general trend well, as other non-parametric methods are more likely to be influenced by noise and more or less overfit the training data, while without the linear assumption about the relationship.
+
+
+
+
+## Voter turnout and depression
+### 1.Split the data into a training and test set (70/30).
+```{r 2-1}
+set.seed(1234)
+
+#--Split data
+dfs_mental <- resample_partition(df_mental, c(test = 0.3, train = 0.7))
+df_mental_tr <- as_tibble(dfs_mental$train)
+df_mental_te <- as_tibble(dfs_mental$test)
+
+#--Split data with factor
+dfs_mentalF <- resample_partition(df_mentalF, c(test = 0.3, train = 0.7))
+df_mentalF_tr <- as_tibble(dfs_mentalF$train)
+df_mentalF_te <- as_tibble(dfs_mentalF$test)
+
+```
+
+Two versions of the data is split. One takes all variables cardinal (`dfs_mental`); one takes `vote96`, `black`, `female`, and `married` as factors (`dfs_mentalF`). The factor model will be applied with a priority as long as the algorithm accept non-numeric inputs.  
+  
+
+
+
+### 2.Calculate the test error rate for KNN models with K = 1, 2,.., 10, using whatever combination of variables you see fit. Which model produces the lowest test error rate?
+```{r 2-2}
+set.seed(1234)
+
+#--KNN and err
+KNN_2 <- data_frame(k = 1:10,
+                    knn = map(k, ~ knn(train=select(df_mental_tr, -vote96),
+                                       test=select(df_mental_te, -vote96),
+                                       cl=df_mental_tr$vote96,
+                                       k=.)),
+                    err = map_dbl(knn, ~ mean(df_mental_te$vote96 != .))
+                    )
+KNN_2
+
+ggplot(KNN_2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate")
+
+```
+
+I apply all variables except `vote96` in the classification task whereas `vote96` can be intuitively explained by any of the other variables. The relationships between the variables are generally verified in the last few problems sets. With the KNN method of different ks, the lowest test error rate (31.23%) occurs at k = 9. The test error rate fluctuates quite a bit while with a generally downward pattern from k = 1 to 10.
+  
+
+
+
+### 3.Calculate the test MSE for weighted KNN models with K = 1, 2,.., 10 using the same combination of variables as before. Which model produces the lowest test error rate?
+```{r 2-3}
+set.seed(1234)
+
+#--wKNN and err
+wKNN_2 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ .,
+                                         train=df_mentalF_tr,
+                                         test=df_mentalF_te, k =.)
+                     ),
+                     err = map_dbl(knn, ~ mean(df_mentalF_te$vote96 != .$fitted.values)))
+
+wKNN_2
+
+ggplot(wKNN_2, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate")
+
+```
+
+With the weighted KNN method of different ks, the lowest test error rate (30.09%) occurs at k = 10. Again, error rates of the weighted models are generally less fluctuating.  
+  
+
+
+
+### 4.Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+```{r 2-4}
+set.seed(1234)
+
+#--Linear regression
+logis_2 <- glm(vote96 ~ ., data=df_mentalF_tr, family=binomial)
+
+summary(logis_2)
+
+logistic_2 <- df_mentalF_te %>%
+  add_predictions(logis_2) %>%
+  mutate(prob = exp(pred) / (1 + exp(pred))) %>%
+  mutate(pred_bi = as.numeric(prob > .5))
+
+err_logistic2 <- mean(df_mentalF_te$vote96 != logistic_2$pred_bi)
+err_logistic2
+
+
+#--Decision tree
+tree_2 <- tree(vote96 ~ ., data=df_mentalF_tr)
+summary(tree_2)
+
+err_tree2 <- err.rate.tree(tree_2, df_mentalF_te)
+err_tree2
+
+
+#--Boosting
+boost_2 <- gbm(as.character(vote96) ~ ., data=df_mentalF_tr, n.trees=500)
+summary(boost_2)
+
+yhat.boost <- predict(boost_2, newdata=df_mentalF_te, n.trees=500)
+yhat.boost_bi <- as.numeric(yhat.boost > .5)
+err_boost_2 <- mean(yhat.boost_bi != df_mentalF_te$vote96)
+err_boost_2
+
+
+#--Random forest
+rf_2 <- randomForest(vote96 ~ ., data=df_mentalF_tr, ntree=500)
+summary(rf_2)
+
+err_rf2 <- err.rate.tree(rf_2, df_mentalF_te)
+err_rf2
+
+
+#--SVM
+svmlin_2 <- svm(vote96 ~ ., data=df_mentalF_tr, kernel="linear", cost=5)
+summary(svmlin_2)
+
+yhat.svm <- predict(svmlin_2, newdata=df_mentalF_te)
+err_svm_2 <- mean(yhat.svm != df_mentalF_te$vote96)
+err_svm_2
+
+```
+
+With the same variables of previous models, regarding test error rate, logistic regression acquires 28.65%, decision tree 30.09%, boosting 29.51%, random forest 27.22%, and SVM 27.79%. Among all, the random forest performs the best even compared to the KNN models. The data contains noise which damages the precision of the KNN and decision tree mehods. With bagging and random selection of features, random forest has less overfitting issue and hense captures better the general relationship between the variables. SVM also performs well (at the second place) as it decides the categorization boundary with only the support machines; this mechanism reduces some noise's influence and make the model stabler as well.  
+  
+
+
+
+## Colleges
+### Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+```{r 3-1}
+set.seed(1234)
+
+pca_3 <- prcomp(df_college, scale = TRUE)
+pca_3$rotation
+
+biplot(pca_3, scale = 0, cex = .6)
+
+```
+
+With the plot, we can see most observations gathering at the up-right part of the space, with both high PC1 and PC2 levels.  
+  
+PC1 is most postively correlated with `S.F.Ratio` (with coefficient 0.21026) and negatively correlated with `Top10perc` (-0.36035), `Top25perc` (-0.34475), `Expend` (-0.33301), and `outstate` (-0.32766). Conceptually, PC1 could represent the institutions' lack of general quality of environment for learning. With a higher PC1, the school has a higher student/faculty rate, lower percentage of students coming from top high school classes, and with lower expenditure on students; they all potentially contribute to a lower quality of leaning environment.
+
+PC2 is most postively correlated with `Private` (0.34588) and negatively correlated with `F.Undergrad` (-0.41073), `Enroll` (-0.39970), `Accept` (-0.37256), and `Apps` (-0.19963). Conceptually, PC2 could represent the scale of the institutions (reversely). With a higher PC2, the school is more likely private, and with less full time students, less enrolled and accepted students, and less applications; these all contributes a smaller scale of educational organization.  
+  
+Combining the interpretation together, most of the institutions in the sample have a relatively lower quality of leaning environment and a relatively smaller scale and gather at the up-right section. With some schools have higher quality of leaning environment and smaller scale sitting at the top left part of the space; most schools with larger scale tend to have a mediocre quality of leaning environment (lower middle part of the space).  
+  
+
+
+
+## Clustering states
+### 1.Perform PCA on the dataset and plot the observations on the first and second principal components.
+```{r 4-1}
+set.seed(1234)
+
+pca_4 <- prcomp(select(df_arrest, -State), scale = TRUE)
+pca_4$rotation
+
+biplot(pca_4, scale = 0, cex = .6, xlabs=df_arrest$State)
+
+```
+
+With the plot, we see the observations spreding across the entire space. PC1 here is negatively correlated with all four variables. It could represent a general safety of a state. The higher the PC1 of a state, the lower proportion of urban population it has and, more importantly, the less of all three types of crimes. PC2 is heavily and negatively correlated with urban population proportion. The higher the PC2 of a state, the lower proportion of urban population it has.  
+  
+
+
+
+### 2.Perform K-means clustering with K = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r 4-2}
+set.seed(1234)
+
+kmean_4_2 <- kmeans(select(df_arrest, -State), centers=2, nstart=1)
+kmean_4_2
+
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_2$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+
+```
+
+The two clusters are generally distinguished by the level of their PC1 score. One cluster at the left with lower PC1, including the States with more crimes, such as NY, CA, IL, etc. Another cluster at the right with higher PC1, it includes the safer states such as NH, WV, ND, etc.  
+  
+
+
+
+### 3.Perform K-means clustering with K = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r 4-3}
+set.seed(1234)
+
+kmean_4_4 <- kmeans(select(df_arrest, -State), centers=4, nstart=1)
+kmean_4_4
+
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_4$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+
+```
+
+Again, the four clusters are generally distinguished by their safety levels. The first group with the most crimes, including FL, NV, CA, etc.; the second with the second most crimes, including TX, MO, AL, etc.; the third is the second to the safest, including PA, OH, MT, etc.; the fourth is the safest, including NH, ND, WI, etc.  
+  
+
+
+
+### 4.Perform K-means clustering with K = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+```{r 4-4}
+set.seed(1234)
+
+kmean_4_3 <- kmeans(select(df_arrest, -State), centers=3, nstart=1)
+kmean_4_3
+
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_3$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+
+```
+
+With a similar result, the three clusters are generally separated by safety levels. The first is with the lowest safety level, including IL, NY, CA, etc.; the second with the middle safety level, including MO, VA, AR, etc.; the third is the safest, including PA, NH, ID, etc.  
+  
+
+
+
+### 5.Perform K-means clustering with K = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with K = 3 based on the raw data.
+```{r 4-5}
+set.seed(1234)
+
+kmean_4_3p <- kmeans(pca_4$x[,1:2], centers=3, nstart=1)
+kmean_4_3p
+
+ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=factor(kmean_4_3p$cluster))) +
+  geom_point() +
+  geom_text(hjust=0, vjust=0) +
+  scale_color_discrete(guide=FALSE) +
+  labs(title = "State clustering regarding crime statistics",
+       x = "PC 1 (safety)",
+       y = "PC 2 (rural-inclined)")
+
+```
+
+The first cluster is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second is less urbanized while also unsafe, including SC, NC, AK, etc.; the third is generally the safer states, including PA, NH, ID, etc.  
+  
+The three clusters here are distinguished by both "safety" and "rural-inclined" axes, compared to the only "safety" criterion in the previous models. This is probably because while using the PCs as the clustering input, we "up-weight" the originally not-so-important factor "rural-inclined" to the same level as "safety", which should be the dominant factor explaining the variance in this sample data.  
+  
+
+
+
+### 6.Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+```{r 4-6}
+set.seed(1234)
+
+h <- 0
+hc_4 <- hclust(dist(select(df_arrest, -State)), method="complete")
+
+#--Extract dendro data
+hcdata <- dendro_data(hc_4)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_arrest))),
+                       State = df_arrest$State,
+                       cl = as.factor(cutree(hc_4, h=h))))
+
+#--Plot
+ggdendrogram(hc_4) +
+  geom_text(data=hclabs,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+
+```
+
+The clustering is performed and plotted as above.
+  
+
+
+
+### 7.Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+```{r 4-7}
+set.seed(1234)
+
+h <- 150
+hc_4 <- hclust(dist(select(df_arrest, -State)), method="complete")
+
+#--Extract dendro data
+hcdata <- dendro_data(hc_4)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_arrest))),
+                       State = df_arrest$State,
+                       cl = as.factor(cutree(hc_4, h=h))))
+
+#--Plot
+ggdendrogram(hc_4) +
+  geom_text(data=hclabs,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=h, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+
+```
+
+With a distance cut-off at 150, we acquire 3 clusters. The result is very similar to the k-mean clustering (k = 3) with the raw data.  
+
+- One cluster is generally unsafe, including FL, SC, DE, AL, LA, AK, MS, NC, MD, AZ, NM, CA, IL, NY, MI, and NV.
+- One with middle safety, including MS, AR, TN, GA, TX, RI, WY, OR, OK, VA, WA, MA, and NJ.
+- One is relatively safe, including OH, UT, CT, PA, NE, KY, MT, IN, AR, HI, MN, WI, IA, NH, WV, ME, ND, SD, and VT.  
+
+From the hierarchical structure, we also observe that the second (green) and the third (blue) clusters are more similar to each other than the first (red) cluster.  
+  
+
+
+
+
+### 8.Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+```{r 4-8}
+set.seed(1234)
+
+#--Scaling (standardization)
+df_arrest_s <- scale(select(df_arrest, -State))
+
+h <- 4.41
+hc_42 <- hclust(dist(df_arrest_s), method="complete")
+
+#--Extract dendro data
+hcdata <- dendro_data(hc_42)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(df_arrest))),
+                       State = df_arrest$State,
+                       cl = as.factor(cutree(hc_42, h=h))))
+
+#--Plot
+ggdendrogram(hc_42) +
+  geom_text(data=hclabs,
+            aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=h, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+
+```
+
+The scaling upweights the `Murder` and `Rape` variables, which have the lower original value and thus lower variance to be considered in the clustering. Also, the "rural-urban" factor is upweighted as well; the result is, therefore, more similar to the result coming from the clustering model with PCs as the input. The first cluster (green) is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second (red) is less urbanized while also unsafe, including SC, NC, AK, etc.; the third (blue) is generally the safer states, including PA, NH, ID, etc.  
+  
+While the Euclidean distance is influenced by the "scale" of each variable, I'd suggest, in this case, the variabes be standardized (to have standard deviation 1) before calculating the distance (inter-similarity), to avoid over-weighting the variables with larger scales. Here, `Assult` is generally 2-3 times in number compared to `Murder`, which could make the algorithm weights more on `Assult` in clustering while it provides a higher variance in the absolute value. However, without saying, the significance of 1 `Murder` event is much higher than 1 `Assult` event and shouldn't be overlooked only because the "number" of murder is smaller.
