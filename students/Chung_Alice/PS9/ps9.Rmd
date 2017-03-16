@@ -2,7 +2,7 @@
 title: "MACSS 30100 PS#9"
 author: "Alice Mee Seon Chung"
 date: "3/10/2017"
-output: html_document
+output: github_document
 
 ---
 
