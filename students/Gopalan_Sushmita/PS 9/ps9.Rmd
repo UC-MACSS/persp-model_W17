@@ -1,0 +1,401 @@
+---
+title: "Problem set #9: Unsupervised Learning"
+author: "Sushmita V Gopalan"
+output:
+  github_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(ISLR)
+library(titanic)
+#library(rcfss)
+library(grid)
+library(gridExtra)
+library(ggdendro)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(FNN)
+library(varhandle)
+library(class)
+library(kknn)
+library(tree)
+library(randomForest)
+library(gbm)
+library(e1071)
+library(plyr)
+
+
+options(digits = 3)
+set.seed(1234)
+theme_set(theme_minimal())
+# read in data
+
+college <- read_csv("data/college.csv")
+feminist <- read_csv("data/feminist.csv")
+arrests <- read_csv("data/USArrests.csv")
+mh <- read_csv("data/mental_health.csv")
+
+```
+
+## Attitudes Towards Feminists
+[1] Split the data into a training and test set (70/30%).
+
+```{r}
+set.seed(1234)
+feminist_split <- resample_partition(feminist, p=c(test = 0.3, train = 0.7))
+feminist_train <- feminist_split$train %>%
+  tbl_df()
+feminist_test <- feminist_split$test %>%
+  tbl_df()
+
+test_label <- feminist_test$feminist
+train_label <- feminist_train$feminist
+
+train_data <- feminist_train[c("female", "age", "educ", "income", "dem", "rep")]
+test_data <- feminist_test[c("female", "age", "educ", "income", "dem", "rep")]
+
+# define mse function
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+```
+
+[2] Calculate the test MSE for KNN models with $K = 5, 10, 15, \dots, 100$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+
+```{r}
+set.seed(1234)
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+prediction_int <- unfactor(prediction)
+ks <- seq(5, 100, 5)
+mses <- list()
+for(i in 1:20){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i*5)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of KNN Model",
+     pch=20, cex=2)
+min_unweighted_mse <- mses[11]
+min_unweighted_mse
+
+```
+I test the KNN models using all available variables. The model with K = 55 and K = 65 both produce the lowest test MSE of 
+`r min_unweighted_mse`
+
+[3] Calculate the test MSE for weighted KNN models with $K = 5, 10, 15, \dots, 100$ using the same combination of variables as before. Which model produces the lowest test MSE?
+
+```{r}
+set.seed(1234)
+model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, 2)
+mses <- list()
+for(i in 1:20){
+  model <- kknn(feminist_train$feminist ~ ., train=feminist_train, test=feminist_test, k=i*5)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+ks <- seq(5, 100, 5)
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of Weighted KNN Model",
+     pch=20, cex=2)
+min_weighted_mse = mses[20]
+```
+I obtain the lowest MSE of `r min_weighted_mse` for the weighted KNN model with K = 100.
+
+[4] Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r}
+set.seed(1234)
+
+lm_fit <- lm(feminist_train$feminist ~ ., data=feminist_train)
+tree_fit <- tree(feminist_train$feminist ~ ., data=feminist_train, control = tree.control(nobs = nrow(feminist_train), mindev = 0))
+rf_fit <- randomForest(feminist_train$feminist ~ ., data=feminist_train, ntree = 500)
+boosting <- gbm(feminist_train$feminist ~ ., data=feminist_train, n.trees = 2000, interaction.depth = 2)
+
+mse_lm <- mse(predict(lm_fit, feminist_test), test_label)
+mse_tree <- mse(predict(tree_fit, feminist_test), test_label)
+mse_rf <- mse(predict(rf_fit, feminist_test), test_label)
+mse_boost <- mse(predict(boosting, feminist_test, n.trees=2000), test_label)
+```
+MSE for best unweighted KNN: `r min_unweighted_mse`
+MSE for best weighted KNN: `r min_weighted_mse`
+MSE for OLS : `r mse_lm`
+MSE for Decision Trees: `r mse_tree`
+MSE for Random Forest: `r mse_rf`
+MSE for Boosting: `r mse_boost`
+
+The MSE for the boosted trees model has the lowest value of `r mse_boost`. I also checked with interaction depths of 1 and 4, but obtained a lower MSE for 2. The advantage of this approach is that the model is built slowly and additively, resulting in higher accuracy of prediction. The MSE for OLS `r mse_lm` is only slightly higher. 
+
+## Voter Turnout and Depression
+
+[1] Split the data into a training and test set (70/30).
+
+[4]Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+
+```{r}
+set.seed(1234)
+# drop invalid observations
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+mh <- delete.na(mh)
+
+mh_split <- resample_partition(mh, p=c(test = 0.3, train = 0.7))
+
+mh_train <- mh_split$train %>%
+  tbl_df()
+mh_test <- mh_split$test %>%
+  tbl_df()
+
+test_label <- mh_test$vote96
+train_label <- mh_train$vote96
+
+train_data <- mh_train[c("mhealth_sum", "age", "educ", "black", "female", "married", "inc10")]
+test_data  <- mh_test[c("mhealth_sum", "age", "educ", "black", "female", "married", "inc10")]
+```
+
+[2] Calculate the test error rate for KNN models with $K = 1,2,\dots,10$, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+```{r}
+set.seed(1234)
+prediction <- knn(train = train_data, test = test_data, cl = train_label, k=2)
+prediction_int <- unfactor(prediction)
+ks <- seq(1, 10, 1)
+mses <- list()
+for(i in 1:10){
+  prediction <- knn(train = train_data, test = test_data, cl = train_label, k=i)
+  prediction_int <- unfactor(prediction)
+  mses[[i]] <- mse(prediction_int, test_label)
+}
+
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of KNN Model",
+     pch=20, cex=2)
+mse_uw_min <- mses[[9]]
+```
+The lowest MSE  of `r mse_uw_min` is obtained for K = 9.
+
+[3]Calculate the test error rate for weighted KNN models with $K = 1,2,\dots,10$ using the same combination of variables as before. Which model produces the lowest test error rate?
+
+```{r}
+set.seed(1234)
+model <- kknn(mh_train$vote96 ~ ., train=mh_train, test=mh_test, 2)
+
+mses <- list()
+for(i in 1:10){
+  model <- kknn(mh_train$vote96 ~ ., train=mh_train, test=mh_test, k=i)
+  mses[[i]] <- mse(test_label, model$fitted.values)
+}
+
+ks <- seq(1, 10, 1)
+plot(ks, mses, type="b", xlab="Number of Clusters",
+     ylab="MSEs",
+     main="MSE of Weighted KNN Model",
+     pch=20, cex=2)
+mse_w_min = mses[[10]]
+```
+The lowest MSE is `r mse_w_min` for K = 10.
+
+```{r}
+set.seed(1234)
+
+glm_fit      <- glm(mh_train$vote96 ~ ., data=mh_train, family=binomial)
+tree_fit     <- tree(mh_train$vote96 ~ ., data=mh_train, control = tree.control(nobs = nrow(mh_train), mindev = 0))
+rf_fit       <- randomForest(mh_train$vote96 ~ ., data=mh_train, ntree = 500)
+boosting_fit <- gbm(mh_train$vote96 ~ ., data=mh_train, n.trees = 10000, interaction.depth = 2)
+svm_fit      <- svm(mh_train$vote96 ~ ., data=mh_train, kernel = "linear", range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+
+mse <- function(model, data) {
+  x <- model - data
+  mean(x ^ 2, na.rm = TRUE)
+}
+
+mse_glm2 <- mse(predict(glm_fit, mh_test), test_label)
+mse_tree2 <- mse(predict(tree_fit, mh_test), test_label)
+mse_rf2 <- mse(predict(rf_fit, mh_test), test_label)
+mse_svm2 <- mse(predict(svm_fit, mh_test), test_label)
+mse_boost2 <- mse(predict(boosting_fit, mh_test, n.trees=1000), test_label)
+
+```
+MSE for best unweighted KNN model : `r mse_uw_min`
+
+MSE for bestn weighted KNN model : `r mse_w_min`
+
+MSE for Linear Regression: `r mse_glm2`
+
+MSE for Decision Tree: `r mse_tree2`
+
+MSE for Random Forest: `r mse_rf2`
+
+MSE for SVM: `r mse_svm2`
+
+MSE for Boosting: `r mse_boost2`
+
+The lowest MSE obtained is `r mse_rf2`  for the random forest model. Random forests offer an improvement over bagged trees by 'decorrelating' the trees. We still build a number of decision trees on bootstrapped training samples. In a random forest model, each time a split in a tree is considered, a random sample of m predictors is chosen as split candidates from the full set of p predictors. We restrict ourselves to a random subset m of all predictors in order to avoid the possibility of all trees looking extremely similar like in a bagged model, where all the trees would end up using the same strongest predictor in the top split. In such a situation, averaging across highly correlated predictions would not lead to a substantial decrease in variance. In the random forest model, we overcome this issue by restricting each split to only a subset of predictors - basically, about (p-m)/p of the splits wouldn't even consider the strongest predictor, allowing the influence of the other predictors to become discernible. Conventionally (and by default in most packages), using m approximately equal to the square root of p leads to a low test MSE.
+
+## Colleges
+
+```{r}
+mse_boost2
+college$Private <- mapvalues(college$Private, from = c("Yes", "No"), to = c(1, 0))
+college$Private <- as.numeric(as.character(college$Private))
+pr.out <- prcomp(college, scale = TRUE)
+summary(pr.out)
+pr.out
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+For PC1, we notice that Top10perc, Top25 perc, Outstate, Expend, PhD and Terminal load quite negatively. So, schools with high PC1 scores, are likely to have low proportions of students in the top 10% or top 25% or from out-of-state, low expenditure per student and low proportions of faculty with a PhD or a terminal degree.
+
+Along PC2, we notice that F.Undergrad, Enroll, Accept, Apps load very negatively, i.e. schools with high PC2 scores will have low enrollment of full-time undergrads, low total enrollment, low number of acceptances and low number of applications. On the other hand, 'Private' loads positively, meaning that schools with high PC2 scores are likely to be private.
+
+## Clustering States
+
+[1] Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+```{r}
+# Principal Component Analysis 
+arrests_label <-arrests$State
+arrests_df <- arrests[c("Murder", "Assault", "UrbanPop", "Rape")]
+pr.out <- prcomp(arrests_df, scale = TRUE)
+pr.out$rotation 
+biplot(pr.out, scale = 0, cex = .6)
+```
+
+[2] Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+
+```{r}
+
+kmeans_fit2 <- kmeans(arrests_df, 2, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+plot(PC1, PC2, label=arrests_label)
+state_group <- as.factor(kmeans_fit2$cluster)
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(x="PC1",y="PC2",title = "PCA: Divide States into 2 Groups (K-Means Clustering, K=2)")
+```
+The clustering appears to be based mostly on PC1 scores. Roughly,with negative PC1 scores form one cluster, while those with positive PC1 scores form the other. Violent crime (murder, assault, rape) rates are correlated with PC1 while urban population seems to be correlated with PC2, implying that the clustering here, is taking place based roughly on the rates of violent crime.
+
+[3] Perform $K$-means clustering with $K=4$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+kmeans_fit4 <- kmeans(arrests_df, 4, nstart = 20)
+
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=arrests_label)
+
+state_group <- as.factor(kmeans_fit4$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(x="PC1",y="PC2",title = "PCA: Divide States into 4 Groups (K-Means Clustering, K=4)")
+```
+The states continue to be clustered into groups depending on the value of their PC1 scores. 
+
+[4] Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r}
+kmeans_fit3 <- kmeans(arrests_df, 3, nstart = 20)
+biplot(pr.out, scale = 0, cex = .6)
+PC1 <- as.data.frame(pr.out$x)$PC1
+PC2 <- as.data.frame(pr.out$x)$PC2
+
+plot(PC1, PC2, label=arrests_label)
+
+state_group <- as.factor(kmeans_fit3$cluster)
+
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(x="PC1",y=
+                          "PC2
+",title = "PCA: Divide States into 3 Groups (K-Means Clustering, K=3)")
+```
+For K = 3 too, we see that PC1 scores appear to primarily determine which cluster a state belongs to.
+
+[5] Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
+
+```{r}
+pr.out <- prcomp(arrests_df, scale = TRUE)
+PCS <- data.frame(v1=PC1, v2=PC2)
+kmeans_fit3_pca <- kmeans(PCS, 3, nstart = 20)
+state_group <- as.factor(kmeans_fit3_pca$cluster)
+d <- data.frame(x=PC1, y=PC2, name=arrests_label)
+p <- ggplot(d, aes(x, y, label=name, color=state_group))
+p +  geom_text() + labs(x="PC1",y="PC2",title = "PCA: Divide States into 3 Groups based on PC1, PC2 (K-Means Clustering, K=2)")
+```
+The overlaps between the groups is lower when I use the first two principal component score vectors for clustering, than when I use raw data. 
+
+[6] Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r}
+hc.complete <- hclust(dist(arrests), method = "complete")
+#ggdendrogram(hc.complete)
+```
+
+[7]Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r}
+h <- 150
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(arrests))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y, color = cl),
+            vjust = 0.8, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+The above dendrogram shows three clusters, delineated by colour.
+
+[8]Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation $1$. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+
+```{r}
+arrests_scaled <- scale(arrests_df)
+
+hc.complete <- hclust(dist(arrests_scaled), method = "complete")
+h <- 4
+# extract dendro data
+hcdata <- dendro_data(hc.complete)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(arrests))),
+                       cl = as.factor(cutree(hc.complete, h = h))))
+
+
+# plot dendrogram
+ggdendrogram(hc.complete, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = -.5, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+Upon scaling the data to have a standard deviation of 1, I obtain this dendrogram. We now see that the states are sorted into 4 main groups. Their groupings also appear fairly different from the dendrogram obtained in part 7. I would argue that it does indeed seem appropriate to scale variables before clustering in order to ensure that variables that are measured in higher scales (for e.g. - `assault` ranges between 40 and 340, while `murder` takes values under 20) aren't weighted higher.
