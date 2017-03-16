@@ -1,0 +1,473 @@
+---
+title: "Perspectives on Computational Modeling PS9"
+author: "HyungJin Cho"
+date: "March 13, 2017"
+output: github_document
+---
+
+```{r Setup, echo=FALSE, include=FALSE}
+# < Import Pacakges >
+library(tidyverse)
+library(knitr)
+library(modelr)
+library(forcats)
+library(broom)
+library(tree)
+library(randomForest)
+library(ISLR)
+library(grid)
+library(gridExtra)
+library(pROC)
+library(gbm)
+library(ggdendro)
+library(e1071)
+library(stringr)
+library(FNN)
+library(kknn)
+library(tm)
+
+# < Chunk Options >
+knitr::opts_chunk$set(cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE)
+
+# < Option >
+set.seed(1234)
+options(digits = 3)
+theme_set(theme_minimal())
+
+
+# < Import Data >
+DF_FEM = read_csv("data/feminist.csv") %>%
+  na.omit()
+DF_MH = read.csv("data/mental_health.csv") %>%
+  na.omit()
+DF_CL = read_csv("data/College.csv") %>%
+  mutate(Private = as.numeric(as.factor(Private)))
+DF_AR = read_csv("data/USArrests.csv")
+
+```
+
+# Part 1: Attitudes towards feminists
+
+#### 1.Split the data into a training and test set (70/30%).
+```{r I.1., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+SPLIT.DF_FEM = resample_partition(DF_FEM, c(train=0.7, test=0.3))
+DF_FEM_TRAIN = as_tibble(SPLIT.DF_FEM$train)
+DF_FEM_TEST = as_tibble(SPLIT.DF_FEM$test)
+
+```
+
+#### 2.Calculate the test MSE for KNN models with K=5,10,15,…,100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+```{r, I.2., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < KNN Model >
+DF_FEM_KNN = data_frame(k = seq(5, 100, by = 5),
+                        knn = map(k, ~ knn.reg(select(DF_FEM_TRAIN, -feminist),
+                                               y = DF_FEM_TRAIN$feminist,
+                                               test = select(DF_FEM_TEST, -feminist),
+                                               k = .)),
+                        mse = map_dbl(knn, ~ mean((DF_FEM_TEST$feminist - .$pred)^2)))
+DF_FEM_KNN
+
+# < Graph >
+ggplot(data=DF_FEM_KNN, mapping=aes(k, mse)) +
+  geom_line() +
+  geom_point() + 
+  labs(title = "Feminist Data: KNN Model",
+       x = "K",
+       y = "Test Mean Squared Error")
+
+```
+
+The KNN model with K=60 produces the lowest test MSE of 433.
+ 
+#### 3.Calculate the test MSE for weighted KNN models with K=5,10,15,…,100 using the same combination of variables as before. Which model produces the lowest test MSE?
+```{r, I.3., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < wKNN Model >
+DF_FEM_WKNN = data_frame(k = seq(5, 100, by = 5),
+                         knn = map(k, ~ kknn(feminist ~ .,
+                                             train = DF_FEM_TRAIN,
+                                             test = DF_FEM_TEST, k = .)),
+                         mse = map_dbl(knn, ~ mean((DF_FEM_TEST$feminist - .$fitted.values)^2)))
+DF_FEM_WKNN
+
+# < Graph >
+ggplot(data=DF_FEM_WKNN, mapping=aes(k, mse)) +
+  geom_line() +
+  geom_point() + 
+  labs(title = "Feminist Data: Weighted KNN Model",
+       x = "K",
+       y = "Test Mean Squared Error")
+
+```
+
+The KNN model with K=100 produces the lowest test MSE of 397.
+
+#### 4.Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+```{r, I.4., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < Function >
+FUNC_MSE = function(model, data){
+  x = model - data
+  mean(x^2, na.rm=TRUE)
+}
+
+# < Weighted KNN >
+DF_FEM_WKNN_1 = DF_FEM_WKNN %>% 
+  filter(k == 100)
+MSE_WKNN = DF_FEM_WKNN_1$mse
+
+# < Linear Regression >
+DF_FEM_LM = lm(feminist ~ ., data = DF_FEM_TRAIN)
+MSE_LM = FUNC_MSE(predict(DF_FEM_LM, DF_FEM_TEST), DF_FEM_TEST$feminist)
+
+# < Decision Tree >
+DF_FEM_TREE = tree(feminist ~ ., data = DF_FEM_TRAIN)
+MSE_TREE = FUNC_MSE(predict(DF_FEM_TREE, DF_FEM_TEST), DF_FEM_TEST$feminist)
+
+# < Random Forest >
+DF_FEM_RF = randomForest(feminist ~ ., data = DF_FEM_TRAIN, ntree = 500)
+MSE_RF = FUNC_MSE(predict(DF_FEM_RF, DF_FEM_TEST), DF_FEM_TEST$feminist)
+
+# < Boosting >
+DF_FEM_BOOST = gbm(DF_FEM_TRAIN$feminist ~ ., data=DF_FEM_TRAIN, n.trees = 500, interaction.depth = 2)
+MSE_BOOST = FUNC_MSE(predict(DF_FEM_BOOST, DF_FEM_TEST, n.trees=500), DF_FEM_TEST$feminist)
+
+# < Test Error Rate >
+METHOD = c("Weighted KNN", "Linear model", "Decision Tree", "Random Forests", "Boosting")
+MSE = c(MSE_WKNN, MSE_LM, MSE_TREE, MSE_RF, MSE_BOOST)
+kable(data.frame(METHOD, MSE))
+
+```
+
+The results show that test MSE for $Weighted KNN = 397$ < $Linear Regression = 402$ < $Random Forests = 408$ < $Decision Tree = 409$ < $Boosting = 418$. Among all methods, the weighted KNN had the lowest test MSE. This implies that using the near data points leads to a good prediction of the attitude towards feminists. The second best model turnout to be Linear model. This suggests that there is a linear relationship which minimizes test MSE.
+
+# Part 2: Voter turnout and depression
+
+#### 1.Split the data into a training and test set (70/30).
+
+```{r, II.1., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+SPLIT.DF_MH = resample_partition(DF_MH, c(train=0.7, test=0.3))
+DF_MH_TRAIN = as_tibble(SPLIT.DF_MH$train)
+DF_MH_TEST = as_tibble(SPLIT.DF_MH$test)
+
+```
+
+#### 2.Calculate the test error rate for KNN models with K=1,2,…,10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+
+```{r, II.2., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < KNN Model >
+DF_MH_KNN = data_frame(k = 1:10,
+                       knn = map(k, ~ class::knn(select(DF_MH_TRAIN, -vote96),
+                                                 test = select(DF_MH_TEST, -vote96),
+                                                 cl = DF_MH_TRAIN$vote96,
+                                                 k = .)),
+                       mse = map_dbl(knn, ~ mean(DF_MH_TEST$vote96 != .)))
+DF_MH_KNN
+
+# < Graph >
+ggplot(data=DF_MH_KNN, mapping=aes(k, mse)) +
+  geom_line() +
+  geom_point() + 
+  labs(title = "Mental Health Data: KNN Model",
+       x = "K",
+       y = "Test Mean Squared Error")
+
+```
+
+The KNN model with K=6 produces the lowest test MSE of 0.303.
+
+#### 3.Calculate the test error rate for weighted KNN models with K=1,2,…,10 using the same combination of variables as before. Which model produces the lowest test error rate?
+```{r, II.3., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < wKNN Model >
+DF_MH_WKNN = data_frame(k = seq(1, 10, by = 1),
+                        knn = map(k, ~ kknn(vote96 ~ .,
+                                            train = DF_MH_TRAIN, test = DF_MH_TEST,
+                                            k = .)),
+                        mse = map_dbl(knn, ~ mean((DF_MH_TEST$vote96 - .$fitted.values)^2)))
+DF_MH_WKNN
+
+# < Graph >
+ggplot(data=DF_MH_WKNN, mapping=aes(k, mse)) +
+  geom_line() +
+  geom_point() + 
+  labs(title = "Mental Health Data: Weighted KNN Model",
+       x = "K",
+       y = "Test Mean Squared Error")
+
+```
+
+The KNN model with K=10 produces the lowest test MSE of 0.208.
+
+#### 4.Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+```{r, II.4., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < Function >
+FUNC_MSE = function(model, data){
+  x = model - data
+  mean(x^2, na.rm=TRUE)
+}
+
+# < Weighted KNN >
+DF_MH_WKNN_1 = DF_MH_WKNN %>% 
+  filter(k == 10)
+MSE_WKNN = DF_MH_WKNN_1$mse
+
+# < Logistic  Regression >
+DF_MH_GLM = glm(vote96 ~ ., family = binomial, data = DF_MH_TRAIN)
+DF_MH_LG = DF_MH_TEST %>%
+  add_predictions(DF_MH_GLM) %>%
+  mutate(prob = exp(pred) / (1 + exp(pred))) %>%
+  mutate(pred_bi = as.numeric(prob > .5))
+MSE_GLM = mean(DF_MH_TEST$vote96 != DF_MH_LG$pred_bi)
+MSE_GLM
+
+# < Decision Tree >
+DF_MH_TREE = tree(vote96 ~ ., data = DF_MH_TRAIN)
+MSE_TREE = FUNC_MSE(predict(DF_MH_TREE, DF_MH_TRAIN), DF_MH_TEST$vote96)
+
+# < Random Forest >
+DF_MH_RF = randomForest(vote96 ~., data = DF_MH_TRAIN, ntree = 500)
+MSE_RF = FUNC_MSE(predict(DF_MH_RF, DF_MH_TRAIN), DF_MH_TEST$vote96)
+
+# < Boosting >
+DF_MH_BOOST = gbm(DF_MH_TRAIN$vote96 ~ ., data=DF_MH_TRAIN, n.trees = 500, interaction.depth = 2)
+MSE_BOOST = FUNC_MSE(predict(DF_MH_BOOST, DF_MH_TRAIN, n.trees=500), DF_MH_TEST$vote96)
+
+# < Linear SVM >
+DF_MH_LSVM = tune(svm, vote96 ~., data = DF_MH_TRAIN, kernel = "linear", 
+                  range = list(cost = c(.001, 0.01, .1, 1, 5, 10, 100)))
+DF_MH_LSVM_1 = DF_MH_LSVM$best.model
+MSE_LSVM = FUNC_MSE(predict(DF_MH_LSVM_1, DF_MH_TEST, decision.values = TRUE), DF_MH_TEST$vote96)
+
+# < Polynomial SVM >
+DF_MH_PSVM = tune(svm, vote96 ~ ., data = DF_MH_TRAIN, kernel = "polynomial",
+                  range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+DF_MH_LSVM_1 = DF_MH_PSVM$best.model
+MSE_PSVM = FUNC_MSE(predict(DF_MH_LSVM_1, DF_MH_TEST, decision.values = TRUE), DF_MH_TEST$vote96)
+
+# < Test Error Rate >
+METHOD = c("Weighted KNN", "Logistic  Regression", "Decision Tree", "Random Forests", "Boosting", "Linear SVM", "Polynomial SVM")
+MSE = c(MSE_WKNN, MSE_GLM, MSE_TREE, MSE_RF, MSE_BOOST, MSE_LSVM, MSE_PSVM)
+kable(data.frame(METHOD, MSE))
+
+```
+
+The results show that test MSE for $Weighted KNN = 0.208$ < $Polynomial SVM = 0.267$ < $Decision Tree = 0.270$ < $Linear SVM = 0.273$ < $Random Forests = 0.284$ < $Logistic Regression = 0.291$ < $Boosting = 0.297$. Among all methods, the weighted KNN had the lowest test MSE. This implies that using the near data points leads to a good prediction of the attitude towards feminists. The second best model turnout to be Polynomial SVM. This suggests that predicition is improved withthe categorization boundary of the support vector machine.
+
+# Part 3: Colleges
+
+#### 1.Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
+
+```{r, III.1., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+PCA.DF_CL = prcomp(DF_CL, scale=TRUE)
+
+PCA.DF_CL$rotation %>%
+  kable()
+
+biplot(PCA.DF_CL, scale = 0, cex = 0.6)
+
+```
+
+PC1 has postive correlation with `S.F.Ratio` (coefficient = 0.210) and negative correlation with `Top10perc` (coefficient = -0.360), `Top25perc` (coefficient = -0.345), `Expend` (coefficient = -0.333), and `outstate` (coefficient = -0.328). This means as PC1 increases, $Student/faculty ratio$ goes up and $Percent of new students from top tier of H.S. class$, $Instructional expenditure per student$, $Out-of-state tuition$ goes down. Thus, PC1 could be interpreted as a negative educational evironment.
+
+PC2 has postive correlation with `Private` (coefficient = 0.346) and negative correlation with `F.Undergrad` (coefficient = -0.411), `Enroll` (coefficient = -0.400), `Accept` (coefficient = -0.373). This means as PC2 increases, $private/public university ratio$ goes up and $Number of fulltime undergraduates$, $Number of new students enrolled$, $Number of applications accepted$ goes down. Thus, PC2 could be interpreted as a small size of educational institution.
+
+The plot shows that most observations are located at PC1 > 0 and PC2 > 0. This indicates most institutions have relatively negative educational environment and are relatively small size of educational institution.
+
+# Part 4: Clustering states
+
+#### 1.Perform PCA on the dataset and plot the observations on the first and second principal components.
+
+```{r, IIII.1., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+PCA.DF_AR = prcomp(select(DF_AR, -State), scale=TRUE)
+
+PCA.DF_AR$rotation %>%
+  kable()
+
+biplot(PCA.DF_AR, scale = 0, cex = 0.6)
+
+```
+
+PC1 has negative correlation with all four variables. PC1 can be interpreted as general safety.
+PC2 has strong negative correlation with `UrbanPop`. PC2 can be interpreted as urban population.
+
+#### 2.Perform K-means clustering with K=2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r, IIII.2., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+MEAN_2.DF_AR = kmeans(select(DF_AR, -State), centers=2, nstart=1)
+MEAN_2.DF_AR
+
+ggplot(mapping=aes(x=PCA.DF_AR$x[,1], y=PCA.DF_AR$x[,2],
+                   label=DF_AR$State, color=factor(MEAN_2.DF_AR$cluster))) +
+geom_point() +
+geom_text(hjust=0, vjust=0) +
+scale_color_discrete(guide=FALSE) +
+labs(title = "US Arrests Data: Clustering Method",
+     x = "Principal Component 1: Safety",
+     y = "Principal Component 2: Rural Population")
+
+```
+The plot visualizes 2 clusters based on the first principal component values. The plot shows the low PC1 value group (e.g. Florida, Nevada, California) and the hig PC1 value group (e.g. North Dakota, Vermont, New Hampshire). Therefore, states are mainly clustered by the high and low safety.
+
+#### 3.Perform K-means clustering with K=4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r, IIII.3., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+MEAN_4.DF_AR = kmeans(select(DF_AR, -State), centers=4, nstart=1)
+MEAN_4.DF_AR
+
+ggplot(mapping=aes(x=PCA.DF_AR$x[,1], y=PCA.DF_AR$x[,2],
+                   label=DF_AR$State, color=factor(MEAN_4.DF_AR$cluster))) +
+geom_point() +
+geom_text(hjust=0, vjust=0) +
+scale_color_discrete(guide=FALSE) +
+labs(title = "US Arrests Data: Clustering Method",
+     x = "Principal Component 1: Safety",
+     y = "Principal Component 2: Rural Population")
+
+```
+The plot visualizes 4 clusters based on the first principal component values. The plot shows the lowest PC1 value group, the second lowesest PC1 value group, the second highest PC1 value group, and the highest PC1 value group. Therefore, states are mainly clustered by the high and low safety.
+
+#### 4.Perform K-means clustering with K=3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+```{r, IIII.4., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+MEAN_3.DF_AR = kmeans(select(DF_AR, -State), centers=3, nstart=1)
+MEAN_3.DF_AR
+
+ggplot(mapping=aes(x=PCA.DF_AR$x[,1], y=PCA.DF_AR$x[,2],
+                   label=DF_AR$State, color=factor(MEAN_3.DF_AR$cluster))) +
+geom_point() +
+geom_text(hjust=0, vjust=0) +
+scale_color_discrete(guide=FALSE) +
+labs(title = "US Arrests Data: Clustering Method",
+     x = "Principal Component 1: Safety",
+     y = "Principal Component 2: Rural Population")
+
+```
+
+The plot visualizes 3 clusters based on the first principal component values. The plot shows the low PC1 value group, the middle PC1 value group, and the high PC1 value group. Therefore, states are mainly clustered by the high and low safety.
+
+#### 5.Perform K-means clustering with K=3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with K=3 based on the raw data.
+
+```{r, IIII.5., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+MEAN_3A.DF_AR = kmeans(PCA.DF_AR$x[,1:2], centers=3, nstart=1)
+MEAN_3A.DF_AR
+
+ggplot(mapping=aes(x=PCA.DF_AR$x[,1], y=PCA.DF_AR$x[,2],
+                   label=DF_AR$State, color=factor(MEAN_3A.DF_AR$cluster))) +
+geom_point() +
+geom_text(hjust=0, vjust=0) +
+scale_color_discrete(guide=FALSE) +
+labs(title = "US Arrests Data: Clustering Method",
+     x = "Principal Component 1: Safety",
+     y = "Principal Component 2: Rural Population")
+
+```
+
+The plot visualizes 3 clusters based on the first and second principal component values. The plot shows the group of low PC1 and low PC2 value , the group of low PC1 but high PC2 value, and the group of high PC1 value. Therefore, states are mainly clustered by the safety and rural population.
+
+#### 6.Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+
+```{r, IIII.6., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < Hierarchical Clustering >
+H = 0
+HC.DF_AR = hclust(dist(select(DF_AR, -State)), method="complete")
+
+# < Dendro Data >
+DENDRO.DF_AR = dendro_data(HC.DF_AR)
+HC.LABS = label(DENDRO.DF_AR) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(DF_AR))),
+                       State = DF_AR$State,
+                       cl = as.factor(cutree(HC.DF_AR, h=H))))
+
+# < Graph >
+ggdendrogram(HC.DF_AR) +
+  geom_text(data=HC.LABS, mapping=aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=H, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+
+```
+
+#### 7.Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+```{r, IIII.7., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < Hierarchical Clustering >
+H = 150
+HC.DF_AR = hclust(dist(select(DF_AR, -State)), method="complete")
+
+# < Dendro Data >
+DENDRO.DF_AR = dendro_data(HC.DF_AR)
+HC.LABS = label(DENDRO.DF_AR) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(DF_AR))),
+                       State = DF_AR$State,
+                       cl = as.factor(cutree(HC.DF_AR, h=H))))
+
+# < Graph >
+ggdendrogram(HC.DF_AR) +
+  geom_text(data=HC.LABS, mapping=aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=H, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+
+```
+
+Similar to k-mean clustering, dendrogram with cut-off of 150 groups 3 clusters.The hierarchical structure reveals that the green group and the blue group share more similarity than the red group.
+
+#### 8.Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+```{r, IIII.8., echo=TRUE}
+set.seed(1234)    #Reproducibility
+
+# < Hierarchical Clustering >
+DF_AR_SCALE = scale(select(DF_AR, -State))
+
+H = 4.42
+HC.DF_AR = hclust(dist(DF_AR_SCALE), method="complete")
+
+# < Dendro Data >
+DENDRO.DF_AR = dendro_data(HC.DF_AR)
+HC.LABS = label(DENDRO.DF_AR) %>%
+  left_join(data_frame(label = as.factor(seq.int(nrow(DF_AR))),
+                       State = DF_AR$State,
+                       cl = as.factor(cutree(HC.DF_AR, h=H))))
+
+# < Graph >
+ggdendrogram(HC.DF_AR) +
+  geom_text(data=HC.LABS, mapping=aes(label=State, x=x, y=0, color=cl),
+            vjust=.5, angle=90) +
+  geom_hline(yintercept=H, linetype=2) +
+  theme(axis.text.x=element_blank(),
+        legend.position="none")
+
+```
+
+To avoid over-weighting the variables with large scale and under-weighting the variables with small scale, stadardization of variables before calculating the distance in recommended. The scaling provides equal wightage by giving higher weights on the variables of `Murder`,`Rape` since they have small values. The scaling has the effect on the dendrogram by making four splits at the top. Therefore, in my opinion, the variables should be scaled before the inter-observation dissimilarities are computed.
