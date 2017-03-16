@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 library(tidyverse)
 library(forcats)
 library(broom)
@@ -34,7 +35,7 @@ theme_set(theme_minimal())
 
 ## Part 1: Attitudes towards feminists
 
-### 1.
+### 1. Import and split data
 
   The data has been imported and spitted as required.
   
@@ -162,7 +163,7 @@ cat('The test MSE of equivalent random forest is: ', mse_rf, '\n')
 
 ## Part 2: Voter turnout and depression
 
-### 1. Read and split data
+### 1. Import and split data
 
   The `mental_health` data is imported and splitted as required.
 
@@ -170,7 +171,7 @@ cat('The test MSE of equivalent random forest is: ', mse_rf, '\n')
 data2 <- read.csv('mental_health.csv')
 
 # mark the qualitative variables
-data2<-na.omit(data2) #%>%
+data2<-data2 %>%
   #mutate (vote96 = factor (vote96, levels = 0:1, labels = c("not_voted","voted")),
 #          black = factor (black, levels = 0:1, labels = c("not_black", "black")),
 #         female = factor (female, levels = 0:1, labels = c("male", "female")),
@@ -178,7 +179,7 @@ data2<-na.omit(data2) #%>%
 #  mutate (inc10=as.numeric(inc10), 
 #          mhealth_sum=as.numeric(mhealth_sum))%>%
   # omit missing values
-#  na.omit()
+  na.omit()
 
 # data split
 set.seed(1234)
@@ -212,7 +213,7 @@ logit2prob <- function(x){
   The response variable in this part is `vote96`, and the predictors are `mhealth_sum`, `age`, `educ` and `inc10`. I choose these predictors because they represent important features of individuals. `mhealth_sum` represents mental state that would influence behavior. `age` is a very important demographic feature. `educ` and `inc10` are good explanatory variables to locate individuals' social status.
 
 ```{r problem2_2_model, echo=FALSE}
-## estimate the MSE for GLM and KNN models:
+set.seed(1234)
 
 # estimate the MSE for GLM
 mh_glm <- glm(vote96 ~ age + inc10 + mhealth_sum + educ, data = data2_train, family = binomial) 
@@ -232,8 +233,8 @@ mse_knn <- data_frame(k = 1:10,
                       knn_test = map(k, ~ class::knn(select(data2_train, -vote96),
                                                 test = select(data2_test, -vote96),
                                                 cl = data2_train$vote96, k = .)),
-                      mse_train = map_dbl(knn_train, ~ mean(data2_test$vote96!= as.logical(.))),
-                      mse_test = map_dbl(knn_test, ~ mean(data2_test$vote96)))
+                      mse_train = map_dbl(knn_train, ~ mean(data2_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(data2_test$vote96 != .)))
 
 ggplot(mse_knn, aes(k, mse_test)) +
   geom_line() +
@@ -243,10 +244,47 @@ ggplot(mse_knn, aes(k, mse_test)) +
        title = "KNN on Vote Turnout") +
   expand_limits(y = 0)
 
-#hm_knn_mse<-min(mse_knn$mse_test)
-#hm_knn_mse
+hm_knn_mse<-min(mse_knn$mse_test)
+hm_knn_mse
 ```
 
+  According to the plot, the KNN model does not perform better than GLM. The model with `k = 8` produces the lowest test MSE, which is `r hm_knn_mse`.
+
+
+### 3. Weighted KNN models
+
+```{r problem2_3, echo=FALSE}
+set.seed(1234)
+## estimate the MSE for weighted KNN models:
+
+# estimate the MSE for KNN K=1,2,...,10
+# note here we need to convert the fitted.values, probablity to 0 or 1. 
+mse_wknn <- data_frame(k = 1:10,
+                      wknn = map(k, ~ kknn(vote96 ~., train = data2_train, test = data2_test, k =.)),
+                      mse_test_wknn = map_dbl(wknn, ~ mean(data2_test$vote96 != as.numeric(.$fitted.values > 0.5))))
+
+mse_wknn_mh <- min(mse_wknn$ mse_test_wknn)
+cat(mse_wknn_mh)
+
+err<-mse_wknn %>%
+  left_join(mse_knn, by = "k") %>%
+  select(k, mse_test_wknn, mse_test) %>%
+  gather(method,mse, -k) %>%
+  mutate(method = factor(method, levels =c("mse_test_wknn","mse_test"), labels = c("Weighted KNN","KNN")))
+
+err %>%
+  ggplot(aes(k, mse, color = method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = err.rate.glm, linetype = 2) +
+  labs(title = "Test MSE for linear regression vs. KNN, on Vote Turnout",
+       subtitle = "Traditional and weighted KNN",
+       x = "K",
+       y = "Test mean squared error",
+       method = NULL) +
+  expand_limits(y = 0) +
+  theme(legend.position = "bottom")
+```
 
 ## Part 3: Colleges
 
