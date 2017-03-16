@@ -362,9 +362,11 @@ These makes sense, since the first dimension stresses the expenditure of student
 # Clustering States
 #### Perform PCA on the dataset and plot the observations on the first and second principal components.
 ```{r}
-pr.out <- prcomp(USArrests, scale = TRUE)
-pr.out$rotation
-biplot(pr.out, scale = 0, cex = .6)
+state_name = USArrests$State
+arrests_df = USArrests[c("Murder", "Assault", "UrbanPop", "Rape")]
+arrests_pca = prcomp(arrests_df, scale = TRUE)
+arrests_pca_1_2 = as.data.frame(arrests_pca$rotation)[1:2]
+arrests_pca_1_2
 
 ```
 ### Perform $K$-means clustering with $K=2$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
