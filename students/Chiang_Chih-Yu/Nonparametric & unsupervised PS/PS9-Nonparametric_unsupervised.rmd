@@ -86,6 +86,7 @@ df_feministF_tr <- as_tibble(dfs_feministF$train)
 df_feministF_te <- as_tibble(dfs_feministF$test)
 
 ```
+
 Two versions of the data is split. One takes all variables cardinal (`dfs_feminist`); one takes `female`, `dem`, and `rep` as factors (`dfs_feministF`). The factor model will be applied with a priority as long as the algorithm accept non-numeric inputs.  
   
 
@@ -113,6 +114,7 @@ ggplot(KNN_1, aes(k, mse)) +
        y = "Test mean squared error")
 
 ```
+
 I apply all variables except `feminist` in the predicting task whereas `feminist` can be intuitively explained by any of the other variables. With the KNN method of different ks, the lowest test MSE (455.7) occurs at k = 45. The test MSE goes down very quickly from 5 to 25, and generally stabalized at 450-460 afterward.  
   
 
@@ -139,6 +141,7 @@ ggplot(wKNN_1, aes(k, mse)) +
        y = "Test mean squared error")
 
 ```
+
 With the weighted KNN method of different ks, the lowest MSE (437.4) occurs at k = 100. While weighted by distance, the test MSE curve is less jagged and goes down smoothly from 5 to 100, and could keep going down afterwards.  
 
 
@@ -181,6 +184,7 @@ mse_rf1 <- mse(rf_1, df_feminist_te)
 mse_rf1
 
 ```
+
 With the same variables of previous models, regarding test MSE, linear regression acquires 435.1, decision tree 436.2, boosting 448.8, and random forest 437.8. Among all, the linear regression performs the best even compared to the KNN models. This is probably because the general relation between the predictor and respondent variables is close to linear; this linear relationship allows the linear model captures the general trend well, as other non-parametric methods are more likely to be influenced by noise and more or less overfit the training data, while without the linear assumption about the relationship.
 
 
@@ -202,6 +206,7 @@ df_mentalF_tr <- as_tibble(dfs_mentalF$train)
 df_mentalF_te <- as_tibble(dfs_mentalF$test)
 
 ```
+
 Two versions of the data is split. One takes all variables cardinal (`dfs_mental`); one takes `vote96`, `black`, `female`, and `married` as factors (`dfs_mentalF`). The factor model will be applied with a priority as long as the algorithm accept non-numeric inputs.  
   
 
@@ -228,6 +233,7 @@ ggplot(KNN_2, aes(k, err)) +
        y = "Test error rate")
 
 ```
+
 I apply all variables except `vote96` in the classification task whereas `vote96` can be intuitively explained by any of the other variables. The relationships between the variables are generally verified in the last few problems sets. With the KNN method of different ks, the lowest test error rate (31.23%) occurs at k = 9. The test error rate fluctuates quite a bit while with a generally downward pattern from k = 1 to 10.
   
 
@@ -254,6 +260,7 @@ ggplot(wKNN_2, aes(k, err)) +
        y = "Test error rate")
 
 ```
+
 With the weighted KNN method of different ks, the lowest test error rate (30.09%) occurs at k = 10. Again, error rates of the weighted models are generally less fluctuating.  
   
 
@@ -312,6 +319,7 @@ err_svm_2 <- mean(yhat.svm != df_mentalF_te$vote96)
 err_svm_2
 
 ```
+
 With the same variables of previous models, regarding test error rate, logistic regression acquires 28.65%, decision tree 30.09%, boosting 29.51%, random forest 27.22%, and SVM 27.79%. Among all, the random forest performs the best even compared to the KNN models. The data contains noise which damages the precision of the KNN and decision tree mehods. With bagging and random selection of features, random forest has less overfitting issue and hense captures better the general relationship between the variables. SVM also performs well (at the second place) as it decides the categorization boundary with only the support machines; this mechanism reduces some noise's influence and make the model stabler as well.  
   
 
@@ -328,6 +336,7 @@ pca_3$rotation
 biplot(pca_3, scale = 0, cex = .6)
 
 ```
+
 With the plot, we can see most observations gathering at the up-right part of the space, with both high PC1 and PC2 levels.  
   
 PC1 is most postively correlated with `S.F.Ratio` (with coefficient 0.21026) and negatively correlated with `Top10perc` (-0.36035), `Top25perc` (-0.34475), `Expend` (-0.33301), and `outstate` (-0.32766). Conceptually, PC1 could represent the institutions' lack of general quality of environment for learning. With a higher PC1, the school has a higher student/faculty rate, lower percentage of students coming from top high school classes, and with lower expenditure on students; they all potentially contribute to a lower quality of leaning environment.
@@ -350,6 +359,7 @@ pca_4$rotation
 biplot(pca_4, scale = 0, cex = .6, xlabs=df_arrest$State)
 
 ```
+
 With the plot, we see the observations spreding across the entire space. PC1 here is negatively correlated with all four variables. It could represent a general safety of a state. The higher the PC1 of a state, the lower proportion of urban population it has and, more importantly, the less of all three types of crimes. PC2 is heavily and negatively correlated with urban population proportion. The higher the PC2 of a state, the lower proportion of urban population it has.  
   
 
@@ -371,6 +381,7 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 
 ```
+
 The two clusters are generally distinguished by the level of their PC1 score. One cluster at the left with lower PC1, including the States with more crimes, such as NY, CA, IL, etc. Another cluster at the right with higher PC1, it includes the safer states such as NH, WV, ND, etc.  
   
 
@@ -392,6 +403,7 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 
 ```
+
 Again, the four clusters are generally distinguished by their safety levels. The first group with the most crimes, including FL, NV, CA, etc.; the second with the second most crimes, including TX, MO, AL, etc.; the third is the second to the safest, including PA, OH, MT, etc.; the fourth is the safest, including NH, ND, WI, etc.  
   
 
@@ -413,6 +425,7 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 
 ```
+
 With a similar result, the three clusters are generally separated by safety levels. The first is with the lowest safety level, including IL, NY, CA, etc.; the second with the middle safety level, including MO, VA, AR, etc.; the third is the safest, including PA, NH, ID, etc.  
   
 
@@ -434,6 +447,7 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 
 ```
+
 The first cluster is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second is less urbanized while also unsafe, including SC, NC, AK, etc.; the third is generally the safer states, including PA, NH, ID, etc.  
   
 The three clusters here are distinguished by both "safety" and "rural-inclined" axes, compared to the only "safety" criterion in the previous models. This is probably because while using the PCs as the clustering input, we "up-weight" the originally not-so-important factor "rural-inclined" to the same level as "safety", which should be the dominant factor explaining the variance in this sample data.  
@@ -464,6 +478,7 @@ ggdendrogram(hc_4) +
         legend.position="none")
 
 ```
+
 The clustering is performed and plotted as above.
   
 
@@ -493,6 +508,7 @@ ggdendrogram(hc_4) +
         legend.position="none")
 
 ```
+
 With a distance cut-off at 150, we acquire 3 clusters. The result is very similar to the k-mean clustering (k = 3) with the raw data.  
 
 - One cluster is generally unsafe, including FL, SC, DE, AL, LA, AK, MS, NC, MD, AZ, NM, CA, IL, NY, MI, and NV.
@@ -532,6 +548,7 @@ ggdendrogram(hc_42) +
         legend.position="none")
 
 ```
+
 The scaling upweights the `Murder` and `Rape` variables, which have the lower original value and thus lower variance to be considered in the clustering. Also, the "rural-urban" factor is upweighted as well; the result is, therefore, more similar to the result coming from the clustering model with PCs as the input. The first cluster (green) is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second (red) is less urbanized while also unsafe, including SC, NC, AK, etc.; the third (blue) is generally the safer states, including PA, NH, ID, etc.  
   
 While the Euclidean distance is influenced by the "scale" of each variable, I'd suggest, in this case, the variabes be standardized (to have standard deviation 1) before calculating the distance (inter-similarity), to avoid over-weighting the variables with larger scales. Here, `Assult` is generally 2-3 times in number compared to `Murder`, which could make the algorithm weights more on `Assult` in clustering while it provides a higher variance in the absolute value. However, without saying, the significance of 1 `Murder` event is much higher than 1 `Assult` event and shouldn't be overlooked only because the "number" of murder is smaller.

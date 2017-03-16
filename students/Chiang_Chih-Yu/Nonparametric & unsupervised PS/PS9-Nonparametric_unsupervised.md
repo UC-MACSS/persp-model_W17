@@ -74,7 +74,9 @@ ggplot(KNN_1, aes(k, mse)) +
        y = "Test mean squared error")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/1-2-1.png) I apply all variables except `feminist` in the predicting task whereas `feminist` can be intuitively explained by any of the other variables. With the KNN method of different ks, the lowest test MSE (455.7) occurs at k = 45. The test MSE goes down very quickly from 5 to 25, and generally stabalized at 450-460 afterward.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/1-2-1.png)
+
+I apply all variables except `feminist` in the predicting task whereas `feminist` can be intuitively explained by any of the other variables. With the KNN method of different ks, the lowest test MSE (455.7) occurs at k = 45. The test MSE goes down very quickly from 5 to 25, and generally stabalized at 450-460 afterward.
 
 ### 3.Calculate the test MSE for weighted KNN models with 5, 10, 15,.., 100, using the same combination of variables as before. Which model produces the lowest test MSE?
 
@@ -124,7 +126,9 @@ ggplot(wKNN_1, aes(k, mse)) +
        y = "Test mean squared error")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/1-3-1.png) With the weighted KNN method of different ks, the lowest MSE (437.4) occurs at k = 100. While weighted by distance, the test MSE curve is less jagged and goes down smoothly from 5 to 100, and could keep going down afterwards.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/1-3-1.png)
+
+With the weighted KNN method of different ks, the lowest MSE (437.4) occurs at k = 100. While weighted by distance, the test MSE curve is less jagged and goes down smoothly from 5 to 100, and could keep going down afterwards.
 
 ### 4.Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
@@ -314,7 +318,9 @@ ggplot(KNN_2, aes(k, err)) +
        y = "Test error rate")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/2-2-1.png) I apply all variables except `vote96` in the classification task whereas `vote96` can be intuitively explained by any of the other variables. The relationships between the variables are generally verified in the last few problems sets. With the KNN method of different ks, the lowest test error rate (31.23%) occurs at k = 9. The test error rate fluctuates quite a bit while with a generally downward pattern from k = 1 to 10.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/2-2-1.png)
+
+I apply all variables except `vote96` in the classification task whereas `vote96` can be intuitively explained by any of the other variables. The relationships between the variables are generally verified in the last few problems sets. With the KNN method of different ks, the lowest test error rate (31.23%) occurs at k = 9. The test error rate fluctuates quite a bit while with a generally downward pattern from k = 1 to 10.
 
 ### 3.Calculate the test MSE for weighted KNN models with K = 1, 2,.., 10 using the same combination of variables as before. Which model produces the lowest test error rate?
 
@@ -354,7 +360,9 @@ ggplot(wKNN_2, aes(k, err)) +
        y = "Test error rate")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/2-3-1.png) With the weighted KNN method of different ks, the lowest test error rate (30.09%) occurs at k = 10. Again, error rates of the weighted models are generally less fluctuating.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/2-3-1.png)
+
+With the weighted KNN method of different ks, the lowest test error rate (30.09%) occurs at k = 10. Again, error rates of the weighted models are generally less fluctuating.
 
 ### 4.Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
 
@@ -607,7 +615,9 @@ pca_3$rotation
 biplot(pca_3, scale = 0, cex = .6)
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/3-1-1.png) With the plot, we can see most observations gathering at the up-right part of the space, with both high PC1 and PC2 levels.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/3-1-1.png)
+
+With the plot, we can see most observations gathering at the up-right part of the space, with both high PC1 and PC2 levels.
 
 PC1 is most postively correlated with `S.F.Ratio` (with coefficient 0.21026) and negatively correlated with `Top10perc` (-0.36035), `Top25perc` (-0.34475), `Expend` (-0.33301), and `outstate` (-0.32766). Conceptually, PC1 could represent the institutions' lack of general quality of environment for learning. With a higher PC1, the school has a higher student/faculty rate, lower percentage of students coming from top high school classes, and with lower expenditure on students; they all potentially contribute to a lower quality of leaning environment.
 
@@ -637,7 +647,9 @@ pca_4$rotation
 biplot(pca_4, scale = 0, cex = .6, xlabs=df_arrest$State)
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-1-1.png) With the plot, we see the observations spreding across the entire space. PC1 here is negatively correlated with all four variables. It could represent a general safety of a state. The higher the PC1 of a state, the lower proportion of urban population it has and, more importantly, the less of all three types of crimes. PC2 is heavily and negatively correlated with urban population proportion. The higher the PC2 of a state, the lower proportion of urban population it has.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-1-1.png)
+
+With the plot, we see the observations spreding across the entire space. PC1 here is negatively correlated with all four variables. It could represent a general safety of a state. The higher the PC1 of a state, the lower proportion of urban population it has and, more importantly, the less of all three types of crimes. PC2 is heavily and negatively correlated with urban population proportion. The higher the PC2 of a state, the lower proportion of urban population it has.
 
 ### 2.Perform K-means clustering with K = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -679,7 +691,9 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-2-1.png) The two clusters are generally distinguished by the level of their PC1 score. One cluster at the left with lower PC1, including the States with more crimes, such as NY, CA, IL, etc. Another cluster at the right with higher PC1, it includes the safer states such as NH, WV, ND, etc.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-2-1.png)
+
+The two clusters are generally distinguished by the level of their PC1 score. One cluster at the left with lower PC1, including the States with more crimes, such as NY, CA, IL, etc. Another cluster at the right with higher PC1, it includes the safer states such as NH, WV, ND, etc.
 
 ### 3.Perform K-means clustering with K = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -723,7 +737,9 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-3-1.png) Again, the four clusters are generally distinguished by their safety levels. The first group with the most crimes, including FL, NV, CA, etc.; the second with the second most crimes, including TX, MO, AL, etc.; the third is the second to the safest, including PA, OH, MT, etc.; the fourth is the safest, including NH, ND, WI, etc.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-3-1.png)
+
+Again, the four clusters are generally distinguished by their safety levels. The first group with the most crimes, including FL, NV, CA, etc.; the second with the second most crimes, including TX, MO, AL, etc.; the third is the second to the safest, including PA, OH, MT, etc.; the fourth is the safest, including NH, ND, WI, etc.
 
 ### 4.Perform K-means clustering with K = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
@@ -766,7 +782,9 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-4-1.png) With a similar result, the three clusters are generally separated by safety levels. The first is with the lowest safety level, including IL, NY, CA, etc.; the second with the middle safety level, including MO, VA, AR, etc.; the third is the safest, including PA, NH, ID, etc.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-4-1.png)
+
+With a similar result, the three clusters are generally separated by safety levels. The first is with the lowest safety level, including IL, NY, CA, etc.; the second with the middle safety level, including MO, VA, AR, etc.; the third is the safest, including PA, NH, ID, etc.
 
 ### 5.Perform K-means clustering with K = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with K = 3 based on the raw data.
 
@@ -809,7 +827,9 @@ ggplot(mapping=aes(x=pca_4$x[,1], y=pca_4$x[,2], label=df_arrest$State, color=fa
        y = "PC 2 (rural-inclined)")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-5-1.png) The first cluster is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second is less urbanized while also unsafe, including SC, NC, AK, etc.; the third is generally the safer states, including PA, NH, ID, etc.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-5-1.png)
+
+The first cluster is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second is less urbanized while also unsafe, including SC, NC, AK, etc.; the third is generally the safer states, including PA, NH, ID, etc.
 
 The three clusters here are distinguished by both "safety" and "rural-inclined" axes, compared to the only "safety" criterion in the previous models. This is probably because while using the PCs as the clustering input, we "up-weight" the originally not-so-important factor "rural-inclined" to the same level as "safety", which should be the dominant factor explaining the variance in this sample data.
 
@@ -844,7 +864,9 @@ ggdendrogram(hc_4) +
         legend.position="none")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-6-1.png) The clustering is performed and plotted as above.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-6-1.png)
+
+The clustering is performed and plotted as above.
 
 ### 7.Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
 
@@ -878,7 +900,9 @@ ggdendrogram(hc_4) +
         legend.position="none")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-7-1.png) With a distance cut-off at 150, we acquire 3 clusters. The result is very similar to the k-mean clustering (k = 3) with the raw data.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-7-1.png)
+
+With a distance cut-off at 150, we acquire 3 clusters. The result is very similar to the k-mean clustering (k = 3) with the raw data.
 
 -   One cluster is generally unsafe, including FL, SC, DE, AL, LA, AK, MS, NC, MD, AZ, NM, CA, IL, NY, MI, and NV.
 -   One with middle safety, including MS, AR, TN, GA, TX, RI, WY, OR, OK, VA, WA, MA, and NJ.
@@ -921,6 +945,8 @@ ggdendrogram(hc_42) +
         legend.position="none")
 ```
 
-![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-8-1.png) The scaling upweights the `Murder` and `Rape` variables, which have the lower original value and thus lower variance to be considered in the clustering. Also, the "rural-urban" factor is upweighted as well; the result is, therefore, more similar to the result coming from the clustering model with PCs as the input. The first cluster (green) is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second (red) is less urbanized while also unsafe, including SC, NC, AK, etc.; the third (blue) is generally the safer states, including PA, NH, ID, etc.
+![](PS9-Nonparametric_unsupervised_files/figure-markdown_github/4-8-1.png)
+
+The scaling upweights the `Murder` and `Rape` variables, which have the lower original value and thus lower variance to be considered in the clustering. Also, the "rural-urban" factor is upweighted as well; the result is, therefore, more similar to the result coming from the clustering model with PCs as the input. The first cluster (green) is more urbanized and is relatively unsafe, including CA, NY, IL, etc.; the second (red) is less urbanized while also unsafe, including SC, NC, AK, etc.; the third (blue) is generally the safer states, including PA, NH, ID, etc.
 
 While the Euclidean distance is influenced by the "scale" of each variable, I'd suggest, in this case, the variabes be standardized (to have standard deviation 1) before calculating the distance (inter-similarity), to avoid over-weighting the variables with larger scales. Here, `Assult` is generally 2-3 times in number compared to `Murder`, which could make the algorithm weights more on `Assult` in clustering while it provides a higher variance in the absolute value. However, without saying, the significance of 1 `Murder` event is much higher than 1 `Assult` event and shouldn't be overlooked only because the "number" of murder is smaller.
