@@ -329,6 +329,8 @@ pr_out$rotation[, 2]
 ```
 
 
+From the results above, Top10perc, Top25perc, Outstate, PhD, Terminal, and Expend  are strongly correlated on the first principal component, and Accept, F.Undergrad, and Enroll appear to be strongly correlated on the second principal component.
+
 # Clustering states [3 points]
 
 #### Perform PCA on the dataset and plot the observations on the first and second principal components.
@@ -360,9 +362,8 @@ kmeans_clusters <- function(df, num_clusters, data, orig = TRUE){
 
 pca2_df <- select(as_data_frame(pr_out$x), PC1:PC2) %>%
   mutate(State = crime$State)
-num_clusters <- 2
 
-pca2_df %>% kmeans_clusters(num_clusters, crime) %>%
+pca2_df %>% kmeans_clusters(2, crime) %>%
   ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
     geom_text() + 
     labs(title = sprintf('K-means clustering with K = 2'),
@@ -376,9 +377,8 @@ The plot shows a clear grouping of States. The clustering is a split on the firs
 
 
 ```{r}
-num_clusters <- 4
 
-pca2_df %>% kmeans_clusters(num_clusters, crime) %>%
+pca2_df %>% kmeans_clusters(4, crime) %>%
   ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
     geom_text() + 
     labs(title = sprintf('K-means clustering with K = 4'),
@@ -390,9 +390,8 @@ This graph shows 4 clear clusters. Again, the differences between the clusters a
 #### Perform $K$-means clustering with $K=3$. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
 
 ```{r}
-num_clusters <- 3
 
-pca2_df %>% kmeans_clusters(num_clusters, crime) %>%
+pca2_df %>% kmeans_clusters(3, crime) %>%
   ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
     geom_text() + 
     labs(title = sprintf('K-means clustering with K = 3'),
@@ -404,12 +403,10 @@ The graph shows 3 clusters, yet the second cluster mingles with the other two.
 #### Perform $K$-means clustering with $K=3$ on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with $K=3$ based on the raw data.
 
 ```{r}
-num_clusters <- 3
-
-pca2_df %>% kmeans_clusters(num_clusters, crime, FALSE) %>%
+pca2_df %>% kmeans_clusters(3, crime, FALSE) %>%
   ggplot(aes(PC1, PC2, color = cluster_id, label = State)) +
     geom_text() + 
-    labs(title = sprintf('K-means clustering with K = %d on First 2 Principal Components', num_clusters),
+    labs(title = sprintf('K-means clustering with K = 3 (on first two principal components)'),
          color = 'Cluster ID')
 ```
 

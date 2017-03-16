@@ -124,6 +124,8 @@ The first two principal components account for 58.4% of the variance of the data
     ##         PhD    Terminal   S.F.Ratio perc.alumni      Expend   Grad.Rate 
     ##     -0.1162     -0.1042     -0.2044      0.1941      0.0703      0.1178
 
+From the results above, Top10perc, Top25perc, Outstate, PhD, Terminal, and Expend are strongly correlated on the first principal component, and Accept, F.Undergrad, and Enroll appear to be strongly correlated on the second principal component.
+
 Clustering states \[3 points\]
 ==============================
 
