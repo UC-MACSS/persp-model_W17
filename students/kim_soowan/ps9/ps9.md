@@ -4,49 +4,750 @@ Soo Wan Kim
 March 15, 2017
 
 -   [Attitudes towards feminists \[3 points\]](#attitudes-towards-feminists-3-points)
+    -   [Subpart 1](#subpart-1)
+    -   [Subpart 2](#subpart-2)
+    -   [Subpart 3](#subpart-3)
+    -   [Subpart 4](#subpart-4)
 -   [Voter turnout and depression \[2 points\]](#voter-turnout-and-depression-2-points)
+    -   [Subpart 1](#subpart-1-1)
+    -   [Subpart 2](#subpart-2-1)
+    -   [Subpart 3](#subpart-3-1)
+    -   [Subpart 4](#subpart-4-1)
 -   [Colleges \[2 points\]](#colleges-2-points)
 -   [Clustering states \[3 points\]](#clustering-states-3-points)
+    -   [Subpart 1](#subpart-1-2)
+    -   [Subpart 2](#subpart-2-2)
+    -   [Subpart 3](#subpart-3-2)
+    -   [Subpart 4](#subpart-4-2)
+    -   [Subpart 5](#subpart-5)
+    -   [Subpart 6](#subpart-6)
+    -   [Subpart 7](#subpart-7)
+    -   [Subpart 8](#subpart-8)
 
 Attitudes towards feminists \[3 points\]
 ========================================
 
-1.  Split the data into a training and test set (70/30%).
+Subpart 1
+---------
+
+**Split the data into a training and test set (70/30%).**
 
 ``` r
-fem <- read.csv("data/feminist.csv")
-
-fem_split <- resample_partition(fem, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+#split data into 70/30 training/test set
+fem_split <- resample_partition(fem, c(test = 0.3, train = 0.7)) 
 fem_train <- fem_split$train %>% 
   tbl_df()
 fem_test <- fem_split$test %>% 
   tbl_df()
 ```
 
-1.  Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
-2.  Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?
-3.  Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+Subpart 2
+---------
+
+**Calculate the test MSE for KNN models with *K* = 5, 10, 15, …, 100, using whatever combination of variables you see fit. Which model produces the lowest test MSE?**
+
+First I calculate the test MSE for KNN models for `feminist` using all predictors with *K* = 5, 10, 15, …, 100.
+
+``` r
+mse_knn1 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist), y = fem_train$feminist,
+                         test = select(fem_test, -feminist), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+#plot test MSE
+ggplot(data = mse_knn1, mapping = aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  ylim(300,600) + 
+  labs(title = "KNN for feminist",
+       x = "K",
+       y = "Test mean squared error",
+       subtitle = "feminist ~ .") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/fem_knn_mse_sing-1.png)
+
+``` r
+knn_mse_min <- min(mse_knn1$mse)
+knn_mse_min_k <- mse_knn1$k[mse_knn1$mse == min(mse_knn1$mse)]
+```
+
+Overall, MSE decreases as K increases. However, the MSE is minimized at 455.7123299 when K = 45.
+
+Now I test KNN models for `feminist` with four different sets of predictors.
+
+``` r
+#KNN 1: feminist ~ .
+mse_knn1 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist), y = fem_train$feminist,
+                         test = select(fem_test, -feminist), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+#KNN 2: feminist ~ female + age + educ + income
+
+mse_knn2 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist, -dem, -rep), y = fem_train$feminist,
+                         test = select(fem_test, -feminist, -dem, -rep), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+#KNN 3: feminist ~ age + educ + income + dem
+
+mse_knn3 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist, -female, -rep), 
+                                             y = fem_train$feminist,
+                         test = select(fem_test, -feminist, -female, -rep), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+#KNN 4: feminist ~ female + income + dem
+
+mse_knn4 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, female, income, dem), y = fem_train$feminist,
+                         test = select(fem_test, female, income, dem), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+
+#plot test MSEs
+ggplot() +
+  geom_line(data = mse_knn1, mapping = aes(k, mse), color="red") +
+  geom_point(data = mse_knn1, mapping = aes(k, mse), color="red") +
+  geom_line(data = mse_knn2, mapping = aes(k, mse), color="orange") +
+  geom_point(data = mse_knn2, mapping = aes(k, mse), color="orange") +
+  geom_line(data = mse_knn3, mapping = aes(k, mse), color="yellow") +
+  geom_point(data = mse_knn3, mapping = aes(k, mse), color="yellow") +
+  geom_line(data = mse_knn4, mapping = aes(k, mse), color="green") +
+  geom_point(data = mse_knn4, mapping = aes(k, mse), color="green") +
+  ylim(430,550) + 
+  labs(title = "KNN for feminist",
+       x = "K",
+       y = "Test mean squared error",
+       caption = "Red: feminist ~ .\n
+       Orange: feminist ~ female + age + educ + income\n
+       Yellow: feminist ~ feminist ~ age + educ + income + dem\n
+       Green: feminist ~ female + income + dem") +
+  expand_limits(y = 0) + 
+  theme_gray()
+```
+
+![](ps9_files/figure-markdown_github/fem_knn_mse_mult-1.png)
+
+`feminist ~ female + income + dem` produces the lowest test MSE. From these results it looks like gender, income, and party identification are the most important factors for predicting feminist warmth.
+
+Subpart 3
+---------
+
+**Calculate the test MSE for weighted KNN models with *K* = 5, 10, 15, …, 100 using the same combination of variables as before. Which model produces the lowest test MSE?**
+
+Weighted KNN models for `feminist ~ .` with *K* = 5, 10, 15, …, 100 (default weight):
+
+``` r
+mse_wknn1 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ .,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+#plot test MSEs
+ggplot(data = mse_wknn1, mapping = aes(k, mse)) +
+  geom_line() +
+  geom_point() +
+  ylim(400,700) + 
+  labs(title = "Weighted KNN for feminist",
+       x = "K",
+       y = "Test mean squared error",
+       subtitle = "feminist ~ .") +
+  expand_limits(y = 0) + 
+  theme_gray()
+```
+
+![](ps9_files/figure-markdown_github/fem_wknn_mse_sing-1.png)
+
+``` r
+wknn_mse_min <- min(mse_wknn1$mse)
+wknn_mse_min_k <- mse_wknn1$k[mse_wknn1$mse == min(mse_wknn1$mse)]
+```
+
+Again, MSE decreases as K increases. The MSE is minized at 455.7123299 when K = 100.
+
+Now I test weighted KNN models for `feminist` with the same four sets of predictors as before.
+
+``` r
+#WKNN 1: feminist ~ .
+mse_wknn1 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ .,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+#WKNN 2: feminist ~ female + age + educ + income
+mse_wknn2 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ female + age + educ + income,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+#WKNN 3: feminist ~ age + educ + income + dem
+
+mse_wknn3 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ age + educ + income + dem,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+#WKNN 4: feminist ~ female + income + dem
+
+mse_wknn4 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ female + income + dem,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+#plot test MSEs
+ggplot() +
+  geom_line(data = mse_wknn1, mapping = aes(k, mse), color="red") +
+  geom_point(data = mse_wknn1, mapping = aes(k, mse), color="red") +
+  geom_line(data = mse_wknn2, mapping = aes(k, mse), color="orange") +
+  geom_point(data = mse_wknn2, mapping = aes(k, mse), color="orange") +
+  geom_line(data = mse_wknn3, mapping = aes(k, mse), color="yellow") +
+  geom_point(data = mse_wknn3, mapping = aes(k, mse), color="yellow") +
+  geom_line(data = mse_wknn4, mapping = aes(k, mse), color="green") +
+  geom_point(data = mse_wknn4, mapping = aes(k, mse), color="green") +
+  ylim(400,700) + 
+  labs(title = "Weighted KNN for feminist",
+       subtitle = "Default weight",
+       x = "K",
+       y = "Test mean squared error",
+       caption = "Red: feminist ~ .\n
+       Orange: feminist ~ female + age + educ + income\n
+       Yellow: feminist ~ feminist ~ age + educ + income + dem\n
+       Green: feminist ~ female + income + dem") +
+  expand_limits(y = 0) + 
+  theme_gray()
+```
+
+![](ps9_files/figure-markdown_github/fem_wknn_mse_mult-1.png)
+
+Using default weights in the `kknn` package, the `feminist ~ .` model performed the best, followed by the `feminist ~ female + income + dem` model.
+
+Subpart 4
+---------
+
+**Compare the test MSE for the best KNN/wKNN model(s) to the test MSE for the equivalent linear regression, decision tree, boosting, and random forest methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?**
+
+First, I compare test MSEs across methods using all of the predictors (`feminist ~ .`).
+
+``` r
+#KNN
+mse_knn1 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, -feminist), y = fem_train$feminist,
+                         test = select(fem_test, -feminist), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+#WKNN
+mse_wknn1 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ .,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+#LM model
+mse_lm <- lm(feminist ~ ., data = fem_train) %>%
+  mse(fem_test)
+
+#decision tree
+mse_dt <- tree(feminist ~ ., data = fem_train) %>%
+  mse(fem_test)
+
+#boosting
+#boosting with interaction depth = 4
+fem_boost <- gbm(feminist ~ ., data = fem_train, 
+                   distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
+#get optimal number of trees with interaction depth 4
+opt_iter <- gbm.perf(fem_boost, plot.it=FALSE)
+```
+
+    ## Using OOB method...
+
+``` r
+#boosting with interaction depth = 4 and optimal number of trees for that depth
+fem_boost_opt <- gbm(feminist ~ ., data = fem_train, 
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4)
+#predicted boosting values
+yhat_boost <- predict(fem_boost_opt, newdata = fem_test, n.trees = opt_iter[[1]])
+mse_boost <- mean((yhat_boost - fem_test$feminist)^2)
+
+#random forest
+mse_rf <- randomForest(feminist ~ ., data = fem_train, ntree = 500) %>%
+  mse(fem_test)
+
+#plot test MSEs
+ggplot() +
+  geom_line(data = mse_knn1, mapping = aes(k, mse), color="red") +
+  geom_point(data = mse_knn1, mapping = aes(k, mse), color="red") +
+  geom_line(data = mse_wknn1, mapping = aes(k, mse), color="orange") +
+  geom_point(data = mse_wknn1, mapping = aes(k, mse), color="orange") +
+  geom_hline(yintercept = mse_lm, linetype = 1, color = "pink") +
+  geom_hline(yintercept = mse_dt, linetype = 2, color = "green") +
+  geom_hline(yintercept = mse_boost, linetype = 1, color = "gray") +
+  geom_hline(yintercept = mse_rf, linetype = 1, color = "black") +
+  ylim(420,460) + 
+  labs(title = "Test MSEs using different methods",
+       subtitle = "feminist ~ .",
+       x = "K",
+       y = "Test mean squared error",
+       caption = "Red: KNN
+       Orange: Weighted KNN\n
+       Pink: Linear regression\n
+       Green: Decision tree\n
+       Gray: Boosting\n
+       Black: Random Forest") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/fem_mse_party_mod1-1.png)
+
+The boosting method performed the best, although random forest, decision tree, linear regression and boosting produced similar MSEs. Seeing as how the linear regression outperformed the decision tree and the random forest, the relationship between the predictors and `feminist` is probably very close to linear. Boosting just barely outperformed linear regression. Boosting yields small errors because it fits sequentially to the residuals of each new tree.
+
+Now I compare test MSEs across methods using `feminist ~ female + income + dem`.
+
+``` r
+#KNN
+mse_knn4 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ knn.reg(select(fem_train, female, income, dem), y = fem_train$feminist,
+                         test = select(fem_test, female, income, dem), k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$pred)^2)))
+#WKNN
+mse_wknn4 <- data_frame(k = c(seq(5, 100, by = 5)),
+                      knn = map(k, ~ kknn(feminist ~ female + income + dem,
+                                          train = fem_train, test = fem_test, k = .)),
+                      mse = map_dbl(knn, ~ mean((fem_test$feminist - .$fitted.values)^2)))
+
+#LM model
+mse_lm <- lm(feminist ~ female + income + dem, data = fem_train) %>%
+  mse(fem_test)
+
+#decision tree
+mse_dt <- tree(feminist ~ female + income + dem, data = fem_train) %>%
+  mse(fem_test)
+
+#boosting
+#boosting with interaction depth = 4
+fem_boost <- gbm(feminist ~ female + income + dem, data = fem_train, 
+                   distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
+#get optimal number of trees with interaction depth 4
+opt_iter <- gbm.perf(fem_boost, plot.it=FALSE)
+```
+
+    ## Using OOB method...
+
+``` r
+#boosting with interaction depth = 4 and optimal number of trees for that depth
+fem_boost_opt <- gbm(feminist ~ female + income + dem, data = fem_train, 
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4)
+#predicted boosting values
+yhat_boost <- predict(fem_boost_opt, newdata = fem_test, n.trees = opt_iter[[1]])
+mse_boost <- mean((yhat_boost - fem_test$feminist)^2)
+
+#random forest
+mse_rf <- randomForest(feminist ~ female + income + dem, data = fem_train, ntree = 500) %>%
+  mse(fem_test)
+
+#plot test MSEs
+ggplot() +
+  geom_line(data = mse_knn4, mapping = aes(k, mse), color="red") +
+  geom_point(data = mse_knn4, mapping = aes(k, mse), color="red") +
+  geom_line(data = mse_wknn4, mapping = aes(k, mse), color="orange") +
+  geom_point(data = mse_wknn4, mapping = aes(k, mse), color="orange") +
+  geom_hline(yintercept = mse_lm, linetype = 1, color = "pink") +
+  geom_hline(yintercept = mse_dt, linetype = 2, color = "green") +
+  geom_hline(yintercept = mse_boost, linetype = 1, color = "gray") +
+  geom_hline(yintercept = mse_rf, linetype = 1, color = "black") +
+  ylim(430,460) + 
+  labs(title = "Test MSEs using different methods",
+       subtitle = "feminist ~ female + income + dem",
+       x = "K",
+       y = "Test mean squared error",
+       caption = "Red: KNN
+       Orange: Weighted KNN\n
+       Pink: Linear regression\n
+       Green: Decision tree\n
+       Gray: Boosting\n
+       Black: Random Forest") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/fem_mse_party_mod4-1.png)
+
+For this set of variables random forest performed the best, though linear regression, boosting, and random forest performed similarly. Again, the relationship is probably quite close to linear, but not perfectly so. Boosting and random forest generally produce similar MSEs because they reduce bias by producing multiple decision trees. Random forest reduces bias by sampling with replacement many times, reducing sampling bias.
+
+Now we compare the best models: boosting with all predictors and random forest with `female`, `income`, and `dem`.
+
+``` r
+#boosting
+#boosting with interaction depth = 4
+fem_boost <- gbm(feminist ~ ., data = fem_train, 
+                   distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
+#get optimal number of trees with interaction depth 4
+opt_iter <- gbm.perf(fem_boost, plot.it=FALSE)
+```
+
+    ## Using OOB method...
+
+``` r
+#boosting with interaction depth = 4 and optimal number of trees for that depth
+fem_boost_opt <- gbm(feminist ~ ., data = fem_train, 
+                   distribution = "gaussian", n.trees = opt_iter[[1]], interaction.depth = 4)
+#predicted boosting values
+yhat_boost <- predict(fem_boost_opt, newdata = fem_test, n.trees = opt_iter[[1]])
+mse_boost <- mean((yhat_boost - fem_test$feminist)^2)
+
+#random forest
+mse_rf <- randomForest(feminist ~ female + income + dem, data = fem_train, ntree = 500) %>%
+  mse(fem_test)
+
+#plot test MSEs
+ggplot() +
+  geom_hline(yintercept = mse_boost, linetype = 1, color = "red") +
+  geom_hline(yintercept = mse_rf, linetype = 1, color = "blue") +
+  ylim(430,440) + 
+  labs(title = "Test MSEs using different methods",
+       subtitle = "feminist ~ female + income + dem",
+       x = "K",
+       y = "Test mean squared error",
+       caption = "Red: feminist ~ ., Boosting\n
+       Blue: feminist ~ female + income + dem, Random Forest") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/fem_mse_party_best-1.png)
+
+The model with all predictors outperformed the more parsimonious model. However, the test MSEs are very very similar.
 
 Voter turnout and depression \[2 points\]
 =========================================
 
-1.  Split the data into a training and test set (70/30).
+Subpart 1
+---------
+
+**Split the data into a training and test set (70/30).**
 
 ``` r
-mh <- read.csv("data/mental_health.csv")
-
 mh_split <- resample_partition(mh, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
 mh_train <- mh_split$train %>% 
   tbl_df()
 mh_test <- mh_split$test %>% 
   tbl_df()
+
+#versions where vote96 is factor variable (weighted KNN doesn't work properly with numeric values)
+mh$vote96 <- as.factor(mh$vote96)
+mh_split_f <- resample_partition(mh, c(test = 0.3, train = 0.7)) #split data into 70/30 training/test set
+mh_train_f <- mh_split_f$train %>% 
+  tbl_df()
+mh_test_f <- mh_split_f$test %>% 
+  tbl_df()
 ```
 
-1.  Calculate the test error rate for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?
+Subpart 2
+---------
 
-2.  Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?
+**Calculate the test error rate for KNN models with *K* = 1, 2, …, 10, using whatever combination of variables you see fit. Which model produces the lowest test MSE?**
 
-3.  Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?
+Test MSEs for KNN models for `vote96` using all predictors, *K* = 1, 2, …, 10:
+
+``` r
+er_knn1 <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_train, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_test, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+#plot test error rate
+ggplot() +
+  geom_line(data = er_knn1, mapping = aes(k, mse_test)) +
+  labs(x = "K",
+       y = "Test error rate") +
+  expand_limits(y = 0) +  
+  scale_x_continuous(breaks = seq(1,10,1)) + 
+  ylim(.25,0.4)
+```
+
+![](ps9_files/figure-markdown_github/mh_knn_terror_sing-1.png)
+
+``` r
+min_err_knn <- min(er_knn1$mse_test)
+min_err_knn_k <- er_knn1$k[er_knn1$mse_test == min(er_knn1$mse_test)]
+```
+
+Using all predictors, the test error rate is minimized at K = 10 and is 0.31.
+
+Test MSEs for KNN models for `vote96` using four different sets of predictors:
+
+``` r
+# vote96 ~ .
+er_knn1 <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_train, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(mh_train, -vote96),
+                                                test = select(mh_test, -vote96),
+                                                cl = mh_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+# vote96 ~ mhealth_sum + age + educ + black + female + married
+er_knn2 <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(mh_train, -vote96, -inc10),
+                                                test = select(mh_train, -vote96, -inc10),
+                                                cl = mh_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(mh_train, -vote96, -inc10),
+                                                test = select(mh_test, -vote96, -inc10),
+                                                cl = mh_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+# vote96 ~ age + educ + black + female + married + inc10
+er_knn3 <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(mh_train, -vote96, mhealth_sum),
+                                                test = select(mh_train, -vote96, mhealth_sum),
+                                                cl = mh_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(mh_train, -vote96, mhealth_sum),
+                                                test = select(mh_test, -vote96, mhealth_sum),
+                                                cl = mh_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+# vote96 ~ mhealth_sum + age + educ
+er_knn4 <- data_frame(k = 1:10,
+                      knn_train = map(k, ~ class::knn(select(mh_train, mhealth_sum, age, educ),
+                                                test = select(mh_train, mhealth_sum, age, educ),
+                                                cl = mh_train$vote96, k = .)),
+                      knn_test = map(k, ~ class::knn(select(mh_train, mhealth_sum, age, educ),
+                                                test = select(mh_test, mhealth_sum, age, educ),
+                                                cl = mh_train$vote96, k = .)),
+                      mse_train = map_dbl(knn_train, ~ mean(mh_test$vote96 != .)),
+                      mse_test = map_dbl(knn_test, ~ mean(mh_test$vote96 != .)))
+
+#Plot Test MSEs
+ggplot() +
+  geom_line(data = er_knn1, mapping = aes(k, mse_test), color="red") +
+  geom_point(data = er_knn1, mapping = aes(k, mse_test), color="red") +
+  geom_line(data = er_knn2, mapping = aes(k, mse_test), color="orange") +
+  geom_point(data = er_knn2, mapping = aes(k, mse_test), color="orange") +
+  geom_line(data = er_knn3, mapping = aes(k, mse_test), color="green") +
+  geom_point(data = er_knn3, mapping = aes(k, mse_test), color="green") +
+  geom_line(data = er_knn4, mapping = aes(k, mse_test), color="black") +
+  geom_point(data = er_knn4, mapping = aes(k, mse_test), color="black") +
+  scale_x_continuous(breaks = (seq(1,10,1))) + 
+  ylim(0.3, 0.4) + 
+  labs(title = "KNN for vote96",
+       x = "K",
+       y = "Test error rate",
+       caption = "Red: vote97 ~ .\n
+       Orange: vote96 ~ mhealth_sum + age + educ + black + female + married\n
+       Green: vote96 ~ age + educ + black + female + married + inc10\n
+       Black: vote96 ~ mhealth_sum + age + educ") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/mh_knn_terror_mult-1.png)
+
+All four sets of predictors perform similarly, but `vote96 ~ mhealth_sum + age + educ + black + female + married` produces the lowest test error rate.
+
+Subpart 3
+---------
+
+**Calculate the test error rate for weighted KNN models with *K* = 1, 2, …, 10 using the same combination of variables as before. Which model produces the lowest test error rate?**
+
+Test MSEs for weighted KNN models for `vote96` using all predictors, *K* = 1, 2, …, 10:
+
+``` r
+er_wknn <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ .,
+                                         train=mh_train_f,
+                                         test=mh_test_f, k =.)),
+                     err = map_dbl(knn, ~ mean(mh_test_f$vote96 != .$fitted.values)))
+
+#plot error rates
+ggplot(er_wknn, aes(k, err)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "K",
+       y = "Test error rate") + 
+  scale_x_continuous(breaks = seq(1,10,1), labels = seq(1,10,1))
+```
+
+![](ps9_files/figure-markdown_github/mh_wknn_mse_sing-1.png)
+
+``` r
+wknn_err_min <- min(er_wknn$err)
+wknn_err_min_k <- er_wknn$k[er_wknn$err == min(er_wknn$err)]
+```
+
+The test error rate is minimized at 0.3180516 with K = 9.
+
+Test error rates for weighted KNN models for `vote96` with the same four sets of predictors as before:
+
+``` r
+# vote96 ~ .
+er_wknn1 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ .,
+                                         train=mh_train_f,
+                                         test=mh_test_f, k =.)),
+                     err = map_dbl(knn, ~ mean(mh_test_f$vote96 != .$fitted.values)))
+
+# vote96 ~ mhealth_sum + age + educ + black + female + married
+er_wknn2 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ mhealth_sum + age + educ + black + female + married,
+                                         train=mh_train_f,
+                                         test=mh_test_f, k =.)),
+                     err = map_dbl(knn, ~ mean(mh_test_f$vote96 != .$fitted.values)))
+
+# vote96 ~ age + educ + black + female + married + inc10
+er_wknn3 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ age + educ + black + female + married + inc10,
+                                         train=mh_train_f,
+                                         test=mh_test_f, k =.)),
+                     err = map_dbl(knn, ~ mean(mh_test_f$vote96 != .$fitted.values)))
+
+# vote96 ~ mhealth_sum + age + educ
+er_wknn4 <- data_frame(k = 1:10,
+                     knn = map(k, ~ kknn(vote96 ~ mhealth_sum + age + educ,
+                                         train=mh_train_f,
+                                         test=mh_test_f, k =.)),
+                     err = map_dbl(knn, ~ mean(mh_test_f$vote96 != .$fitted.values)))
+
+#Plot Test MSEs
+ggplot() +
+  geom_line(data = er_wknn1, mapping = aes(k, err), color="red") +
+  geom_point(data = er_wknn1, mapping = aes(k, err), color="red") +
+  geom_line(data = er_wknn2, mapping = aes(k, err), color="orange") +
+  geom_point(data = er_wknn2, mapping = aes(k, err), color="orange") +
+  geom_line(data = er_wknn3, mapping = aes(k, err), color="green") +
+  geom_point(data = er_wknn3, mapping = aes(k, err), color="green") +
+  geom_line(data = er_wknn4, mapping = aes(k, err), color="black") +
+  geom_point(data = er_wknn4, mapping = aes(k, err), color="black") +
+  ylim(0.3, 0.4) + 
+  scale_x_continuous(breaks = (seq(1,10,1))) + 
+  labs(title = "Weighted KNN for vote96",
+       subtitle = "Default weights",
+       x = "K",
+       y = "Test error rate",
+       caption = "Red: vote97 ~ .\n
+       Orange: vote96 ~ mhealth_sum + age + educ + black + female + married\n
+       Green: vote96 ~ age + educ + black + female + married + inc10\n
+       Black: vote96 ~ mhealth_sum + age + educ") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/mh_wknn_mse_mult-1.png)
+
+The test error rate is minimized with `vote96 ~ mhealth_sum + age + educ`.
+
+Test error rates for non-weighted KNN `vote96 ~ mhealth_sum + age + educ + black + female + married` vs. weighted KNN `vote96 ~ mhealth_sum + age + educ`:
+
+``` r
+ggplot() +
+  geom_line(data = er_knn2, mapping = aes(k, mse_test), color="red") +
+  geom_point(data = er_knn2, mapping = aes(k, mse_test), color="red") +
+  geom_line(data = er_wknn4, mapping = aes(k, err), color="blue") +
+  geom_point(data = er_wknn4, mapping = aes(k, err), color="blue") +
+  ylim(0.2, 0.5) + 
+  scale_x_continuous(breaks = (seq(1,10,1))) + 
+  labs(title = "Weighted KNN for vote96",
+       x = "K",
+       y = "Test error rate",
+       caption = "Red: KNN, vote96 ~ mhealth_sum + age + educ + black + female + married\n
+       Blue: Weighted KNN, vote96 ~ mhealth_sum + age + educ") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/mh_terror_best_compare-1.png)
+
+The non-weighted `vote96 ~ mhealth_sum + age + educ + black + female + married` generally performs the best across different K values.
+
+Subpart 4
+---------
+
+**Compare the test error rate for the best KNN/wKNN model(s) to the test error rate for the equivalent logistic regression, decision tree, boosting, random forest, and SVM methods using the same combination of variables as before. Which performs the best? Why do you think this method performed the best, given your knowledge of how it works?**
+
+``` r
+#logistic
+mh_logistic <- glm(vote96 ~ mhealth_sum + age + educ + black + female + married, 
+        data=mh_train, family=binomial)
+
+#decision tree
+mh_tree <- tree(vote96 ~ mhealth_sum + age + educ + black + female + married, 
+                data=mh_train)
+
+#boosting
+#boosting with interaction depth = 4
+mh_boost <- gbm(vote96 ~ mhealth_sum + age + educ + black + female + married,
+                data = mh_train, n.trees = 5000)
+```
+
+    ## Distribution not specified, assuming bernoulli ...
+
+``` r
+yhat_boost <- predict(mh_boost, newdata = mh_test, n.trees = 5000)
+pred <- as.data.frame(yhat_boost) %>%
+  rename(pred = yhat_boost)
+
+#random forest
+mh_rf <- randomForest(vote96 ~ mhealth_sum + age + educ + black + female + married,
+             data = mh_train, ntree = 500)
+#svm
+#fit each model with optimal cost parameter
+mh_svm_tune <- tune(svm, vote96 ~ mhealth_sum + age + educ + black + female + married,
+                    data = as_tibble(mh_train_f),
+                    kernel = "radial",
+                    range = list(cost = c(.001, .01, .1, 1, 5, 10, 100)))
+mh_svm <- mh_svm_tune$best.model
+
+#test error rate
+mh_error <- mh_test %>%
+  as_tibble() %>%
+  add_predictions(mh_logistic) %>% 
+  mutate(pred_log = as.numeric(pred > .5)) %>%
+  rename(prob_log = pred) %>%
+  add_predictions(mh_tree) %>%
+  mutate(pred_tr = as.numeric(pred > .5)) %>%
+  rename(prob_tr = pred)
+
+mh_error <- cbind(mh_error, pred) %>%
+  mutate(pred_bo = as.numeric(pred > .5)) %>%
+  rename(prob_bo = pred) %>%
+  add_predictions(mh_rf) %>%
+  mutate(pred_rf = as.numeric(pred > .5)) %>%
+  rename(prob_rf = pred) %>%
+  add_predictions(mh_svm) %>%
+  rename(pred_svm = pred)
+
+mh_log_er <- mean(mh_error$vote96 != mh_error$pred_log, na.rm = TRUE)
+mh_tr_er <- mean(mh_error$vote96 != mh_error$pred_tr, na.rm = TRUE)
+mh_bo_er <- mean(mh_error$vote96 != mh_error$pred_bo, na.rm = TRUE)
+mh_rf_er <- mean(mh_error$vote96 != mh_error$pred_rf, na.rm = TRUE)
+mh_svm_er <- mean(mh_error$vote96 != mh_error$pred_svm, na.rm = TRUE)
+
+ggplot() +
+  geom_line(data = er_knn2, mapping = aes(k, mse_test), color="red") +
+  geom_point(data = er_knn2, mapping = aes(k, mse_test), color="red") +
+  geom_hline(yintercept = mh_log_er, linetype = 1, color = "pink") +
+  geom_hline(yintercept = mh_tr_er, linetype = 2, color = "green") +
+  geom_hline(yintercept = mh_bo_er, linetype = 1, color = "gray") +
+  geom_hline(yintercept = mh_rf_er, linetype = 1, color = "black") +
+  geom_hline(yintercept = mh_svm_er, linetype = 1, color = "orange") +
+  #ylim(420,460) + 
+  labs(title = "Test error rates for multiple methods",
+       subtitle = "vote96 ~ mhealth_sum + age + educ + black + female + married",
+       x = "K",
+       y = "Test error rate",
+       caption = "Red: KNN\n
+       Pink: Logistic regression\n
+       Green: Decision tree\n
+       Gray: Boosting\n
+       Black: Random Forest\n
+       Orange: SVM") +
+  expand_limits(y = 0)
+```
+
+![](ps9_files/figure-markdown_github/mh_terror_party-1.png)
+
+The support vector machine model with a radial kernel performed the best. Because many of the observations in `mental_health` were deleted when I removed NA values with `na.omit()`, the predictive advantages of resampling used in random forest and boosting were probably reduced. Generally, SVM and tree-based models perform well in predictions. The radial kernel allows for smoother decision boundaries; this likely improved the SVM model's performance as well.
 
 Colleges \[2 points\]
 =====================
@@ -54,24 +755,796 @@ Colleges \[2 points\]
 Perform PCA analysis on the college dataset and plot the first two principal components. Describe the results. What variables appear strongly correlated on the first principal component? What about the second principal component?
 
 ``` r
-college <- read.csv("data/college.csv")
+college$Private <- as.character(college$Private)
+college$Private[college$Private == "Yes"] <- 1
+college$Private[college$Private == "No"] <- 0
+college$Private <- as.numeric(college$Private)
+
+pca_col <- prcomp(college, scale = TRUE)
+biplot(pca_col, scale = 0, cex = .6)
 ```
+
+![](ps9_files/figure-markdown_github/college_pca-1.png)
+
+The plot is difficult to read due to the number of variables, but `Apps`, `F.Undergrad`, `P.Undergrad`, and `S.F.Ratio` appear to cluster on the first principal component. These are all correlated with the size of the student body. On the second prinicipal component, `Top10perc`, `Top25perc`, `Room.Board`, `Books`, `PhD`, `Terminal`, `Outstate`, and `perc.alumni` appear to cluster together. It seems like higher values on these factors would indicate more prestigious schools.
 
 Clustering states \[3 points\]
 ==============================
 
-1.  Perform PCA on the dataset and plot the observations on the first and second principal components.
+Subpart 1
+---------
 
-2.  Perform *K*-means clustering with *K* = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+**Perform PCA on the dataset and plot the observations on the first and second principal components.**
 
-3.  Perform *K*-means clustering with *K* = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+``` r
+pca_usa <- prcomp(usa, scale = TRUE)
 
-4.  Perform *K*-means clustering with *K* = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+biplot(pca_usa, scale = 0, cex = .6)
+```
 
-5.  Perform *K*-means clustering with *K* = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with *K* = 3 based on the raw data.
+![](ps9_files/figure-markdown_github/states_pca-1.png)
 
-6.  Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.
+Subpart 2
+---------
 
-7.  Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+**Perform *K*-means clustering with *K* = 2. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
 
-8.  Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.
+``` r
+#K-means clustering with K = 2, 3, 4
+usa.out <- usa %>%
+  mutate(k2 = kmeans(usa, 2, nstart = 20)[[1]],
+         k3 = kmeans(usa, 3, nstart = 20)[[1]],
+         k4 = kmeans(usa, 4, nstart = 20)[[1]])
+usa.out$k2 <- as.factor(usa.out$k2)
+usa.out$k3 <- as.factor(usa.out$k3)
+usa.out$k4 <- as.factor(usa.out$k4)
+
+#plot K = 2 observations
+autoplot(pca_usa, data = usa.out, 
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'k2',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  labs(title = 'Principal Component Analysis on USArrest data',
+       subtitle = 'K-means clustering with K = 2') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+![](ps9_files/figure-markdown_github/states_pca_k2-1.png)
+
+With K = 2, the states seem cluster by the first principal component. States with higher crime rates cluster in group 1, while states with lower crime rates fall mostly in group 2. The states are divided roughly in half, with one side on the left and the other on the right. However, the separation boundary between the clusters is slanted rather than straight, following the UrbanPop vector. This indicates that each cluster has similar variance in terms of urbanization.
+
+Subpart 3
+---------
+
+Perform *K*-means clustering with *K* = 4. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.
+
+``` r
+autoplot(pca_usa, data = usa.out, 
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'k4',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  labs(title = 'Principal Component Analysis on USArrest data',
+       subtitle = 'K-means clustering with K = 4') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+![](ps9_files/figure-markdown_github/states_pca_k4-1.png)
+
+Again, the states seem to cluster along their relative position with regard to crime rates, or by the first principle component.
+
+Subpart 4
+---------
+
+**Perform *K*-means clustering with *K* = 3. Plot the observations on the first and second principal components and color-code each state based on their cluster membership. Describe your results.**
+
+``` r
+autoplot(pca_usa, data = usa.out, 
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'k3',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 4) +
+  labs(title = 'Principal Component Analysis on USArrest data',
+       subtitle = 'K-means clustering with K = 3') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+![](ps9_files/figure-markdown_github/states_pca_k3-1.png)
+
+With K = 3, the states are again clustered mostly by their relative postition on the PC1 axis.
+
+Subpart 5
+---------
+
+**Perform *K*-means clustering with *K* = 3 on the first two principal components score vectors, rather than the raw data. Describe your results and compare them to the clustering results with *K* = 3 based on the raw data.**
+
+``` r
+#get first two principal components score vectors
+vec <- as.data.frame(pca_usa$x[,1:2])
+#perform K-means clustering with K = 3
+pca_vec <- kmeans(vec, 3, nstart = 20)
+cl_vec <- as.factor(pca_vec$cluster)
+#bind to vectors data
+data <- cbind(vec, cl_vec)
+
+# plot
+autoplot(pca_usa, data = data,
+         shape = FALSE, label = TRUE, label.size = 3, label.colour = 'cl_vec',
+         loadings = TRUE, loadings.label = TRUE, loadings.label.size = 3) +
+  labs(title = 'Principal Component Analysis on USArrest data',
+       subtitle = 'K-means clustering with K = 3, on principal component score vectors') +
+  scale_color_discrete(name = 'Clusters')
+```
+
+![](ps9_files/figure-markdown_github/usa_pca_k3_score_vec-1.png)
+
+There is less overlapping among the clusters compared to the results for K = 3 clustering on the raw data. The states are cleanly separated in groups, mostly along the PC1 axis as before. Cluster 2 stands out in that the cluster 2 states are less urbanized than in the other two clusters.
+
+Subpart 6
+---------
+
+**Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states.**
+
+``` r
+usa_hclust <- hclust(dist(usa), method = 'complete')
+ggdendrogram(usa_hclust)
+```
+
+![](ps9_files/figure-markdown_github/usa_hclust-1.png)
+
+Subpart 7
+---------
+
+**Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?**
+
+``` r
+h <- 110 #height
+# extract data
+hcdata <- dendro_data(usa_hclust)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(rownames(usa)),
+                       cl = as.factor(cutree(usa_hclust, h = h))))
+
+# plot dendrogram
+ggdendrogram(usa_hclust, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+![](ps9_files/figure-markdown_github/usa_hclust_3clust-1.png)
+
+``` r
+#get list of states by cluster
+hclabs_spr <- hclabs %>%
+  spread(key = cl, value = label)
+cl1 <- hclabs_spr[,3] %>%
+  na.omit()
+cl2 <- hclabs_spr[,4] %>%
+  na.omit()
+cl3 <- hclabs_spr[,5] %>%
+  na.omit()
+
+#bind lists together and report
+clusters <- cbind(cl1, cl2, cl3)
+clusters %>%
+  kable(caption = "Hierarchical clustering on USArrests",
+        col.names = c("Cluster 1", "Cluster 2", "Cluster 3"),
+        format = "html")
+```
+
+<table>
+<caption>
+Hierarchical clustering on USArrests
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Cluster 1
+</th>
+<th style="text-align:left;">
+Cluster 2
+</th>
+<th style="text-align:left;">
+Cluster 3
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Florida
+</td>
+<td style="text-align:left;">
+Missouri
+</td>
+<td style="text-align:left;">
+Ohio
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+North Carolina
+</td>
+<td style="text-align:left;">
+Arkansas
+</td>
+<td style="text-align:left;">
+Utah
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Delaware
+</td>
+<td style="text-align:left;">
+Tennessee
+</td>
+<td style="text-align:left;">
+Connecticut
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alabama
+</td>
+<td style="text-align:left;">
+Georgia
+</td>
+<td style="text-align:left;">
+Pennsylvania
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Louisiana
+</td>
+<td style="text-align:left;">
+Colorado
+</td>
+<td style="text-align:left;">
+Nebraska
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alaska
+</td>
+<td style="text-align:left;">
+Texas
+</td>
+<td style="text-align:left;">
+Kentucky
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Mississippi
+</td>
+<td style="text-align:left;">
+Rhode Island
+</td>
+<td style="text-align:left;">
+Montana
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+South Carolina
+</td>
+<td style="text-align:left;">
+Wyoming
+</td>
+<td style="text-align:left;">
+Idaho
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Maryland
+</td>
+<td style="text-align:left;">
+Oregon
+</td>
+<td style="text-align:left;">
+Indiana
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Arizona
+</td>
+<td style="text-align:left;">
+Oklahoma
+</td>
+<td style="text-align:left;">
+Kansas
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+New Mexico
+</td>
+<td style="text-align:left;">
+Virginia
+</td>
+<td style="text-align:left;">
+Hawaii
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+California
+</td>
+<td style="text-align:left;">
+Washington
+</td>
+<td style="text-align:left;">
+Minnesota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Illinois
+</td>
+<td style="text-align:left;">
+Massachusetts
+</td>
+<td style="text-align:left;">
+Wisconsin
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+New York
+</td>
+<td style="text-align:left;">
+New Jersey
+</td>
+<td style="text-align:left;">
+Iowa
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Michigan
+</td>
+<td style="text-align:left;">
+Missouri
+</td>
+<td style="text-align:left;">
+New Hampshire
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Nevada
+</td>
+<td style="text-align:left;">
+Arkansas
+</td>
+<td style="text-align:left;">
+West Virginia
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Florida
+</td>
+<td style="text-align:left;">
+Tennessee
+</td>
+<td style="text-align:left;">
+Maine
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+North Carolina
+</td>
+<td style="text-align:left;">
+Georgia
+</td>
+<td style="text-align:left;">
+South Dakota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Delaware
+</td>
+<td style="text-align:left;">
+Colorado
+</td>
+<td style="text-align:left;">
+North Dakota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alabama
+</td>
+<td style="text-align:left;">
+Texas
+</td>
+<td style="text-align:left;">
+Vermont
+</td>
+</tr>
+</tbody>
+</table>
+Subpart 8
+---------
+
+**Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation 1. What effect does scaling the variables have on the hierarchical clustering obtained? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed? Provide a justification for your answer.**
+
+``` r
+#scale the variables
+usa_scaled <- scale(usa)
+
+# hierarchically cluster states
+usa_hclust_scaled <- hclust(dist(usa_scaled), method = 'complete')
+ggdendrogram(usa_hclust_scaled)
+```
+
+![](ps9_files/figure-markdown_github/usa_hclust_scaled-1.png)
+
+``` r
+#split into clusters
+h <- 4
+# extract data
+hcdata <- dendro_data(usa_hclust_scaled)
+hclabs <- label(hcdata) %>%
+  left_join(data_frame(label = as.factor(rownames(usa)),
+                       cl = as.factor(cutree(usa_hclust_scaled, h = h))))
+
+# plot dendrogram
+ggdendrogram(usa_hclust_scaled, labels = FALSE) +
+  geom_text(data = hclabs,
+            aes(label = label, x = x, y = 0, color = cl),
+            vjust = .5, angle = 90) +
+  geom_hline(yintercept = h, linetype = 2) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+```
+
+![](ps9_files/figure-markdown_github/usa_hclust_scaled-2.png)
+
+``` r
+#get lists of states by cluster and report
+hclabs_spr <- hclabs %>%
+  spread(key = cl, value = label)
+cl1 <- hclabs_spr[,3] %>%
+  na.omit()
+cl2 <- hclabs_spr[,4] %>%
+  na.omit()
+cl3 <- hclabs_spr[,5] %>%
+  na.omit()
+cl4 <- hclabs_spr[,6] %>%
+  na.omit()
+
+clusters <- cbind(cl1, cl2, cl3, cl4)
+clusters %>%
+  kable(caption = "Hierarchical clustering on USArrests",
+        col.names = c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4"),
+        format = "html")
+```
+
+<table>
+<caption>
+Hierarchical clustering on USArrests
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Cluster 1
+</th>
+<th style="text-align:left;">
+Cluster 2
+</th>
+<th style="text-align:left;">
+Cluster 3
+</th>
+<th style="text-align:left;">
+Cluster 4
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Alaska
+</td>
+<td style="text-align:left;">
+Colorado
+</td>
+<td style="text-align:left;">
+Kentucky
+</td>
+<td style="text-align:left;">
+South Dakota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alabama
+</td>
+<td style="text-align:left;">
+California
+</td>
+<td style="text-align:left;">
+Arkansas
+</td>
+<td style="text-align:left;">
+West Virginia
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Louisiana
+</td>
+<td style="text-align:left;">
+Nevada
+</td>
+<td style="text-align:left;">
+Virginia
+</td>
+<td style="text-align:left;">
+North Dakota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Georgia
+</td>
+<td style="text-align:left;">
+Florida
+</td>
+<td style="text-align:left;">
+Wyoming
+</td>
+<td style="text-align:left;">
+Vermont
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Tennessee
+</td>
+<td style="text-align:left;">
+Texas
+</td>
+<td style="text-align:left;">
+Missouri
+</td>
+<td style="text-align:left;">
+Maine
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+North Carolina
+</td>
+<td style="text-align:left;">
+Illinois
+</td>
+<td style="text-align:left;">
+Oregon
+</td>
+<td style="text-align:left;">
+Iowa
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Mississippi
+</td>
+<td style="text-align:left;">
+New York
+</td>
+<td style="text-align:left;">
+Washington
+</td>
+<td style="text-align:left;">
+New Hampshire
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+South Carolina
+</td>
+<td style="text-align:left;">
+Arizona
+</td>
+<td style="text-align:left;">
+Delaware
+</td>
+<td style="text-align:left;">
+Idaho
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alaska
+</td>
+<td style="text-align:left;">
+Michigan
+</td>
+<td style="text-align:left;">
+Rhode Island
+</td>
+<td style="text-align:left;">
+Montana
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alabama
+</td>
+<td style="text-align:left;">
+Maryland
+</td>
+<td style="text-align:left;">
+Massachusetts
+</td>
+<td style="text-align:left;">
+Nebraska
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Louisiana
+</td>
+<td style="text-align:left;">
+New Mexico
+</td>
+<td style="text-align:left;">
+New Jersey
+</td>
+<td style="text-align:left;">
+South Dakota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Georgia
+</td>
+<td style="text-align:left;">
+Colorado
+</td>
+<td style="text-align:left;">
+Connecticut
+</td>
+<td style="text-align:left;">
+West Virginia
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Tennessee
+</td>
+<td style="text-align:left;">
+California
+</td>
+<td style="text-align:left;">
+Minnesota
+</td>
+<td style="text-align:left;">
+North Dakota
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+North Carolina
+</td>
+<td style="text-align:left;">
+Nevada
+</td>
+<td style="text-align:left;">
+Wisconsin
+</td>
+<td style="text-align:left;">
+Vermont
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Mississippi
+</td>
+<td style="text-align:left;">
+Florida
+</td>
+<td style="text-align:left;">
+Oklahoma
+</td>
+<td style="text-align:left;">
+Maine
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+South Carolina
+</td>
+<td style="text-align:left;">
+Texas
+</td>
+<td style="text-align:left;">
+Indiana
+</td>
+<td style="text-align:left;">
+Iowa
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alaska
+</td>
+<td style="text-align:left;">
+Illinois
+</td>
+<td style="text-align:left;">
+Kansas
+</td>
+<td style="text-align:left;">
+New Hampshire
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Alabama
+</td>
+<td style="text-align:left;">
+New York
+</td>
+<td style="text-align:left;">
+Ohio
+</td>
+<td style="text-align:left;">
+Idaho
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Louisiana
+</td>
+<td style="text-align:left;">
+Arizona
+</td>
+<td style="text-align:left;">
+Pennsylvania
+</td>
+<td style="text-align:left;">
+Montana
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Georgia
+</td>
+<td style="text-align:left;">
+Michigan
+</td>
+<td style="text-align:left;">
+Hawaii
+</td>
+<td style="text-align:left;">
+Nebraska
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Tennessee
+</td>
+<td style="text-align:left;">
+Maryland
+</td>
+<td style="text-align:left;">
+Utah
+</td>
+<td style="text-align:left;">
+South Dakota
+</td>
+</tr>
+</tbody>
+</table>
+Scaling makes it impossible (or more difficult) to get the same three clusters as before. The closest I can get are 4 clusters. From eyeballing the new data, clustering after scaling appears to yield more "sensible" groupings. Cluster 1 lists largely rural states with high crime rates, cluster 2 contains states with large metropolises that have high crime rates, cluster 3 appears to represent "middle-of-the-road" states with regard to both urbanization and crime, and cluster 4 includes the least urbanized states with the least crime.
+
+For this dataset, it's appropriate to scale the variables before conducting hierarchical clustering. Although the data for each state is measured along the same scale for each variable, the values are probably skewed in some way. In other words, some states will drive a large amount of the variance, biasing the results.
